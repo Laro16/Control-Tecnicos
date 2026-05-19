@@ -1,369 +1,683 @@
-import React, { useState, useEffect } from 'react';
-import { supabase } from './supabase';
-import * as XLSX from 'xlsx';
-import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
-import { Users, CheckSquare, Upload, Copy, MessageCircle, FileText, Image as ImageIcon, Trash2, Edit2, Plus, X } from 'lucide-react';
+Entendido. Tienes toda la razón, cuando estamos armando y depurando es mucho más fácil, rápido y seguro simplemente copiar y pegar el archivo completo para evitar errores de sintaxis o llaves perdidas.
 
-export default function App() {
-  const [activeTab, setActiveTab] = useState('tecnicos');
-  
-  // ==========================================
-  // ESTADOS - MÓDULO TÉCNICOS
-  // ==========================================
-  const [ticketsPorTecnico, setTicketsPorTecnico] = useState({});
-  const [fileName, setFileName] = useState('');
+Aquí tienes el archivo **`App.jsx` COMPLETO**, integrando el diseño que te generó Claude pero con el **motor de lectura de Excel a prueba de balas** que normaliza mayúsculas, minúsculas, espacios y acentos, además de la alerta visual si el Excel no trae los datos esperados.
 
-  // ==========================================
-  // ESTADOS - MÓDULO PENDIENTES
-  // ==========================================
-  const [pendientes, setPendientes] = useState([]);
-  const [showModal, setShowModal] = useState(false);
-  const [formData, setFormData] = useState({ id: null, titulo: '', descripcion: '', fecha: '', prioridad: 'Media', estado: 'Pendiente' });
+Copia este código y reemplaza **TODO** el contenido de tu actual `src/App.jsx`:
 
-  // ==========================================
-  // EFECTOS
-  // ==========================================
-  useEffect(() => {
-    if (activeTab === 'pendientes') {
-      fetchPendientes();
-    }
-  }, [activeTab]);
+```javascript
+import { useState, useEffect, useRef } from 'react'
+import * as XLSX from 'xlsx'
+import jsPDF from 'jspdf'
+import html2canvas from 'html2canvas'
+import { supabase } from './supabase.jsx'
+import {
+  Upload, Clipboard, MessageCircle, Image, FileText,
+  Plus, Pencil, Trash2, CheckCircle, X, ChevronDown,
+  Wrench, ClipboardList, AlertCircle, RotateCcw
+} from 'lucide-react'
 
-  // ==========================================
-  // LÓGICA - MÓDULO TÉCNICOS
-  // ==========================================
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setFileName(file.name);
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      const bstr = evt.target.result;
-      const wb = XLSX.read(bstr, { type: 'binary' });
-      const wsname = wb.SheetNames[0]; // Regla: Tomar únicamente la PRIMERA HOJA
-      const ws = wb.Sheets[wsname];
-      const data = XLSX.utils.sheet_to_json(ws);
+const TODAY = () => {
+  const d = new Date()
+  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`
+}
 
-      const estadosValidos = ['Asignada a Técnico', 'En Proceso', 'Asignada a Agencia'];
-      const agrupados = {};
+// Construye el mensaje WhatsApp de un técnico
+function buildMessage(tecnico, tickets) {
+  const fecha = TODAY()
+  let msg = `🔧 TÉCNICO: ${tecnico}\n📅 FECHA: ${fecha}\n`
+  msg += `━━━━━━━━━━━━━━━━━━━━━━━━\n`
+  tickets.forEach((t, i) => {
+    if (i > 0) msg += `\n━━━━━━━━━━━━━━━━━━━━━━━━\n`
+    msg += `\n📌 REFERENCIA: ${t['N° REFERENCIA'] || '-'}\n`
+    msg += `🏪 NEGOCIO: ${t['NEGOCIO'] || '-'}\n`
+    msg += `📍 DIRECCIÓN: ${t['DIRECCIÓN'] || '-'}\n`
+    msg += `👤 CLIENTE: ${t['CLIENTE'] || '-'}\n`
+    msg += `🧊 SERIE: ${t['SERIE'] || '-'}\n`
+    msg += `📦 MODELO: ${t['MODELO'] || '-'}\n`
+    msg += `📝 DESCRIPCIÓN:\n${t['DESCRIPCIÓN INICIAL'] || '-'}\n`
+  })
+  msg += `\n━━━━━━━━━━━━━━━━━━━━━━━━`
+  return msg
+}
 
-      data.forEach(row => {
-        const estado = row['ESTADO'];
-        if (estadosValidos.includes(estado)) {
-          let tecnico = row['TÉCNICO'];
-          
-          if (!tecnico || tecnico.trim() === '') {
-            tecnico = 'SIN TÉCNICO';
-          }
-          if (estado === 'Asignada a Agencia') {
-            tecnico = tecnico || 'SIN TÉCNICO';
-          }
-
-          if (!agrupados[tecnico]) agrupados[tecnico] = [];
-          agrupados[tecnico].push(row);
-        }
-      });
-
-      setTicketsPorTecnico(agrupados);
-    };
-    reader.readAsBinaryString(file);
-  };
-
-  const getTextoFormateado = (tecnico, tickets) => {
-    const fecha = new Date().toLocaleDateString('es-ES');
-    let texto = `🔧 TÉCNICO: ${tecnico} FECHA: ${fecha}\n\n`;
-    
-    tickets.forEach(t => {
-      texto += `📌 REFERENCIA: ${t['N° REFERENCIA'] || 'N/A'}\n`;
-      texto += `🏪 NEGOCIO: ${t['NEGOCIO'] || 'N/A'}\n`;
-      texto += `📍 DIRECCIÓN: ${t['DIRECCIÓN'] || 'N/A'}\n`;
-      texto += `👤 CLIENTE: ${t['CLIENTE'] || 'N/A'}\n`;
-      texto += `🧊 SERIE: ${t['SERIE'] || 'N/A'}\n`;
-      texto += `📦 MODELO: ${t['MODELO'] || 'N/A'}\n`;
-      texto += `📝 DESCRIPCIÓN:\n${t['DESCRIPCIÓN INICIAL'] || 'N/A'}\n`;
-      texto += `___________________________\n\n`;
-    });
-    return texto;
-  };
-
-  const handleCopiar = (tecnico, tickets) => {
-    const texto = getTextoFormateado(tecnico, tickets);
-    navigator.clipboard.writeText(texto);
-    alert('¡Texto copiado al portapapeles!');
-  };
-
-  const handleWhatsApp = (tecnico, tickets) => {
-    const numero = prompt('Ingresa el número de WhatsApp (con código de país, ej: 50212345678):');
-    if (!numero) return;
-    
-    const texto = getTextoFormateado(tecnico, tickets);
-    const textoCodificado = encodeURIComponent(texto);
-    window.open(`https://wa.me/${numero.replace(/\D/g,'')}?text=${textoCodificado}`, '_blank');
-  };
-
-  // Generador de Imagen y PDF optimizado para alta resolución (scale: 2)
-  const getCanvasElement = async (elementId) => {
-    const elemento = document.getElementById(elementId);
-    return await html2canvas(elemento, { 
-      scale: 2, 
-      backgroundColor: '#ffffff',
-      useCORS: true 
-    });
-  };
-
-  const handleImagen = async (tecnico, elementId) => {
-    const canvas = await getCanvasElement(elementId);
-    const link = document.createElement('a');
-    link.download = `Reporte_${tecnico.replace(/\s+/g, '_')}.png`;
-    link.href = canvas.toDataURL('image/png');
-    link.click();
-  };
-
-  const handlePDF = async (tecnico, elementId) => {
-    const canvas = await getCanvasElement(elementId);
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-    
-    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-    pdf.save(`Reporte_${tecnico.replace(/\s+/g, '_')}.pdf`);
-  };
-
-
-  // ==========================================
-  // LÓGICA - MÓDULO PENDIENTES
-  // ==========================================
-  const fetchPendientes = async () => {
-    const { data, error } = await supabase.from('pendientes').select('*').order('created_at', { ascending: false });
-    if (!error) setPendientes(data);
-  };
-
-  const savePendiente = async (e) => {
-    e.preventDefault();
-    if (formData.id) {
-      await supabase.from('pendientes').update(formData).eq('id', formData.id);
-    } else {
-      const { id, ...insertData } = formData;
-      await supabase.from('pendientes').insert([insertData]);
-    }
-    setShowModal(false);
-    fetchPendientes();
-  };
-
-  const deletePendiente = async (id) => {
-    if(confirm('¿Seguro que deseas eliminar este pendiente?')) {
-      await supabase.from('pendientes').delete().eq('id', id);
-      fetchPendientes();
-    }
-  };
-
-  const editPendiente = (p) => {
-    setFormData(p);
-    setShowModal(true);
-  };
-
-  const changeStatus = async (id, currentStatus) => {
-    const estados = ['Pendiente', 'En proceso', 'Realizado', 'Cancelado'];
-    const currentIndex = estados.indexOf(currentStatus);
-    const nextStatus = estados[(currentIndex + 1) % estados.length];
-    
-    await supabase.from('pendientes').update({ estado: nextStatus }).eq('id', id);
-    fetchPendientes();
-  };
-
-  const openNewModal = () => {
-    setFormData({ id: null, titulo: '', descripcion: '', fecha: new Date().toISOString().split('T')[0], prioridad: 'Media', estado: 'Pendiente' });
-    setShowModal(true);
-  };
-
-  // ==========================================
-  // RENDERIZADO
-  // ==========================================
+// Badge de estado del ticket
+function TicketBadge({ estado }) {
+  // Normalizar para pintar el color correcto aunque venga en minúsculas
+  const estNormalizado = (estado || '').toString().toLowerCase();
+  let cls = 'badge-asignada'
+  if (estNormalizado.includes('proceso')) cls = 'badge-proceso'
+  if (estNormalizado.includes('agencia')) cls = 'badge-agencia'
   return (
-    <div className="min-h-screen bg-brand-light font-sans text-brand-dark">
-      {/* HEADER TABS */}
-      <nav className="bg-white shadow-sm px-4 py-4 sticky top-0 z-10 flex gap-4">
-        <button 
-          onClick={() => setActiveTab('tecnicos')}
-          className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors font-semibold text-sm ${activeTab === 'tecnicos' ? 'bg-brand-dark text-white' : 'bg-gray-100 text-gray-600'}`}
-        >
-          <Users size={18} /> Técnicos
-        </button>
-        <button 
-          onClick={() => setActiveTab('pendientes')}
-          className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors font-semibold text-sm ${activeTab === 'pendientes' ? 'bg-brand-dark text-white' : 'bg-gray-100 text-gray-600'}`}
-        >
-          <CheckSquare size={18} /> Pendientes
-        </button>
-      </nav>
+    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${cls}`}>
+      {estado}
+    </span>
+  )
+}
 
-      <main className="p-4 max-w-7xl mx-auto">
-        
-        {/* ================= MÓDULO TÉCNICOS ================= */}
-        {activeTab === 'tecnicos' && (
-          <div className="space-y-6">
-            
-            {/* Uploader */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 text-center">
-              <label className="cursor-pointer inline-flex flex-col items-center gap-2">
-                <div className="bg-brand-blue/20 p-4 rounded-full text-blue-600">
-                  <Upload size={32} />
-                </div>
-                <span className="font-semibold text-gray-700">Subir archivo Excel (.xlsx)</span>
-                <span className="text-sm text-gray-400">{fileName || 'Ningún archivo seleccionado'}</span>
-                <input type="file" accept=".xlsx, .xls" onChange={handleFileUpload} className="hidden" />
-              </label>
+// ─── MÓDULO TÉCNICOS ─────────────────────────────────────────────────────────
+
+function ModuloTecnicos() {
+  const [grupos, setGrupos] = useState({})
+  const [dragging, setDragging] = useState(false)
+  const [expandido, setExpandido] = useState({})
+  const [nombreArchivo, setNombreArchivo] = useState('')
+  const fileRef = useRef()
+  const cardRefs = useRef({})
+
+  // Procesa el archivo Excel (VERSIÓN ROBUSTA MEJORADA)
+  function procesarExcel(file) {
+    if (!file) return;
+    setNombreArchivo(file.name);
+    
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const wb = XLSX.read(e.target.result, { type: 'array' })
+      // Solo la PRIMERA hoja
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      const rawData = XLSX.utils.sheet_to_json(ws, { defval: '' })
+
+      // ESTADOS VÁLIDOS (En mayúsculas y sin acentos para la comparación)
+      const estadosValidos = ['ASIGNADA A TECNICO', 'EN PROCESO', 'ASIGNADA A AGENCIA']
+      const agrupados = {}
+      let ticketsEncontrados = 0
+
+      rawData.forEach(rawRow => {
+        // 1. Convertir todas las columnas del Excel a MAYÚSCULAS y quitar espacios
+        const fila = {}
+        Object.keys(rawRow).forEach(key => {
+          fila[key.trim().toUpperCase()] = rawRow[key]
+        })
+
+        // 2. Extraer el ESTADO, pasarlo a mayúsculas y quitarle los acentos
+        let estadoReal = (fila['ESTADO'] || '').toString().trim().toUpperCase()
+        estadoReal = estadoReal.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+
+        // 3. Evaluar si es un estado válido
+        if (estadosValidos.includes(estadoReal)) {
+          ticketsEncontrados++
+          
+          // 4. Extraer técnico (buscando variantes comunes)
+          let tecnico = (fila['TÉCNICO'] || fila['TECNICO'] || '').toString().trim()
+          
+          if (!tecnico || tecnico === '') {
+            tecnico = 'SIN TÉCNICO'
+          }
+          if (estadoReal === 'ASIGNADA A AGENCIA') {
+            tecnico = tecnico || 'SIN TÉCNICO'
+          }
+
+          if (!agrupados[tecnico]) agrupados[tecnico] = []
+          
+          // 5. Guardar los datos mapeados
+          agrupados[tecnico].push({
+            'N° REFERENCIA': fila['N° REFERENCIA'] || fila['NO REFERENCIA'] || fila['REFERENCIA'] || '-',
+            'NEGOCIO': fila['NEGOCIO'] || '-',
+            'DIRECCIÓN': fila['DIRECCIÓN'] || fila['DIRECCION'] || '-',
+            'CLIENTE': fila['CLIENTE'] || '-',
+            'SERIE': fila['SERIE'] || '-',
+            'MODELO': fila['MODELO'] || '-',
+            'ESTADO': rawRow['ESTADO'] || rawRow['Estado'] || estadoReal, // Guardamos el original para mostrar
+            'DESCRIPCIÓN INICIAL': fila['DESCRIPCIÓN INICIAL'] || fila['DESCRIPCION INICIAL'] || fila['DESCRIPCION'] || '-'
+          })
+        }
+      })
+
+      if (ticketsEncontrados === 0) {
+        alert("⚠️ No se encontraron tickets válidos.\n\nPor favor verifica:\n1. Que la hoja tenga una columna llamada 'ESTADO'\n2. Que haya tickets con estado 'Asignada a Técnico', 'En Proceso' o 'Asignada a Agencia'.")
+      } else {
+        setGrupos(agrupados)
+        // Expandir todos por defecto
+        const exp = {}
+        Object.keys(agrupados).forEach(k => (exp[k] = true))
+        setExpandido(exp)
+      }
+    }
+    reader.readAsArrayBuffer(file)
+  }
+
+  function onFileChange(e) {
+    const f = e.target.files[0]
+    if (f) procesarExcel(f)
+  }
+
+  function onDrop(e) {
+    e.preventDefault()
+    setDragging(false)
+    const f = e.dataTransfer.files[0]
+    if (f && f.name.match(/\.xlsx?$/i)) procesarExcel(f)
+  }
+
+  // Copiar texto al portapapeles
+  function copiarTexto(tecnico, tickets) {
+    navigator.clipboard.writeText(buildMessage(tecnico, tickets))
+      .then(() => alert('✅ Texto copiado al portapapeles'))
+  }
+
+  // Abrir WhatsApp Web
+  function abrirWhatsapp(tecnico, tickets) {
+    const num = prompt('Ingresa el número con código de país (Ej: 50230000000):')
+    if (!num) return
+    const msg = encodeURIComponent(buildMessage(tecnico, tickets))
+    window.open(`https://wa.me/${num.replace(/\D/g,'')}?text=${msg}`, '_blank')
+  }
+
+  // Generar imagen del card
+  async function generarImagen(tecnico) {
+    const el = cardRefs.current[tecnico]
+    if (!el) return
+    const canvas = await html2canvas(el, { backgroundColor: '#ffffff', scale: 2 })
+    const link = document.createElement('a')
+    link.download = `${tecnico.replace(/\s+/g,'-')}.png`
+    link.href = canvas.toDataURL('image/png')
+    link.click()
+  }
+
+  // Generar PDF del técnico
+  function generarPDF(tecnico, tickets) {
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+    const fecha = TODAY()
+    let y = 15
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(14)
+    doc.text(`TÉCNICO: ${tecnico}`, 14, y)
+    y += 7
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'normal')
+    doc.text(`Fecha: ${fecha}  |  Tickets: ${tickets.length}`, 14, y)
+    y += 5
+    doc.setDrawColor(180)
+    doc.line(14, y, 196, y)
+    y += 6
+
+    tickets.forEach((t, i) => {
+      if (y > 265) { doc.addPage(); y = 15 }
+
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(10)
+      doc.text(`#${i+1}  Ref: ${t['N° REFERENCIA'] || '-'}`, 14, y)
+      y += 5
+
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(9)
+      const lines = [
+        `Negocio: ${t['NEGOCIO'] || '-'}`,
+        `Dirección: ${t['DIRECCIÓN'] || '-'}`,
+        `Cliente: ${t['CLIENTE'] || '-'}`,
+        `Serie: ${t['SERIE'] || '-'}   Modelo: ${t['MODELO'] || '-'}`,
+        `Estado: ${t['ESTADO'] || '-'}`,
+        `Descripción: ${t['DESCRIPCIÓN INICIAL'] || '-'}`,
+      ]
+      lines.forEach(l => {
+        const wrapped = doc.splitTextToSize(l, 180)
+        if (y > 270) { doc.addPage(); y = 15 }
+        doc.text(wrapped, 14, y)
+        y += wrapped.length * 4.5
+      })
+      y += 2
+      doc.setDrawColor(210)
+      doc.line(14, y, 196, y)
+      y += 4
+    })
+
+    doc.save(`${tecnico.replace(/\s+/g,'-')}_${fecha.replace('/','')}.pdf`)
+  }
+
+  const tieneDatos = Object.keys(grupos).length > 0
+
+  return (
+    <div className="space-y-6">
+      {/* Zona de carga */}
+      <div
+        className={`drop-zone p-10 text-center cursor-pointer select-none ${dragging ? 'drag-over' : ''}`}
+        onClick={() => fileRef.current.click()}
+        onDragOver={e => { e.preventDefault(); setDragging(true) }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={onDrop}
+      >
+        <Upload className="mx-auto mb-3 text-blue-400" size={36} />
+        <p className="font-semibold text-gray-700">Arrastra o haz clic para subir el Excel</p>
+        <p className="text-sm text-gray-400 mt-1">Solo se usa la primera hoja (.xlsx)</p>
+        {nombreArchivo && <p className="text-sm font-medium text-blue-500 mt-3">Archivo: {nombreArchivo}</p>}
+        <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={onFileChange} />
+      </div>
+
+      {/* Cards por técnico */}
+      {tieneDatos && Object.entries(grupos).map(([tecnico, tickets]) => (
+        <div
+          key={tecnico}
+          ref={el => (cardRefs.current[tecnico] = el)}
+          className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden fade-in"
+        >
+          {/* Header del técnico */}
+          <div className="flex items-center justify-between px-5 py-4 bg-gray-50 border-b border-gray-100">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center">
+                <Wrench size={16} className="text-blue-600" />
+              </div>
+              <div>
+                <p className="font-semibold text-gray-800 leading-tight">{tecnico}</p>
+                <p className="text-xs text-gray-400">{tickets.length} ticket{tickets.length !== 1 ? 's' : ''}</p>
+              </div>
             </div>
 
-            {/* Listado Técnicos */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {Object.entries(ticketsPorTecnico).map(([tecnico, tickets]) => {
-                const elementId = `reporte-${tecnico.replace(/\s+/g, '-')}`;
-                
-                return (
-                  <div key={tecnico} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
-                    
-                    {/* Tarjeta Visual para Captura (Oculta scrollbar visualmente en web pero la mantiene en imagen) */}
-                    <div id={elementId} className="p-5 bg-white">
-                      <div className="flex justify-between items-center border-b pb-3 mb-4">
-                        <h2 className="text-lg font-bold uppercase">{tecnico}</h2>
-                        <span className="bg-brand-dark text-white px-3 py-1 rounded-full text-xs font-bold">
-                          {tickets.length} TICKETS
-                        </span>
-                      </div>
-                      
-                      <div className="space-y-4">
-                        {tickets.map((t, idx) => (
-                          <div key={idx} className="bg-gray-50 p-4 rounded-lg border border-gray-100 text-sm flex flex-col gap-1">
-                            <p><span className="font-semibold text-gray-500">REF:</span> {t['N° REFERENCIA']}</p>
-                            <p><span className="font-semibold text-gray-500">NEGOCIO:</span> {t['NEGOCIO']}</p>
-                            <p><span className="font-semibold text-gray-500">DIR:</span> {t['DIRECCIÓN']}</p>
-                            <p><span className="font-semibold text-gray-500">CLIENTE:</span> {t['CLIENTE']}</p>
-                            <div className="grid grid-cols-2 gap-2 mt-1">
-                              <p><span className="font-semibold text-gray-500">SERIE:</span> {t['SERIE']}</p>
-                              <p><span className="font-semibold text-gray-500">MOD:</span> {t['MODELO']}</p>
-                            </div>
-                            <div className="mt-2 pt-2 border-t border-gray-200">
-                              <p className="font-semibold text-gray-500 text-xs uppercase mb-1">Descripción:</p>
-                              <p className="text-gray-800">{t['DESCRIPCIÓN INICIAL']}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Botones de Acción */}
-                    <div className="p-4 bg-gray-50 border-t border-gray-100 grid grid-cols-2 sm:grid-cols-4 gap-2 mt-auto">
-                      <button onClick={() => handleCopiar(tecnico, tickets)} className="flex items-center justify-center gap-1 text-xs font-semibold py-2 px-3 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 transition">
-                        <Copy size={14} /> Copiar
-                      </button>
-                      <button onClick={() => handleWhatsApp(tecnico, tickets)} className="flex items-center justify-center gap-1 text-xs font-semibold py-2 px-3 bg-[#25D366] text-white rounded-lg hover:bg-[#1DA851] transition">
-                        <MessageCircle size={14} /> WhatsApp
-                      </button>
-                      <button onClick={() => handleImagen(tecnico, elementId)} className="flex items-center justify-center gap-1 text-xs font-semibold py-2 px-3 bg-brand-dark text-white rounded-lg hover:bg-black transition">
-                        <ImageIcon size={14} /> Imagen
-                      </button>
-                      <button onClick={() => handlePDF(tecnico, elementId)} className="flex items-center justify-center gap-1 text-xs font-semibold py-2 px-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition">
-                        <FileText size={14} /> PDF
-                      </button>
-                    </div>
-
-                  </div>
-                );
-              })}
+            {/* Botones de acción */}
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              <button
+                onClick={() => copiarTexto(tecnico, tickets)}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition font-medium"
+              >
+                <Clipboard size={13} /> Copiar
+              </button>
+              <button
+                onClick={() => abrirWhatsapp(tecnico, tickets)}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-green-50 hover:bg-green-100 text-green-700 transition font-medium"
+              >
+                <MessageCircle size={13} /> WhatsApp
+              </button>
+              <button
+                onClick={() => generarImagen(tecnico)}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 transition font-medium"
+              >
+                <Image size={13} /> Imagen
+              </button>
+              <button
+                onClick={() => generarPDF(tecnico, tickets)}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 transition font-medium"
+              >
+                <FileText size={13} /> PDF
+              </button>
+              <button
+                onClick={() => setExpandido(p => ({ ...p, [tecnico]: !p[tecnico] }))}
+                className="p-1.5 rounded-lg hover:bg-gray-200 transition text-gray-500"
+              >
+                <ChevronDown size={16} className={`transition-transform ${expandido[tecnico] ? 'rotate-180' : ''}`} />
+              </button>
             </div>
           </div>
-        )}
 
-        {/* ================= MÓDULO PENDIENTES ================= */}
-        {activeTab === 'pendientes' && (
-          <div className="space-y-6">
-            <button onClick={openNewModal} className="w-full md:w-auto bg-brand-dark text-white px-6 py-3 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-black transition-colors shadow-sm">
-              <Plus size={20} /> Crear Pendiente
-            </button>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {pendientes.map(p => (
-                <div key={p.id} className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex flex-col gap-3">
-                  <div className="flex justify-between items-start">
-                    <h3 className="font-bold text-gray-800 text-lg leading-tight">{p.titulo}</h3>
-                    <span onClick={() => changeStatus(p.id, p.estado)} className={`cursor-pointer px-2 py-1 rounded text-xs font-bold uppercase transition-colors
-                      ${p.estado === 'Pendiente' ? 'bg-yellow-100 text-yellow-800' : 
-                        p.estado === 'En proceso' ? 'bg-blue-100 text-blue-800' :
-                        p.estado === 'Realizado' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                      {p.estado}
-                    </span>
-                  </div>
-                  
-                  <p className="text-sm text-gray-600 line-clamp-3">{p.descripcion}</p>
-                  
-                  <div className="mt-auto pt-4 flex items-center justify-between border-t border-gray-50">
-                    <div className="text-xs text-gray-400 font-medium">
-                      {new Date(p.fecha).toLocaleDateString('es-ES')} • 
-                      <span className={`ml-1 ${p.prioridad === 'Alta' ? 'text-red-500' : p.prioridad === 'Media' ? 'text-yellow-500' : 'text-green-500'}`}>
-                        Pri: {p.prioridad}
-                      </span>
-                    </div>
-                    <div className="flex gap-2">
-                      <button onClick={() => editPendiente(p)} className="p-1.5 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition">
-                        <Edit2 size={16} />
-                      </button>
-                      <button onClick={() => deletePendiente(p.id)} className="p-1.5 bg-red-50 text-red-600 rounded hover:bg-red-100 transition">
-                        <Trash2 size={16} />
-                      </button>
+          {/* Lista de tickets */}
+          {expandido[tecnico] && (
+            <div className="divide-y divide-gray-50">
+              {tickets.map((t, i) => (
+                <div key={i} className="px-5 py-4 hover:bg-gray-50 transition">
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
+                          #{t['N° REFERENCIA'] || '-'}
+                        </span>
+                        <TicketBadge estado={t['ESTADO']} />
+                      </div>
+                      <p className="font-semibold text-sm text-gray-800 truncate">{t['NEGOCIO'] || '-'}</p>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-gray-500">
+                        <span>📍 {t['DIRECCIÓN'] || '-'}</span>
+                        <span>👤 {t['CLIENTE'] || '-'}</span>
+                        <span>🧊 {t['SERIE'] || '-'}</span>
+                        <span>📦 {t['MODELO'] || '-'}</span>
+                      </div>
+                      {t['DESCRIPCIÓN INICIAL'] && t['DESCRIPCIÓN INICIAL'] !== '-' && (
+                        <p className="text-xs text-gray-500 mt-1 bg-gray-50 rounded px-2 py-1 border-l-2 border-blue-200">
+                          {t['DESCRIPCIÓN INICIAL']}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          )}
+        </div>
+      ))}
 
-      </main>
+      {!tieneDatos && (
+        <div className="text-center py-16 text-gray-300">
+          <Wrench size={48} className="mx-auto mb-3" />
+          <p className="text-sm">Sube un archivo Excel para ver los tickets</p>
+        </div>
+      )}
+    </div>
+  )
+}
 
-      {/* ================= MODAL PENDIENTES ================= */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md p-6 relative shadow-xl">
-            <button onClick={() => setShowModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
-              <X size={24} />
+// ─── MÓDULO PENDIENTES ───────────────────────────────────────────────────────
+
+const PRIORIDADES = ['Baja', 'Media', 'Alta']
+const ESTADOS_P   = ['Pendiente', 'En proceso', 'Realizado', 'Cancelado']
+
+const VACÍO = { titulo: '', descripcion: '', fecha: '', prioridad: 'Media', estado: 'Pendiente' }
+
+function prioBadge(p) {
+  if (p === 'Baja')  return 'prio-baja'
+  if (p === 'Alta')  return 'prio-alta'
+  return 'prio-media'
+}
+function estBadge(e) {
+  if (e === 'Pendiente')  return 'est-pendiente'
+  if (e === 'En proceso') return 'est-proceso'
+  if (e === 'Realizado')  return 'est-realizado'
+  return 'est-cancelado'
+}
+
+function ModuloPendientes() {
+  const [items, setItems] = useState([])
+  const [cargando, setCargando] = useState(true)
+  const [modal, setModal] = useState(false)
+  const [form, setForm] = useState(VACÍO)
+  const [editId, setEditId] = useState(null)
+  const [filtro, setFiltro] = useState('Todos')
+  const [error, setError] = useState('')
+
+  // Cargar desde Supabase al montar
+  useEffect(() => { cargar() }, [])
+
+  async function cargar() {
+    setCargando(true)
+    const { data, error } = await supabase
+      .from('pendientes')
+      .select('*')
+      .order('created_at', { ascending: false })
+    if (error) setError('Error al cargar. Verifica tu Supabase.')
+    else setItems(data || [])
+    setCargando(false)
+  }
+
+  function abrirNuevo() {
+    setForm(VACÍO)
+    setEditId(null)
+    setModal(true)
+  }
+
+  function abrirEditar(item) {
+    setForm({
+      titulo: item.titulo,
+      descripcion: item.descripcion || '',
+      fecha: item.fecha || '',
+      prioridad: item.prioridad,
+      estado: item.estado,
+    })
+    setEditId(item.id)
+    setModal(true)
+  }
+
+  async function guardar() {
+    if (!form.titulo.trim()) { setError('El título es obligatorio.'); return }
+    setError('')
+    if (editId) {
+      const { error } = await supabase.from('pendientes').update(form).eq('id', editId)
+      if (error) { setError('Error al actualizar.'); return }
+    } else {
+      const { error } = await supabase.from('pendientes').insert([form])
+      if (error) { setError('Error al guardar. ¿Creaste la tabla?'); return }
+    }
+    setModal(false)
+    cargar()
+  }
+
+  async function eliminar(id) {
+    if (!confirm('¿Eliminar este pendiente?')) return
+    await supabase.from('pendientes').delete().eq('id', id)
+    cargar()
+  }
+
+  async function cambiarEstado(id, estadoActual) {
+    const idx = ESTADOS_P.indexOf(estadoActual)
+    const siguiente = ESTADOS_P[(idx + 1) % ESTADOS_P.length]
+    await supabase.from('pendientes').update({ estado: siguiente }).eq('id', id)
+    cargar()
+  }
+
+  const filtrados = filtro === 'Todos' ? items : items.filter(i => i.estado === filtro)
+
+  return (
+    <div className="space-y-5">
+      {/* Toolbar */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex gap-2 flex-wrap">
+          {['Todos', ...ESTADOS_P].map(e => (
+            <button
+              key={e}
+              onClick={() => setFiltro(e)}
+              className={`text-xs px-3 py-1.5 rounded-lg font-medium transition border ${
+                filtro === e
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+              }`}
+            >
+              {e}
             </button>
-            <h2 className="text-xl font-bold mb-5">{formData.id ? 'Editar Pendiente' : 'Nuevo Pendiente'}</h2>
-            
-            <form onSubmit={savePendiente} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1">TÍTULO</label>
-                <input required type="text" value={formData.titulo} onChange={e => setFormData({...formData, titulo: e.target.value})} className="w-full border border-gray-300 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-brand-dark outline-none transition" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1">DESCRIPCIÓN</label>
-                <textarea rows="3" value={formData.descripcion} onChange={e => setFormData({...formData, descripcion: e.target.value})} className="w-full border border-gray-300 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-brand-dark outline-none transition" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 mb-1">FECHA</label>
-                  <input required type="date" value={formData.fecha} onChange={e => setFormData({...formData, fecha: e.target.value})} className="w-full border border-gray-300 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-brand-dark outline-none transition" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 mb-1">PRIORIDAD</label>
-                  <select value={formData.prioridad} onChange={e => setFormData({...formData, prioridad: e.target.value})} className="w-full border border-gray-300 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-brand-dark outline-none transition bg-white">
-                    <option value="Baja">Baja</option>
-                    <option value="Media">Media</option>
-                    <option value="Alta">Alta</option>
-                  </select>
-                </div>
-              </div>
-              <button type="submit" className="w-full bg-brand-dark text-white font-bold py-3 rounded-lg hover:bg-black transition-colors mt-2">
-                Guardar
-              </button>
-            </form>
-          </div>
+          ))}
+        </div>
+        <button
+          onClick={abrirNuevo}
+          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-xl font-medium transition shadow-sm"
+        >
+          <Plus size={15} /> Nuevo
+        </button>
+      </div>
+
+      {/* Error global */}
+      {error && !modal && (
+        <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+          <AlertCircle size={15} /> {error}
         </div>
       )}
 
+      {/* Lista */}
+      {cargando ? (
+        <div className="text-center py-16 text-gray-400 text-sm">
+          <RotateCcw size={30} className="mx-auto mb-2 animate-spin" />
+          Cargando pendientes…
+        </div>
+      ) : filtrados.length === 0 ? (
+        <div className="text-center py-16 text-gray-300">
+          <ClipboardList size={48} className="mx-auto mb-3" />
+          <p className="text-sm">No hay pendientes en esta categoría</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filtrados.map(item => (
+            <div key={item.id} className="bg-white border border-gray-100 rounded-2xl shadow-sm px-5 py-4 fade-in hover:shadow-md transition">
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div className="flex-1 min-w-0 space-y-1.5">
+                  <p className="font-semibold text-gray-800 leading-tight">{item.titulo}</p>
+                  {item.descripcion && (
+                    <p className="text-sm text-gray-500 leading-snug">{item.descripcion}</p>
+                  )}
+                  <div className="flex items-center gap-2 flex-wrap mt-1">
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${prioBadge(item.prioridad)}`}>
+                      {item.prioridad}
+                    </span>
+                    <button
+                      onClick={() => cambiarEstado(item.id, item.estado)}
+                      title="Clic para cambiar estado"
+                      className={`text-xs font-medium px-2 py-0.5 rounded-full cursor-pointer hover:opacity-80 transition ${estBadge(item.estado)}`}
+                    >
+                      {item.estado}
+                    </button>
+                    {item.fecha && (
+                      <span className="text-xs text-gray-400">
+                        📅 {item.fecha}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => abrirEditar(item)}
+                    className="p-2 rounded-lg hover:bg-blue-50 text-blue-500 transition"
+                    title="Editar"
+                  >
+                    <Pencil size={15} />
+                  </button>
+                  <button
+                    onClick={() => eliminar(item.id)}
+                    className="p-2 rounded-lg hover:bg-red-50 text-red-400 transition"
+                    title="Eliminar"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Modal crear / editar */}
+      {modal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md fade-in">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h3 className="font-semibold text-gray-800">{editId ? 'Editar pendiente' : 'Nuevo pendiente'}</h3>
+              <button onClick={() => setModal(false)} className="p-1 rounded-lg hover:bg-gray-100 text-gray-500 transition">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              {error && (
+                <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-lg">{error}</p>
+              )}
+
+              {/* Título */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Título *</label>
+                <input
+                  type="text"
+                  value={form.titulo}
+                  onChange={e => setForm(p => ({ ...p, titulo: e.target.value }))}
+                  placeholder="Ej: Revisar servidor"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-400 transition"
+                />
+              </div>
+
+              {/* Descripción */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Descripción</label>
+                <textarea
+                  value={form.descripcion}
+                  onChange={e => setForm(p => ({ ...p, descripcion: e.target.value }))}
+                  rows={3}
+                  placeholder="Detalles del pendiente…"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-400 transition resize-none"
+                />
+              </div>
+
+              {/* Fecha */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Fecha</label>
+                <input
+                  type="date"
+                  value={form.fecha}
+                  onChange={e => setForm(p => ({ ...p, fecha: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-400 transition"
+                />
+              </div>
+
+              {/* Prioridad + Estado */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">Prioridad</label>
+                  <select
+                    value={form.prioridad}
+                    onChange={e => setForm(p => ({ ...p, prioridad: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 transition bg-white"
+                  >
+                    {PRIORIDADES.map(p => <option key={p}>{p}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">Estado</label>
+                  <select
+                    value={form.estado}
+                    onChange={e => setForm(p => ({ ...p, estado: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 transition bg-white"
+                  >
+                    {ESTADOS_P.map(e => <option key={e}>{e}</option>)}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Acciones del modal */}
+            <div className="flex justify-end gap-2 px-6 py-4 border-t border-gray-100">
+              <button
+                onClick={() => { setModal(false); setError('') }}
+                className="px-4 py-2 rounded-xl text-sm text-gray-600 hover:bg-gray-100 transition font-medium"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={guardar}
+                className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm bg-blue-600 hover:bg-blue-700 text-white font-medium transition shadow-sm"
+              >
+                <CheckCircle size={15} /> Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
-  );
+  )
 }
+
+// ─── APP PRINCIPAL ────────────────────────────────────────────────────────────
+
+export default function App() {
+  const [tab, setTab] = useState('tecnicos')
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white border-b border-gray-100 sticky top-0 z-40 shadow-sm">
+        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center">
+              <Wrench size={16} className="text-white" />
+            </div>
+            <span className="font-bold text-gray-800 text-lg tracking-tight">Ticket Manager</span>
+          </div>
+
+          {/* Tabs */}
+          <nav className="flex gap-1 bg-gray-100 p-1 rounded-xl">
+            <button
+              onClick={() => setTab('tecnicos')}
+              className={`flex items-center gap-1.5 text-sm px-4 py-1.5 rounded-lg font-medium transition ${
+                tab === 'tecnicos'
+                  ? 'bg-white shadow-sm text-gray-800'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <Wrench size={14} /> Técnicos
+            </button>
+            <button
+              onClick={() => setTab('pendientes')}
+              className={`flex items-center gap-1.5 text-sm px-4 py-1.5 rounded-lg font-medium transition ${
+                tab === 'pendientes'
+                  ? 'bg-white shadow-sm text-gray-800'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <ClipboardList size={14} /> Pendientes
+            </button>
+          </nav>
+        </div>
+      </header>
+
+      {/* Contenido */}
+      <main className="max-w-5xl mx-auto px-4 py-8">
+        {tab === 'tecnicos' && <ModuloTecnicos />}
+        {tab === 'pendientes' && <ModuloPendientes />}
+      </main>
+
+      {/* Footer */}
+      <footer className="text-center text-xs text-gray-300 py-6">
+        Ticket Manager · {new Date().getFullYear()}
+      </footer>
+    </div>
+  )
+}
+
+```
