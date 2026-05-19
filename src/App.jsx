@@ -1,10 +1,3 @@
-Entendido. Tienes toda la razón, cuando estamos armando y depurando es mucho más fácil, rápido y seguro simplemente copiar y pegar el archivo completo para evitar errores de sintaxis o llaves perdidas.
-
-Aquí tienes el archivo **`App.jsx` COMPLETO**, integrando el diseño que te generó Claude pero con el **motor de lectura de Excel a prueba de balas** que normaliza mayúsculas, minúsculas, espacios y acentos, además de la alerta visual si el Excel no trae los datos esperados.
-
-Copia este código y reemplaza **TODO** el contenido de tu actual `src/App.jsx`:
-
-```javascript
 import { useState, useEffect, useRef } from 'react'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
@@ -679,5 +672,3 @@ export default function App() {
     </div>
   )
 }
-
-```
