@@ -37,7 +37,6 @@ function buildMessage(tecnico, tickets) {
 
 // Badge de estado del ticket
 function TicketBadge({ estado }) {
-  // Normalizar para pintar el color correcto aunque venga en minúsculas
   const estNormalizado = (estado || '').toString().toLowerCase();
   let cls = 'badge-asignada'
   if (estNormalizado.includes('proceso')) cls = 'badge-proceso'
@@ -59,7 +58,7 @@ function ModuloTecnicos() {
   const fileRef = useRef()
   const cardRefs = useRef({})
 
-  // Procesa el archivo Excel (VERSIÓN ROBUSTA MEJORADA)
+  // Procesa el archivo Excel (VERSIÓN CON INTELIGENCIA AVANZADA)
   function procesarExcel(file) {
     if (!file) return;
     setNombreArchivo(file.name);
@@ -67,61 +66,82 @@ function ModuloTecnicos() {
     const reader = new FileReader()
     reader.onload = (e) => {
       const wb = XLSX.read(e.target.result, { type: 'array' })
-      // Solo la PRIMERA hoja
       const ws = wb.Sheets[wb.SheetNames[0]]
-      const rawData = XLSX.utils.sheet_to_json(ws, { defval: '' })
+      
+      // 1. Leer como Matriz pura para encontrar en qué fila están los encabezados
+      const rawMatrix = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
+      
+      let headerRowIndex = -1;
+      let headerKeys = [];
 
-      // ESTADOS VÁLIDOS (En mayúsculas y sin acentos para la comparación)
-      const estadosValidos = ['ASIGNADA A TECNICO', 'EN PROCESO', 'ASIGNADA A AGENCIA']
+      // 2. Buscar la palabra ESTADO en las filas
+      for (let i = 0; i < rawMatrix.length; i++) {
+        const row = rawMatrix[i];
+        const upperRow = row.map(cell => String(cell).trim().toUpperCase());
+        
+        if (upperRow.includes('ESTADO')) {
+          headerRowIndex = i;
+          headerKeys = upperRow;
+          break;
+        }
+      }
+
+      if (headerRowIndex === -1) {
+        alert("⚠️ No encontré ninguna columna llamada 'ESTADO' en el archivo.\nVerifica que el Excel tenga esa columna.");
+        return;
+      }
+
       const agrupados = {}
       let ticketsEncontrados = 0
 
-      rawData.forEach(rawRow => {
-        // 1. Convertir todas las columnas del Excel a MAYÚSCULAS y quitar espacios
-        const fila = {}
-        Object.keys(rawRow).forEach(key => {
-          fila[key.trim().toUpperCase()] = rawRow[key]
-        })
+      // 3. Procesar los datos desde la fila siguiente a los encabezados
+      for (let i = headerRowIndex + 1; i < rawMatrix.length; i++) {
+        const row = rawMatrix[i];
+        const fila = {};
+        
+        // Emparejar cada celda con su encabezado
+        headerKeys.forEach((key, index) => {
+          if (key) fila[key] = row[index];
+        });
 
-        // 2. Extraer el ESTADO, pasarlo a mayúsculas y quitarle los acentos
-        let estadoReal = (fila['ESTADO'] || '').toString().trim().toUpperCase()
-        estadoReal = estadoReal.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        // 4. Limpiar y normalizar el estado
+        let estadoOriginal = String(fila['ESTADO'] || '').trim();
+        let estadoLimpio = estadoOriginal.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-        // 3. Evaluar si es un estado válido
-        if (estadosValidos.includes(estadoReal)) {
-          ticketsEncontrados++
-          
-          // 4. Extraer técnico (buscando variantes comunes)
-          let tecnico = (fila['TÉCNICO'] || fila['TECNICO'] || '').toString().trim()
-          
-          if (!tecnico || tecnico === '') {
-            tecnico = 'SIN TÉCNICO'
-          }
-          if (estadoReal === 'ASIGNADA A AGENCIA') {
-            tecnico = tecnico || 'SIN TÉCNICO'
-          }
+        // 5. Búsqueda ultra flexible de palabras clave
+        const esAsignadoTecnico = estadoLimpio.includes('ASIGNAD') && estadoLimpio.includes('TECNICO');
+        const esEnProceso = estadoLimpio.includes('PROCESO');
+        const esAsignadoAgencia = estadoLimpio.includes('ASIGNAD') && estadoLimpio.includes('AGENCIA');
 
-          if (!agrupados[tecnico]) agrupados[tecnico] = []
+        if (esAsignadoTecnico || esEnProceso || esAsignadoAgencia) {
+          ticketsEncontrados++;
           
-          // 5. Guardar los datos mapeados
+          // Buscar posibles nombres de la columna técnico
+          let tecnico = String(fila['TÉCNICO'] || fila['TECNICO'] || fila['TECNICOS'] || '').trim();
+          
+          if (!tecnico || tecnico === '') tecnico = 'SIN TÉCNICO';
+          if (esAsignadoAgencia) tecnico = tecnico || 'SIN TÉCNICO';
+
+          if (!agrupados[tecnico]) agrupados[tecnico] = [];
+          
+          // Buscar posibles variaciones en los nombres de las demás columnas
           agrupados[tecnico].push({
-            'N° REFERENCIA': fila['N° REFERENCIA'] || fila['NO REFERENCIA'] || fila['REFERENCIA'] || '-',
-            'NEGOCIO': fila['NEGOCIO'] || '-',
+            'N° REFERENCIA': fila['N° REFERENCIA'] || fila['NO REFERENCIA'] || fila['REFERENCIA'] || fila['TICKET'] || '-',
+            'NEGOCIO': fila['NEGOCIO'] || fila['NOMBRE NEGOCIO'] || fila['SUCURSAL'] || '-',
             'DIRECCIÓN': fila['DIRECCIÓN'] || fila['DIRECCION'] || '-',
-            'CLIENTE': fila['CLIENTE'] || '-',
-            'SERIE': fila['SERIE'] || '-',
+            'CLIENTE': fila['CLIENTE'] || fila['NOMBRE CLIENTE'] || '-',
+            'SERIE': fila['SERIE'] || fila['NO SERIE'] || '-',
             'MODELO': fila['MODELO'] || '-',
-            'ESTADO': rawRow['ESTADO'] || rawRow['Estado'] || estadoReal, // Guardamos el original para mostrar
-            'DESCRIPCIÓN INICIAL': fila['DESCRIPCIÓN INICIAL'] || fila['DESCRIPCION INICIAL'] || fila['DESCRIPCION'] || '-'
+            'ESTADO': estadoOriginal,
+            'DESCRIPCIÓN INICIAL': fila['DESCRIPCIÓN INICIAL'] || fila['DESCRIPCION INICIAL'] || fila['DESCRIPCION'] || fila['PROBLEMA'] || '-'
           })
         }
-      })
+      }
 
       if (ticketsEncontrados === 0) {
-        alert("⚠️ No se encontraron tickets válidos.\n\nPor favor verifica:\n1. Que la hoja tenga una columna llamada 'ESTADO'\n2. Que haya tickets con estado 'Asignada a Técnico', 'En Proceso' o 'Asignada a Agencia'.")
+        alert("⚠️ Encontré la columna 'ESTADO', pero no detecté ningún ticket asignado o en proceso.\n¿Estás seguro de que este reporte tiene tickets activos?");
       } else {
         setGrupos(agrupados)
-        // Expandir todos por defecto
         const exp = {}
         Object.keys(agrupados).forEach(k => (exp[k] = true))
         setExpandido(exp)
@@ -139,7 +159,7 @@ function ModuloTecnicos() {
     e.preventDefault()
     setDragging(false)
     const f = e.dataTransfer.files[0]
-    if (f && f.name.match(/\.xlsx?$/i)) procesarExcel(f)
+    if (f) procesarExcel(f)
   }
 
   // Copiar texto al portapapeles
@@ -232,9 +252,9 @@ function ModuloTecnicos() {
       >
         <Upload className="mx-auto mb-3 text-blue-400" size={36} />
         <p className="font-semibold text-gray-700">Arrastra o haz clic para subir el Excel</p>
-        <p className="text-sm text-gray-400 mt-1">Solo se usa la primera hoja (.xlsx)</p>
+        <p className="text-sm text-gray-400 mt-1">Soporta formatos .xlsx, .xls y .csv</p>
         {nombreArchivo && <p className="text-sm font-medium text-blue-500 mt-3">Archivo: {nombreArchivo}</p>}
-        <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={onFileChange} />
+        <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={onFileChange} />
       </div>
 
       {/* Cards por técnico */}
@@ -328,7 +348,7 @@ function ModuloTecnicos() {
       {!tieneDatos && (
         <div className="text-center py-16 text-gray-300">
           <Wrench size={48} className="mx-auto mb-3" />
-          <p className="text-sm">Sube un archivo Excel para ver los tickets</p>
+          <p className="text-sm">Sube un archivo Excel o CSV para ver los tickets</p>
         </div>
       )}
     </div>
