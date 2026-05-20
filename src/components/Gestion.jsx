@@ -13,12 +13,12 @@ const ESTADOS_PARTICULAR = ['Pendiente de pago', 'Pagado', 'En Proceso', 'Comple
 const VACIO_TAREA = { tipo: 'Tarea', titulo: '', descripcion: '', fecha: '', prioridad: 'Media', estado: 'Pendiente' }
 const VACIO_PARTICULAR = { tipo: 'Particular', titulo: '', descripcion: '', fecha: '', prioridad: 'Media', estado: 'Pendiente de pago', orden: '', correlativo: '', negocio: '', nit: '', direccion: '' }
 
-function prioBadge(p) { return p === 'Baja' ? 'bg-gray-100 text-gray-700' : p === 'Alta' ? 'bg-red-100 text-red-800' : 'bg-orange-100 text-orange-800' }
+function prioBadge(p) { return p === 'Baja' ? 'bg-gray-100 text-gray-700 border-gray-200' : p === 'Alta' ? 'bg-red-100 text-red-800 border-red-200' : 'bg-orange-100 text-orange-800 border-orange-200' }
 function estBadge(e) { 
-  if (e === 'Pendiente' || e === 'Pendiente de pago') return 'bg-yellow-100 text-yellow-800'
-  if (e === 'En proceso' || e === 'En Proceso') return 'bg-blue-100 text-blue-800'
-  if (e === 'Realizado' || e === 'Pagado' || e === 'Completada') return 'bg-green-100 text-green-800'
-  return 'bg-gray-100 text-gray-500'
+  if (e === 'Pendiente' || e === 'Pendiente de pago') return 'bg-yellow-100 text-yellow-800 border-yellow-200'
+  if (e === 'En proceso' || e === 'En Proceso') return 'bg-blue-100 text-blue-800 border-blue-200'
+  if (e === 'Realizado' || e === 'Pagado' || e === 'Completada') return 'bg-green-100 text-green-800 border-green-200'
+  return 'bg-gray-100 text-gray-500 border-gray-200'
 }
 
 export default function ModuloPendientes() {
@@ -56,6 +56,19 @@ export default function ModuloPendientes() {
     setEditId(item.id)
     setArchivosSubir([])
     setModal(true)
+  }
+
+  function eliminarArchivoExistente(index) {
+    if(!confirm('¿Quitar este archivo del registro?')) return;
+    const nuevosArchivos = [...form.archivos];
+    nuevosArchivos.splice(index, 1);
+    setForm({ ...form, archivos: nuevosArchivos });
+  }
+
+  function quitarArchivoParaSubir(index) {
+    const nuevos = [...archivosSubir];
+    nuevos.splice(index, 1);
+    setArchivosSubir(nuevos);
   }
 
   function comprimirImagen(file) {
@@ -116,7 +129,7 @@ export default function ModuloPendientes() {
   }
 
   async function eliminar(id) {
-    if (!confirm('¿Eliminar registro?')) return
+    if (!confirm('¿Eliminar registro de la base de datos?')) return
     await supabase.from('pendientes').delete().eq('id', id)
     cargar()
   }
@@ -157,8 +170,8 @@ export default function ModuloPendientes() {
   const tabsActuales = vistaActual === 'Tarea' ? ESTADOS_TAREA : ESTADOS_PARTICULAR
 
   return (
-    <div className="space-y-5">
-      <div className="flex p-1 bg-white border border-gray-200 rounded-xl max-w-sm mx-auto mb-6 shadow-sm">
+    <div className="space-y-6">
+      <div className="flex p-1 bg-white border border-gray-200 rounded-xl max-w-sm mx-auto shadow-sm">
         <button onClick={() => {setVistaActual('Tarea'); setFiltro('Todos')}} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${vistaActual === 'Tarea' ? 'bg-gray-900 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>Mis Pendientes</button>
         <button onClick={() => {setVistaActual('Particular'); setFiltro('Todos')}} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${vistaActual === 'Particular' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>Servicios Particulares</button>
       </div>
@@ -166,56 +179,56 @@ export default function ModuloPendientes() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex gap-2 flex-wrap">
           {['Todos', ...tabsActuales].map(e => (
-            <button key={e} onClick={() => setFiltro(e)} className={`text-xs px-3 py-1.5 rounded-lg font-bold transition border ${filtro === e ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}>{e}</button>
+            <button key={e} onClick={() => setFiltro(e)} className={`text-xs px-4 py-2 rounded-xl font-bold transition border ${filtro === e ? 'bg-gray-800 text-white border-gray-800 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}>{e}</button>
           ))}
         </div>
-        <button onClick={abrirNuevo} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-xl font-bold transition shadow-sm">
-          <Plus size={15} /> Nuevo {vistaActual === 'Tarea' ? 'Pendiente' : 'Servicio'}
+        <button onClick={abrirNuevo} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm px-5 py-2.5 rounded-xl font-bold transition shadow-md">
+          <Plus size={16} /> Nuevo {vistaActual === 'Tarea' ? 'Pendiente' : 'Servicio'}
         </button>
       </div>
 
-      {error && !modal && <div className="text-sm font-bold text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">{error}</div>}
+      {error && !modal && <div className="text-sm font-bold text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3 shadow-sm">{error}</div>}
 
       {cargando ? (
-        <div className="text-center py-16 text-gray-400 font-bold"><RotateCcw size={30} className="mx-auto mb-2 animate-spin" /> Cargando…</div>
+        <div className="text-center py-20 text-gray-400 font-bold"><RotateCcw size={32} className="mx-auto mb-3 animate-spin text-blue-500" /> Cargando…</div>
       ) : filtrados.length === 0 ? (
-        <div className="text-center py-16 text-gray-300"><ClipboardList size={48} className="mx-auto mb-3" /> <p className="font-bold">No hay registros</p></div>
+        <div className="text-center py-20 text-gray-400"><ClipboardList size={54} className="mx-auto mb-4 text-gray-300" /> <p className="font-bold text-lg">No hay registros aquí</p></div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {filtrados.map(item => (
-            <div key={item.id} className={`bg-white border border-gray-200 rounded-2xl shadow-sm px-5 py-5 transition relative overflow-hidden ${(item.estado === 'Realizado' || item.estado === 'Completada' || item.estado === 'Pagado') ? 'opacity-80' : ''}`}>
-              {item.tipo === 'Particular' && <div className="absolute top-0 left-0 w-full h-1 bg-blue-500"></div>}
+            <div key={item.id} className={`bg-white border border-gray-200 rounded-2xl shadow-md px-6 py-6 transition-all relative overflow-hidden ${(item.estado === 'Realizado' || item.estado === 'Completada' || item.estado === 'Pagado') ? 'opacity-75 bg-gray-50' : 'hover:shadow-lg hover:border-blue-200'}`}>
+              {item.tipo === 'Particular' && <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-500 to-blue-700"></div>}
 
-              <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
+              <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
                 <div className="flex-1 min-w-0">
-                  <p className={`font-black text-lg text-gray-900 leading-tight ${(item.estado === 'Realizado' || item.estado === 'Completada') ? 'line-through text-gray-400' : ''}`}>{item.titulo}</p>
+                  <p className={`font-black text-xl text-gray-900 leading-tight ${(item.estado === 'Realizado' || item.estado === 'Completada') ? 'line-through text-gray-500' : ''}`}>{item.titulo}</p>
                 </div>
-                <div className="flex items-center gap-1">
-                  <button onClick={() => abrirEditar(item)} className="p-1.5 rounded-md hover:bg-blue-50 text-blue-500 transition"><Pencil size={15} /></button>
+                <div className="flex items-center gap-1.5 bg-gray-100 p-1 rounded-lg">
+                  <button onClick={() => abrirEditar(item)} className="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-blue-600 transition"><Pencil size={16} /></button>
                   {item.tipo === 'Tarea' && (
-                    <button onClick={() => eliminar(item.id)} className="p-1.5 rounded-md hover:bg-red-50 text-red-400 transition"><Trash2 size={15} /></button>
+                    <button onClick={() => eliminar(item.id)} className="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-red-500 transition"><Trash2 size={16} /></button>
                   )}
                 </div>
               </div>
 
-              <div className="space-y-3 text-sm">
+              <div className="space-y-4 text-sm">
                 {item.tipo === 'Particular' && (
-                  <div className="grid grid-cols-2 gap-2 text-xs bg-blue-50/50 p-3 rounded-lg border border-blue-100">
-                    <p><span className="font-bold text-blue-900">ORDEN:</span> <span className="font-mono text-blue-700 bg-white px-1 rounded">{item.orden || '-'}</span></p>
-                    <p><span className="font-bold text-blue-900">CORR:</span> <span className="font-mono text-blue-700 bg-white px-1 rounded">{item.correlativo || '-'}</span></p>
+                  <div className="grid grid-cols-2 gap-3 text-xs bg-blue-50 p-4 rounded-xl border border-blue-100 shadow-inner">
+                    <p><span className="font-bold text-blue-900 block mb-0.5">ORDEN:</span> <span className="font-mono font-bold text-blue-800 bg-white px-2 py-0.5 rounded border border-blue-200">{item.orden || '-'}</span></p>
+                    <p><span className="font-bold text-blue-900 block mb-0.5">CORR:</span> <span className="font-mono font-bold text-blue-800 bg-white px-2 py-0.5 rounded border border-blue-200">{item.correlativo || '-'}</span></p>
                     <p className="col-span-2"><span className="font-bold text-blue-900">NEGOCIO:</span> {item.negocio || '-'}</p>
                     <p className="col-span-2"><span className="font-bold text-blue-900">NIT:</span> {item.nit || '-'}</p>
                     <p className="col-span-2"><span className="font-bold text-blue-900">DIR:</span> {item.direccion || '-'}</p>
                   </div>
                 )}
                 
-                {item.descripcion && <p className="text-gray-600 leading-snug">{item.descripcion}</p>}
+                {item.descripcion && <p className="text-gray-700 leading-relaxed font-medium">{item.descripcion}</p>}
                 
                 {item.archivos && item.archivos.length > 0 && (
-                  <div className="pt-3 border-t border-gray-100">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold text-gray-500 flex items-center gap-1"><Paperclip size={12} /> {item.archivos.length} adjuntos</span>
-                      <button onClick={() => descargarZIP(item)} className="text-xs font-bold flex items-center gap-1 text-blue-600 bg-blue-50 px-2 py-1 rounded hover:bg-blue-100 transition"><DownloadCloud size={14}/> Bajar TODO (ZIP)</button>
+                  <div className="pt-4 border-t border-gray-100">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-xs font-bold text-gray-500 flex items-center gap-1.5"><Paperclip size={14} /> {item.archivos.length} archivos adjuntos</span>
+                      <button onClick={() => descargarZIP(item)} className="text-xs font-bold flex items-center gap-1.5 text-blue-700 bg-blue-100 px-3 py-1.5 rounded-lg hover:bg-blue-200 transition shadow-sm"><DownloadCloud size={14}/> Descargar ZIP</button>
                     </div>
                     
                     <div className="flex flex-wrap gap-2">
@@ -225,13 +238,13 @@ export default function ModuloPendientes() {
                         const isImage = url.match(/\.(jpeg|jpg|gif|png|webp)$/i) || nombre.match(/\.(jpeg|jpg|gif|png|webp)$/i);
                         
                         return (
-                          <div key={idx} className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded px-2 py-1 text-xs max-w-full">
+                          <div key={idx} className="flex items-center gap-2 bg-white border border-gray-300 shadow-sm rounded-lg px-2.5 py-1.5 text-xs max-w-full hover:border-blue-300 transition">
                             {isImage ? (
-                              <button onClick={() => setImgPreview(url)} className="text-blue-600 hover:text-blue-800 flex items-center gap-1 truncate max-w-[120px] font-bold"><ImageIcon size={12} className="shrink-0"/> <span className="truncate">{nombre}</span></button>
+                              <button onClick={() => setImgPreview(url)} className="text-blue-600 hover:text-blue-800 flex items-center gap-1.5 truncate max-w-[130px] font-bold"><ImageIcon size={14} className="shrink-0"/> <span className="truncate">{nombre}</span></button>
                             ) : (
-                              <a href={url} target="_blank" rel="noopener noreferrer" className="text-gray-700 hover:text-gray-900 flex items-center gap-1 truncate max-w-[120px] font-bold"><FileText size={12} className="shrink-0"/> <span className="truncate">{nombre}</span></a>
+                              <a href={url} target="_blank" rel="noopener noreferrer" className="text-gray-700 hover:text-gray-900 flex items-center gap-1.5 truncate max-w-[130px] font-bold"><FileText size={14} className="shrink-0"/> <span className="truncate">{nombre}</span></a>
                             )}
-                            <a href={url} target="_blank" rel="noopener noreferrer" download className="text-gray-400 hover:text-gray-600 border-l pl-2"><Download size={14} /></a>
+                            <a href={url} target="_blank" rel="noopener noreferrer" download className="text-gray-400 hover:text-gray-700 border-l border-gray-200 pl-2 ml-1"><Download size={14} /></a>
                           </div>
                         )
                       })}
@@ -240,12 +253,12 @@ export default function ModuloPendientes() {
                 )}
               </div>
 
-              <div className="flex items-center justify-between flex-wrap mt-4 pt-3 border-t border-gray-100">
+              <div className="flex items-center justify-between flex-wrap mt-6 pt-4 border-t border-gray-100">
                  <div className="flex items-center gap-2">
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${prioBadge(item.prioridad)}`}>{item.prioridad}</span>
-                    <button onClick={() => cambiarEstado(item.id, item.estado, item.tipo)} className={`text-xs font-bold px-2 py-0.5 rounded-full border cursor-pointer hover:opacity-80 transition ${estBadge(item.estado)}`}>{item.estado}</button>
+                    <span className={`text-xs font-bold px-3 py-1 rounded-full border ${prioBadge(item.prioridad)}`}>{item.prioridad}</span>
+                    <button onClick={() => cambiarEstado(item.id, item.estado, item.tipo)} className={`text-xs font-bold px-3 py-1 rounded-full border cursor-pointer hover:opacity-80 hover:shadow-sm transition ${estBadge(item.estado)}`}>{item.estado}</button>
                   </div>
-                  {item.fecha && <span className={`text-xs font-bold ${new Date(item.fecha) < new Date() && item.estado !== 'Realizado' ? 'text-red-500' : 'text-gray-400'}`}>📅 {item.fecha}</span>}
+                  {item.fecha && <span className={`text-xs font-bold bg-gray-100 px-3 py-1 rounded-full ${new Date(item.fecha) < new Date() && item.estado !== 'Realizado' ? 'text-red-600' : 'text-gray-500'}`}>📅 {item.fecha}</span>}
               </div>
             </div>
           ))}
@@ -253,58 +266,88 @@ export default function ModuloPendientes() {
       )}
 
       {modal && (
-        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg fade-in max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
-              <h3 className="font-black text-gray-900 text-lg">{editId ? 'Editar' : 'Nuevo'} {form.tipo === 'Particular' ? 'Servicio' : 'Pendiente'}</h3>
-              <button onClick={() => setModal(false)} className="p-1 rounded-lg hover:bg-gray-100 text-gray-500"><X size={20} /></button>
+        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg fade-in max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 sticky top-0 bg-white z-10 shadow-sm">
+              <h3 className="font-black text-gray-900 text-xl">{editId ? 'Editar' : 'Nuevo'} {form.tipo === 'Particular' ? 'Servicio' : 'Pendiente'}</h3>
+              <button onClick={() => setModal(false)} className="p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 transition"><X size={20} /></button>
             </div>
             
-            <div className="px-6 py-5 space-y-4">
-              {error && <p className="text-sm font-bold text-red-500 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+            <div className="px-6 py-6 space-y-5">
+              {error && <p className="text-sm font-bold text-red-600 bg-red-50 border border-red-200 px-4 py-3 rounded-xl">{error}</p>}
 
               <div>
-                <label className="block text-xs font-bold text-gray-600 mb-1">Título / Nombre *</label>
-                <input type="text" value={form.titulo} onChange={e => setForm(p => ({ ...p, titulo: e.target.value }))} className="w-full border border-gray-300 rounded-xl px-4 py-2 text-sm focus:border-blue-500 outline-none font-medium" />
+                <label className="block text-xs font-bold text-gray-700 mb-1.5">Título / Nombre *</label>
+                <input type="text" value={form.titulo} onChange={e => setForm(p => ({ ...p, titulo: e.target.value }))} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-bold text-gray-800 bg-gray-50 focus:bg-white transition" placeholder="Ej: Mantenimiento Preventivo" />
               </div>
 
               {form.tipo === 'Particular' && (
-                <div className="grid grid-cols-2 gap-3 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
-                  <div><label className="block text-xs font-bold text-blue-800 mb-1">Orden N°</label><input type="text" value={form.orden || ''} onChange={e => setForm(p => ({ ...p, orden: e.target.value }))} className="w-full border border-blue-200 rounded-lg px-3 py-2 text-sm outline-none" /></div>
-                  <div><label className="block text-xs font-bold text-blue-800 mb-1">Correlativo</label><input type="text" value={form.correlativo || ''} onChange={e => setForm(p => ({ ...p, correlativo: e.target.value }))} className="w-full border border-blue-200 rounded-lg px-3 py-2 text-sm outline-none" /></div>
-                  <div className="col-span-2"><label className="block text-xs font-bold text-blue-800 mb-1">Negocio / Empresa</label><input type="text" value={form.negocio || ''} onChange={e => setForm(p => ({ ...p, negocio: e.target.value }))} className="w-full border border-blue-200 rounded-lg px-3 py-2 text-sm outline-none" /></div>
-                  <div><label className="block text-xs font-bold text-blue-800 mb-1">NIT</label><input type="text" value={form.nit || ''} onChange={e => setForm(p => ({ ...p, nit: e.target.value }))} className="w-full border border-blue-200 rounded-lg px-3 py-2 text-sm outline-none" /></div>
-                  <div className="col-span-2"><label className="block text-xs font-bold text-blue-800 mb-1">Dirección Exacta</label><input type="text" value={form.direccion || ''} onChange={e => setForm(p => ({ ...p, direccion: e.target.value }))} className="w-full border border-blue-200 rounded-lg px-3 py-2 text-sm outline-none" /></div>
+                <div className="grid grid-cols-2 gap-4 bg-blue-50 p-5 rounded-xl border border-blue-100 shadow-inner">
+                  <div><label className="block text-xs font-bold text-blue-900 mb-1">Orden N°</label><input type="text" value={form.orden || ''} onChange={e => setForm(p => ({ ...p, orden: e.target.value }))} className="w-full border border-blue-200 rounded-lg px-3 py-2 text-sm outline-none font-medium bg-white" /></div>
+                  <div><label className="block text-xs font-bold text-blue-900 mb-1">Correlativo</label><input type="text" value={form.correlativo || ''} onChange={e => setForm(p => ({ ...p, correlativo: e.target.value }))} className="w-full border border-blue-200 rounded-lg px-3 py-2 text-sm outline-none font-medium bg-white" /></div>
+                  <div className="col-span-2"><label className="block text-xs font-bold text-blue-900 mb-1">Negocio / Empresa</label><input type="text" value={form.negocio || ''} onChange={e => setForm(p => ({ ...p, negocio: e.target.value }))} className="w-full border border-blue-200 rounded-lg px-3 py-2 text-sm outline-none font-medium bg-white" /></div>
+                  <div><label className="block text-xs font-bold text-blue-900 mb-1">NIT</label><input type="text" value={form.nit || ''} onChange={e => setForm(p => ({ ...p, nit: e.target.value }))} className="w-full border border-blue-200 rounded-lg px-3 py-2 text-sm outline-none font-medium bg-white" /></div>
+                  <div className="col-span-2"><label className="block text-xs font-bold text-blue-900 mb-1">Dirección Exacta</label><input type="text" value={form.direccion || ''} onChange={e => setForm(p => ({ ...p, direccion: e.target.value }))} className="w-full border border-blue-200 rounded-lg px-3 py-2 text-sm outline-none font-medium bg-white" /></div>
                 </div>
               )}
 
               <div>
-                <label className="block text-xs font-bold text-gray-600 mb-1">Descripción / Notas</label>
-                <textarea value={form.descripcion} onChange={e => setForm(p => ({ ...p, descripcion: e.target.value }))} rows={3} className="w-full border border-gray-300 rounded-xl px-4 py-2 text-sm outline-none resize-none font-medium" />
+                <label className="block text-xs font-bold text-gray-700 mb-1.5">Descripción / Notas</label>
+                <textarea value={form.descripcion} onChange={e => setForm(p => ({ ...p, descripcion: e.target.value }))} rows={4} className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none resize-none font-medium text-gray-800 bg-gray-50 focus:bg-white transition" placeholder="Detalles adicionales..." />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-gray-600 mb-1">Subir Archivos (Fotos, PDF, Excel)</label>
-                <input type="file" multiple onChange={(e) => setArchivosSubir(Array.from(e.target.files))} className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer" />
-                {archivosSubir.length > 0 && <p className="text-xs text-blue-600 mt-2 font-bold">{archivosSubir.length} nuevos archivos seleccionados.</p>}
+              <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                <label className="block text-xs font-bold text-gray-700 mb-2">Adjuntar Nuevos Archivos</label>
+                <input type="file" multiple onChange={(e) => setArchivosSubir(Array.from(e.target.files))} className="w-full text-sm text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200 cursor-pointer transition" />
+                
+                {/* Visualizar archivos seleccionados para subir con opción a quitar */}
+                {archivosSubir.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    <p className="text-xs font-bold text-blue-600">Listos para subir:</p>
+                    {archivosSubir.map((arch, idx) => (
+                      <div key={idx} className="flex items-center justify-between bg-blue-50 border border-blue-100 rounded-lg p-2">
+                        <span className="text-xs text-blue-800 font-bold truncate max-w-[85%]">{arch.name}</span>
+                        <button type="button" onClick={() => quitarArchivoParaSubir(idx)} className="text-blue-500 hover:text-red-500 p-1"><Trash2 size={14} /></button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Mostrar y gestionar archivos que ya están en la base de datos */}
+                {editId && form.archivos?.length > 0 && (
+                  <div className="mt-4 pt-3 border-t border-gray-200 space-y-2">
+                    <p className="text-xs font-bold text-gray-500">Archivos ya guardados en este registro:</p>
+                    {form.archivos.map((arch, idx) => {
+                      const nombre = typeof arch === 'string' ? JSON.parse(arch).nombre : arch.nombre;
+                      return (
+                        <div key={idx} className="flex items-center justify-between bg-white border border-gray-300 rounded-lg p-2 shadow-sm">
+                          <span className="text-xs text-gray-700 font-bold truncate max-w-[85%]">{nombre}</span>
+                          <button type="button" onClick={() => eliminarArchivoExistente(idx)} className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-1.5 rounded transition" title="Quitar archivo">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-xs font-bold text-gray-600 mb-1">Fecha</label><input type="date" value={form.fecha} onChange={e => setForm(p => ({ ...p, fecha: e.target.value }))} className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm outline-none font-medium" /></div>
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className="block text-xs font-bold text-gray-700 mb-1.5">Fecha</label><input type="date" value={form.fecha} onChange={e => setForm(p => ({ ...p, fecha: e.target.value }))} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm outline-none font-bold text-gray-800 bg-gray-50 focus:bg-white transition focus:border-blue-500" /></div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-600 mb-1">Estado</label>
-                  <select value={form.estado} onChange={e => setForm(p => ({ ...p, estado: e.target.value }))} className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm outline-none font-bold">
+                  <label className="block text-xs font-bold text-gray-700 mb-1.5">Estado Inicial</label>
+                  <select value={form.estado} onChange={e => setForm(p => ({ ...p, estado: e.target.value }))} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm outline-none font-bold text-gray-800 bg-gray-50 focus:bg-white transition focus:border-blue-500">
                     {(form.tipo === 'Particular' ? ESTADOS_PARTICULAR : ESTADOS_TAREA).map(e => <option key={e}>{e}</option>)}
                   </select>
                 </div>
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 px-6 py-4 border-t border-gray-100 bg-gray-50 rounded-b-2xl">
-              <button onClick={() => setModal(false)} disabled={subiendoFiles} className="px-4 py-2 rounded-xl text-sm text-gray-700 hover:bg-gray-200 font-bold transition">Cancelar</button>
-              <button onClick={guardar} disabled={subiendoFiles} className="flex items-center gap-2 px-6 py-2 rounded-xl text-sm bg-blue-600 hover:bg-blue-700 text-white font-bold transition shadow-sm disabled:opacity-50">
-                {subiendoFiles ? <RotateCcw size={16} className="animate-spin" /> : <CheckCircle size={16} />} 
-                {subiendoFiles ? 'Guardando...' : 'Guardar'}
+            <div className="flex justify-end gap-3 px-6 py-5 border-t border-gray-200 bg-gray-50 rounded-b-2xl">
+              <button onClick={() => setModal(false)} disabled={subiendoFiles} className="px-5 py-2.5 rounded-xl text-sm text-gray-700 bg-white border border-gray-300 hover:bg-gray-100 font-bold transition shadow-sm">Cancelar</button>
+              <button onClick={guardar} disabled={subiendoFiles} className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm bg-blue-600 hover:bg-blue-700 text-white font-bold transition shadow-md disabled:opacity-60">
+                {subiendoFiles ? <RotateCcw size={18} className="animate-spin" /> : <CheckCircle size={18} />} 
+                {subiendoFiles ? 'Guardando...' : 'Guardar Registro'}
               </button>
             </div>
           </div>
@@ -312,9 +355,9 @@ export default function ModuloPendientes() {
       )}
 
       {imgPreview && (
-        <div className="fixed inset-0 bg-black/90 z-[60] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setImgPreview(null)}>
-          <button onClick={() => setImgPreview(null)} className="absolute top-4 right-4 text-white bg-black/50 p-2 rounded-full hover:bg-white/20 transition"><X size={24} /></button>
-          <img src={imgPreview} alt="Vista previa" className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" onClick={e => e.stopPropagation()} />
+        <div className="fixed inset-0 bg-black/95 z-[60] flex items-center justify-center p-4 backdrop-blur-md" onClick={() => setImgPreview(null)}>
+          <button onClick={() => setImgPreview(null)} className="absolute top-6 right-6 text-white bg-white/10 p-3 rounded-full hover:bg-white/30 hover:scale-110 transition"><X size={24} /></button>
+          <img src={imgPreview} alt="Vista previa" className="max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl ring-1 ring-white/20" onClick={e => e.stopPropagation()} />
         </div>
       )}
     </div>
