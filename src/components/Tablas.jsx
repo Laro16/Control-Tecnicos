@@ -27,7 +27,7 @@ export default function ModuloTablas({ allTickets }) {
     return t.FECHA_OBJ >= start && t.FECHA_OBJ <= end
   })
 
-  // Columnas de fechas
+  // Columnas de fechas únicas ordenadas
   const columnasFechas = Array.from(new Set(ticketsFinalizados.map(t => t.FECHA_TEXTO)))
     .sort((a, b) => {
       const pA = a.split('/'); const pB = b.split('/')
@@ -66,7 +66,6 @@ export default function ModuloTablas({ allTickets }) {
     t.ESTADO_LIMPIO.includes('PROCESO') || 
     t.ESTADO_LIMPIO.includes('AGENCIA')
   ).map(t => {
-    // Si es de agencia o no tiene técnico, forzar "SIN ASIGNAR"
     let tec = t.tecnico;
     if (tec === 'SIN TÉCNICO' || !tec || tec === '-') {
       tec = 'SIN ASIGNAR'
@@ -87,7 +86,6 @@ export default function ModuloTablas({ allTickets }) {
 
     if (matrizEnvejecimiento[tec]) {
       matrizEnvejecimiento[tec].total++
-      // Lógica de horas exacta pedida
       if (horas >= 0 && horas < 24) matrizEnvejecimiento[tec].menos24++
       else if (horas >= 24 && horas < 48) matrizEnvejecimiento[tec].mas24++
       else if (horas >= 48 && horas < 72) matrizEnvejecimiento[tec].mas72++
@@ -117,7 +115,6 @@ export default function ModuloTablas({ allTickets }) {
     link.click()
   }
 
-  // Si no hay datos, mostrar pantalla vacía
   if (allTickets.length === 0) {
     return (
       <div className="text-center py-20 text-gray-400 font-bold bg-white rounded-2xl border border-gray-200 shadow-sm">
@@ -144,7 +141,7 @@ export default function ModuloTablas({ allTickets }) {
       </div>
 
       {/* ========================================================= */}
-      {/* TABLA 1: ORDENES FINALIZADAS                            */}
+      {/* TABLA 1: ÓRDENES FINALIZADAS                            */}
       {/* ========================================================= */}
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="flex justify-between items-center bg-slate-50 px-6 py-4 border-b border-gray-200">
@@ -158,36 +155,36 @@ export default function ModuloTablas({ allTickets }) {
         </div>
 
         <div className="p-6 bg-white overflow-x-auto">
-          <div ref={tablaFinalizadasRef} className="bg-white p-2 rounded-xl">
-            <div className="border border-slate-300 rounded-xl overflow-hidden shadow-sm">
-              <table className="w-full text-left text-sm border-collapse bg-white">
-                <thead className="bg-slate-800 text-white font-bold uppercase text-xs tracking-wider">
-                  <tr className="divide-x divide-slate-700">
-                    <th className="p-3">Técnico</th>
+          <div ref={tablaFinalizadasRef} className="bg-white p-1 rounded-xl">
+            <div className="border-2 border-slate-800 rounded-xl overflow-hidden shadow-sm">
+              <table className="w-full text-left text-xs border-collapse bg-white">
+                <thead className="bg-slate-800 text-white font-black uppercase text-sm tracking-wider">
+                  <tr className="divide-x divide-slate-700 border-b-2 border-slate-800">
+                    <th className="p-2.5 whitespace-nowrap">Técnico</th>
                     {columnasFechas.map(f => (
-                      <th key={f} className="p-3 text-center">{f}</th>
+                      <th key={f} className="p-2.5 text-center whitespace-nowrap">{f}</th>
                     ))}
-                    <th className="p-3 text-center bg-slate-900">Total</th>
+                    <th className="p-2.5 text-center bg-slate-900 whitespace-nowrap">Total</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-200 text-slate-700 font-medium">
+                <tbody className="divide-y divide-slate-700 text-slate-900 font-bold text-[12px]">
                   {listaTecnicosFinalizados.map(tec => (
-                    <tr key={tec} className="divide-x divide-slate-200 hover:bg-blue-50 transition-colors">
-                      <td className="p-3 uppercase font-bold text-slate-900">{tec}</td>
+                    <tr key={tec} className="divide-x divide-slate-700 hover:bg-blue-50 transition-colors">
+                      <td className="p-2.5 uppercase font-black text-slate-900 whitespace-nowrap">{tec}</td>
                       {columnasFechas.map(f => (
-                        <td key={f} className="p-3 text-center font-semibold">{matrizFinalizadas[tec][f] === 0 ? <span className="text-gray-300">-</span> : matrizFinalizadas[tec][f]}</td>
+                        <td key={f} className="p-2.5 text-center font-black text-slate-800 whitespace-nowrap">{matrizFinalizadas[tec][f] === 0 ? <span className="text-gray-300">-</span> : matrizFinalizadas[tec][f]}</td>
                       ))}
-                      <td className="p-3 text-center bg-slate-50 font-black text-blue-700">{matrizFinalizadas[tec].totales}</td>
+                      <td className="p-2.5 text-center bg-slate-100 font-black text-blue-800 text-sm whitespace-nowrap">{matrizFinalizadas[tec].totales}</td>
                     </tr>
                   ))}
                 </tbody>
-                <tfoot className="bg-slate-100 font-black text-slate-900 border-t-2 border-slate-300">
-                  <tr className="divide-x divide-slate-200">
-                    <td className="p-3 uppercase text-right text-xs">Total General</td>
+                <tfoot className="bg-slate-200 font-black text-slate-900 border-t-2 border-slate-800">
+                  <tr className="divide-x divide-slate-700 text-sm">
+                    <td className="p-2.5 uppercase text-right font-black whitespace-nowrap">Total General</td>
                     {columnasFechas.map(f => (
-                      <td key={f} className="p-3 text-center text-blue-800">{totalesFecha[f]}</td>
+                      <td key={f} className="p-2.5 text-center text-blue-900 font-black whitespace-nowrap">{totalesFecha[f]}</td>
                     ))}
-                    <td className="p-3 text-center bg-slate-200 text-emerald-700 text-base">{granTotalFinalizadas}</td>
+                    <td className="p-2.5 text-center bg-slate-300 text-emerald-800 font-black text-base whitespace-nowrap">{granTotalFinalizadas}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -211,54 +208,54 @@ export default function ModuloTablas({ allTickets }) {
         </div>
 
         <div className="p-6 bg-white overflow-x-auto">
-          <div ref={tablaEnvejecimientoRef} className="bg-white p-2 rounded-xl min-w-[800px]">
-            <div className="border border-slate-300 rounded-xl overflow-hidden shadow-sm">
+          <div ref={tablaEnvejecimientoRef} className="bg-white p-1 rounded-xl">
+            <div className="border-2 border-slate-800 rounded-xl overflow-hidden shadow-sm">
               <table className="w-full text-left text-sm border-collapse bg-white">
-                <thead className="text-white font-bold uppercase text-xs tracking-wider">
-                  <tr className="divide-x divide-slate-200 border-b border-slate-700">
-                    <th className="p-3 bg-slate-800 w-1/5">Técnico</th>
-                    <th className="p-3 bg-slate-800 w-1/3">Dirección de la Ruta Real de Trabajo</th>
-                    <th className="p-3 text-center bg-emerald-600 w-24">-24 Hrs</th>
-                    <th className="p-3 text-center bg-orange-500 w-24">+24 Hrs</th>
-                    <th className="p-3 text-center bg-red-600 w-24">+72 Hrs</th>
-                    <th className="p-3 text-center bg-red-800 w-24">+100 Hrs</th>
-                    <th className="p-3 text-center bg-slate-900 w-24">Total</th>
+                <thead className="text-white font-black uppercase text-sm tracking-wider">
+                  <tr className="divide-x divide-slate-700 bg-slate-800 border-b-2 border-slate-800">
+                    <th className="p-2.5 whitespace-nowrap">Técnico</th>
+                    <th className="p-2.5 min-w-[280px]">Dirección de la Ruta Real de Trabajo</th>
+                    <th className="p-2.5 text-center bg-emerald-600 whitespace-nowrap">-24 Hrs</th>
+                    <th className="p-2.5 text-center bg-orange-500 whitespace-nowrap">+24 Hrs</th>
+                    <th className="p-2.5 text-center bg-red-600 whitespace-nowrap">+72 Hrs</th>
+                    <th className="p-2.5 text-center bg-red-800 whitespace-nowrap">+100 Hrs</th>
+                    <th className="p-2.5 text-center bg-slate-900 whitespace-nowrap">Total</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-200 text-slate-800 font-medium">
+                <tbody className="divide-y divide-slate-700 text-slate-800 font-bold text-[12px]">
                   {listaTecnicosActivos.map(tec => (
-                    <tr key={tec} className="divide-x divide-slate-200 hover:bg-slate-50 transition-colors">
-                      <td className="p-3 uppercase font-bold text-slate-900">{tec}</td>
+                    <tr key={tec} className="divide-x divide-slate-700 hover:bg-slate-50 transition-colors">
+                      <td className="p-2.5 uppercase font-black text-slate-900 whitespace-nowrap">{tec}</td>
                       
-                      <td className="p-2" data-html2canvas-ignore="false">
+                      <td className="p-1">
                         <input 
                           type="text" 
                           value={rutasTecnicos[tec] || ''} 
                           onChange={e => handleRutaChange(tec, e.target.value)}
                           placeholder="Escribe la ruta asignada aquí..." 
-                          className="w-full bg-transparent p-1.5 font-semibold text-blue-900 outline-none border-b border-dashed border-gray-300 focus:border-blue-500 placeholder-gray-400"
+                          className="w-full bg-transparent p-1 font-bold text-blue-900 outline-none border-b border-dashed border-slate-400 focus:border-blue-500 placeholder-slate-300 text-xs uppercase"
                         />
                       </td>
                       
-                      <td className="p-3 text-center text-emerald-700 bg-emerald-50/50 font-bold">{matrizEnvejecimiento[tec].menos24 === 0 ? '-' : matrizEnvejecimiento[tec].menos24}</td>
-                      <td className="p-3 text-center text-orange-700 bg-orange-50/50 font-bold">{matrizEnvejecimiento[tec].mas24 === 0 ? '-' : matrizEnvejecimiento[tec].mas24}</td>
-                      <td className="p-3 text-center text-red-600 bg-red-50/50 font-bold">{matrizEnvejecimiento[tec].mas72 === 0 ? '-' : matrizEnvejecimiento[tec].mas72}</td>
-                      <td className="p-3 text-center text-red-900 bg-red-100/50 font-bold">{matrizEnvejecimiento[tec].mas100 === 0 ? '-' : matrizEnvejecimiento[tec].mas100}</td>
-                      <td className="p-3 text-center bg-slate-50 font-black text-slate-900">{matrizEnvejecimiento[tec].total}</td>
+                      <td className="p-2.5 text-center text-emerald-800 bg-emerald-50/50 font-black text-sm whitespace-nowrap">{matrizEnvejecimiento[tec].menos24 === 0 ? '-' : matrizEnvejecimiento[tec].menos24}</td>
+                      <td className="p-2.5 text-center text-orange-800 bg-orange-50/50 font-black text-sm whitespace-nowrap">{matrizEnvejecimiento[tec].mas24 === 0 ? '-' : matrizEnvejecimiento[tec].mas24}</td>
+                      <td className="p-2.5 text-center text-red-700 bg-red-50/50 font-black text-sm whitespace-nowrap">{matrizEnvejecimiento[tec].mas72 === 0 ? '-' : matrizEnvejecimiento[tec].mas72}</td>
+                      <td className="p-2.5 text-center text-red-950 bg-red-100/50 font-black text-sm whitespace-nowrap">{matrizEnvejecimiento[tec].mas100 === 0 ? '-' : matrizEnvejecimiento[tec].mas100}</td>
+                      <td className="p-2.5 text-center bg-slate-100 font-black text-slate-900 text-sm whitespace-nowrap">{matrizEnvejecimiento[tec].total}</td>
                     </tr>
                   ))}
                 </tbody>
-                <tfoot className="bg-slate-100 font-black text-slate-900 border-t-2 border-slate-300">
-                  <tr className="divide-x divide-slate-200">
-                    <td className="p-3 uppercase text-right text-xs" colSpan="2">
-                      <span className="mr-4 text-slate-500 font-bold">Resumen Global:</span>
+                <tfoot className="bg-slate-200 font-black text-slate-900 border-t-2 border-slate-800">
+                  <tr className="divide-x divide-slate-700 text-sm">
+                    <td className="p-2.5 uppercase text-right font-black whitespace-nowrap" colSpan="2">
+                      <span className="mr-4 text-slate-500 font-bold text-xs">Resumen Global:</span>
                       Total Operativo
                     </td>
-                    <td className="p-3 text-center text-emerald-700">{totalesEnv.menos24}</td>
-                    <td className="p-3 text-center text-orange-700">{totalesEnv.mas24}</td>
-                    <td className="p-3 text-center text-red-700">{totalesEnv.mas72}</td>
-                    <td className="p-3 text-center text-red-900">{totalesEnv.mas100}</td>
-                    <td className="p-3 text-center bg-slate-200 text-blue-800 text-base">{totalesEnv.total}</td>
+                    <td className="p-2.5 text-center text-emerald-800 font-black whitespace-nowrap">{totalesEnv.menos24}</td>
+                    <td className="p-2.5 text-center text-orange-800 font-black whitespace-nowrap">{totalesEnv.mas24}</td>
+                    <td className="p-2.5 text-center text-red-700 font-black whitespace-nowrap">{totalesEnv.mas72}</td>
+                    <td className="p-2.5 text-center text-red-950 font-black whitespace-nowrap">{totalesEnv.mas100}</td>
+                    <td className="p-2.5 text-center bg-slate-300 text-blue-900 text-base font-black whitespace-nowrap">{totalesEnv.total}</td>
                   </tr>
                 </tfoot>
               </table>
