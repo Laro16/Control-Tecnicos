@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import html2canvas from 'html2canvas'
-import { Calendar, Image, FileText } from 'lucide-react'
+import { Calendar, Image, BarChart2 } from 'lucide-react'
 
 export default function ModuloTablas({ allTickets }) {
   const [fechaInicio, setFechaInicio] = useState('')
@@ -16,7 +16,9 @@ export default function ModuloTablas({ allTickets }) {
     setRutasTecnicos(prev => ({ ...prev, [tecnico]: valor }))
   }
 
-  // 1. FILTRADO PARA TABLA 1 (Sólo órdenes finalizadas en el rango de fechas)
+  // ============================================================================
+  // 1. LÓGICA TABLA 1: ÓRDENES FINALIZADAS
+  // ============================================================================
   const ticketsFinalizados = allTickets.filter(t => {
     if (!t.ESTADO_LIMPIO.includes('FINALIZADA')) return false
     if (!t.FECHA_OBJ || !fechaInicio || !fechaFin) return true
@@ -25,7 +27,7 @@ export default function ModuloTablas({ allTickets }) {
     return t.FECHA_OBJ >= start && t.FECHA_OBJ <= end
   })
 
-  // Obtener columnas de fechas únicas ordenadas
+  // Columnas de fechas
   const columnasFechas = Array.from(new Set(ticketsFinalizados.map(t => t.FECHA_TEXTO)))
     .sort((a, b) => {
       const pA = a.split('/'); const pB = b.split('/')
@@ -47,8 +49,31 @@ export default function ModuloTablas({ allTickets }) {
     }
   })
 
-  // 2. FILTRADO PARA TABLA 2 (Asignadas y En Proceso - Envejecimiento de Horas)
-  const ticketsActivos = allTickets.filter(t => t.ESTADO_LIMPIO.includes('TECNICO') || t.ESTADO_LIMPIO.includes('PROCESO'))
+  // Totales de Tabla 1
+  const totalesFecha = {}
+  let granTotalFinalizadas = 0
+  columnasFechas.forEach(f => {
+    totalesFecha[f] = listaTecnicosFinalizados.reduce((sum, tec) => sum + (matrizFinalizadas[tec][f] || 0), 0)
+    granTotalFinalizadas += totalesFecha[f]
+  })
+
+
+  // ============================================================================
+  // 2. LÓGICA TABLA 2: RUTAS Y ENVEJECIMIENTO (Incluye Agencia)
+  // ============================================================================
+  const ticketsActivos = allTickets.filter(t => 
+    t.ESTADO_LIMPIO.includes('TECNICO') || 
+    t.ESTADO_LIMPIO.includes('PROCESO') || 
+    t.ESTADO_LIMPIO.includes('AGENCIA')
+  ).map(t => {
+    // Si es de agencia o no tiene técnico, forzar "SIN ASIGNAR"
+    let tec = t.tecnico;
+    if (tec === 'SIN TÉCNICO' || !tec || tec === '-') {
+      tec = 'SIN ASIGNAR'
+    }
+    return { ...t, tecnico: tec }
+  })
+
   const listaTecnicosActivos = Array.from(new Set(ticketsActivos.map(t => t.tecnico))).sort()
 
   const matrizEnvejecimiento = {}
@@ -62,6 +87,7 @@ export default function ModuloTablas({ allTickets }) {
 
     if (matrizEnvejecimiento[tec]) {
       matrizEnvejecimiento[tec].total++
+      // Lógica de horas exacta pedida
       if (horas >= 0 && horas < 24) matrizEnvejecimiento[tec].menos24++
       else if (horas >= 24 && horas < 48) matrizEnvejecimiento[tec].mas24++
       else if (horas >= 48 && horas < 72) matrizEnvejecimiento[tec].mas72++
@@ -69,6 +95,19 @@ export default function ModuloTablas({ allTickets }) {
     }
   })
 
+  // Totales de Tabla 2
+  const totalesEnv = { menos24: 0, mas24: 0, mas72: 0, mas100: 0, total: 0 }
+  listaTecnicosActivos.forEach(tec => {
+    totalesEnv.menos24 += matrizEnvejecimiento[tec].menos24
+    totalesEnv.mas24 += matrizEnvejecimiento[tec].mas24
+    totalesEnv.mas72 += matrizEnvejecimiento[tec].mas72
+    totalesEnv.mas100 += matrizEnvejecimiento[tec].mas100
+    totalesEnv.total += matrizEnvejecimiento[tec].total
+  })
+
+  // ============================================================================
+  // EXPORTADOR DE IMAGEN
+  // ============================================================================
   async function capturarTabla(ref, nombre) {
     if (!ref.current) return
     const canvas = await html2canvas(ref.current, { backgroundColor: '#ffffff', scale: 2 })
@@ -78,112 +117,153 @@ export default function ModuloTablas({ allTickets }) {
     link.click()
   }
 
+  // Si no hay datos, mostrar pantalla vacía
   if (allTickets.length === 0) {
     return (
-      <div className="text-center py-20 text-gray-400 font-bold">
-        <Calendar size={54} className="mx-auto mb-3 text-gray-300" />
-        Sube un archivo de órdenes en la pestaña "Técnicos" para habilitar las tablas analíticas.
+      <div className="text-center py-20 text-gray-400 font-bold bg-white rounded-2xl border border-gray-200 shadow-sm">
+        <BarChart2 size={64} className="mx-auto mb-4 text-gray-300" />
+        <p className="text-lg text-gray-500">Sube un archivo en la pestaña "Técnicos"</p>
+        <p className="text-sm font-medium mt-1">Las tablas analíticas se generarán automáticamente.</p>
       </div>
     )
   }
 
   return (
-    <div className="space-y-10 fade-in">
+    <div className="space-y-8 fade-in">
       
       {/* SECCIÓN INTERACTIVA DE FECHAS */}
-      <div className="bg-white p-4 rounded-xl border border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
-        <div className="text-xs font-black text-gray-700 uppercase flex items-center gap-2">
-          <Calendar size={16} className="text-blue-600" /> Control de Rangos de Cierre Diario
+      <div className="bg-white p-5 rounded-2xl border border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+        <div className="text-sm font-black text-slate-800 uppercase tracking-wide flex items-center gap-2">
+          <Calendar size={18} className="text-blue-600" /> Control de Rangos de Cierre Diario
         </div>
-        <div className="flex items-center gap-2">
-          <input type="date" value={fechaInicio} onChange={e => setFechaInicio(e.target.value)} className="border border-gray-300 rounded-lg p-1.5 text-xs font-bold outline-none" />
-          <span className="text-gray-400 font-bold text-xs">a</span>
-          <input type="date" value={fechaFin} onChange={e => setFechaFin(e.target.value)} className="border border-gray-300 rounded-lg p-1.5 text-xs font-bold outline-none" />
+        <div className="flex items-center gap-3">
+          <input type="date" value={fechaInicio} onChange={e => setFechaInicio(e.target.value)} className="border border-gray-300 rounded-lg p-2 text-sm font-bold outline-none text-slate-700 bg-slate-50 focus:border-blue-500 focus:bg-white transition" />
+          <span className="text-slate-400 font-black text-sm">a</span>
+          <input type="date" value={fechaFin} onChange={e => setFechaFin(e.target.value)} className="border border-gray-300 rounded-lg p-2 text-sm font-bold outline-none text-slate-700 bg-slate-50 focus:border-blue-500 focus:bg-white transition" />
         </div>
       </div>
 
-      {/* TABLA 1: ORDENES FINALIZADAS */}
-      <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm space-y-4">
-        <div className="flex justify-between items-center border-b border-gray-100 pb-2">
-          <div className="text-xs font-black text-gray-400 uppercase tracking-wider">1. Monitoreo de Órdenes Finalizadas</div>
-          <button onClick={() => capturarTabla(tablaFinalizadasRef, 'Reporte_Liquidaciones')} className="flex items-center gap-1 bg-gray-900 text-white text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-black transition">
-            <Image size={12} /> Capturar Tabla 1
+      {/* ========================================================= */}
+      {/* TABLA 1: ORDENES FINALIZADAS                            */}
+      {/* ========================================================= */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="flex justify-between items-center bg-slate-50 px-6 py-4 border-b border-gray-200">
+          <div className="text-sm font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+            1. Monitoreo de Órdenes Finalizadas
+          </div>
+          <button onClick={() => capturarTabla(tablaFinalizadasRef, 'Reporte_Liquidaciones')} className="flex items-center gap-1.5 bg-slate-800 text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-slate-900 transition shadow-sm">
+            <Image size={14} /> Capturar Tabla
           </button>
         </div>
 
-        <div ref={tablaFinalizadasRef} className="p-4 bg-white">
-          <table className="w-full text-left text-xs border-collapse border-2 border-black">
-            <thead className="bg-gray-100 text-black font-black uppercase border-b-2 border-black">
-              <tr className="divide-x divide-black">
-                <th className="p-2 border border-black">Técnico</th>
-                {columnasFechas.map(f => (
-                  <th key={f} className="p-2 text-center border border-black">{f}</th>
-                ))}
-                <th className="p-2 text-center border border-black bg-gray-200">Total</th>
-              </tr>
-            </thead>
-            <tbody className="font-bold text-gray-900 divide-y divide-black">
-              {listaTecnicosFinalizados.map(tec => (
-                <tr key={tec} className="divide-x divide-black hover:bg-gray-50">
-                  <td className="p-2 border border-black uppercase">{tec}</td>
-                  {columnasFechas.map(f => (
-                    <td key={f} className="p-2 text-center border border-black">{matrizFinalizadas[tec][f] || 0}</td>
+        <div className="p-6 bg-white overflow-x-auto">
+          <div ref={tablaFinalizadasRef} className="bg-white p-2 rounded-xl">
+            <div className="border border-slate-300 rounded-xl overflow-hidden shadow-sm">
+              <table className="w-full text-left text-sm border-collapse bg-white">
+                <thead className="bg-slate-800 text-white font-bold uppercase text-xs tracking-wider">
+                  <tr className="divide-x divide-slate-700">
+                    <th className="p-3">Técnico</th>
+                    {columnasFechas.map(f => (
+                      <th key={f} className="p-3 text-center">{f}</th>
+                    ))}
+                    <th className="p-3 text-center bg-slate-900">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 text-slate-700 font-medium">
+                  {listaTecnicosFinalizados.map(tec => (
+                    <tr key={tec} className="divide-x divide-slate-200 hover:bg-blue-50 transition-colors">
+                      <td className="p-3 uppercase font-bold text-slate-900">{tec}</td>
+                      {columnasFechas.map(f => (
+                        <td key={f} className="p-3 text-center font-semibold">{matrizFinalizadas[tec][f] === 0 ? <span className="text-gray-300">-</span> : matrizFinalizadas[tec][f]}</td>
+                      ))}
+                      <td className="p-3 text-center bg-slate-50 font-black text-blue-700">{matrizFinalizadas[tec].totales}</td>
+                    </tr>
                   ))}
-                  <td className="p-2 text-center border border-black bg-gray-100 font-black text-blue-700">{matrizFinalizadas[tec].totales}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                </tbody>
+                <tfoot className="bg-slate-100 font-black text-slate-900 border-t-2 border-slate-300">
+                  <tr className="divide-x divide-slate-200">
+                    <td className="p-3 uppercase text-right text-xs">Total General</td>
+                    {columnasFechas.map(f => (
+                      <td key={f} className="p-3 text-center text-blue-800">{totalesFecha[f]}</td>
+                    ))}
+                    <td className="p-3 text-center bg-slate-200 text-emerald-700 text-base">{granTotalFinalizadas}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* TABLA 2: ENVEJECIMIENTO Y RUTAS EDITABLES */}
-      <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm space-y-4">
-        <div className="flex justify-between items-center border-b border-gray-100 pb-2">
-          <div className="text-xs font-black text-gray-400 uppercase tracking-wider">2. Control de Envejecimiento Operativo y Rutas</div>
-          <button onClick={() => capturarTabla(tablaEnvejecimientoRef, 'Reporte_Rutas_Diarias')} className="flex items-center gap-1 bg-gray-900 text-white text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-black transition">
-            <Image size={12} /> Capturar Tabla 2
+      {/* ========================================================= */}
+      {/* TABLA 2: ENVEJECIMIENTO Y RUTAS EDITABLES               */}
+      {/* ========================================================= */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="flex justify-between items-center bg-slate-50 px-6 py-4 border-b border-gray-200">
+          <div className="text-sm font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-orange-500"></div>
+            2. Control de Envejecimiento Operativo y Rutas
+          </div>
+          <button onClick={() => capturarTabla(tablaEnvejecimientoRef, 'Reporte_Rutas_Diarias')} className="flex items-center gap-1.5 bg-slate-800 text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-slate-900 transition shadow-sm">
+            <Image size={14} /> Capturar Tabla
           </button>
         </div>
 
-        <div ref={tablaEnvejecimientoRef} className="p-4 bg-white">
-          <table className="w-full text-left text-xs border-collapse border-2 border-black">
-            <thead className="bg-gray-100 text-black font-black uppercase border-b-2 border-black">
-              <tr className="divide-x divide-black">
-                <th className="p-2 border border-black w-1/4">Técnico</th>
-                <th className="p-2 border border-black w-1/3">Dirección de la Ruta Real de Trabajo</th>
-                <th className="p-2 text-center border border-black text-emerald-700 bg-emerald-50">-24</th>
-                <th className="p-2 text-center border border-black text-orange-700 bg-orange-50">+24</th>
-                <th className="p-2 text-center border border-black text-red-700 bg-red-50">+72</th>
-                <th className="p-2 text-center border border-black text-red-900 bg-red-100">+100</th>
-                <th className="p-2 text-center border border-black bg-gray-200">Total</th>
-              </tr>
-            </thead>
-            <tbody className="font-bold text-gray-900 divide-y divide-black">
-              {listaTecnicosActivos.map(tec => (
-                <tr key={tec} className="divide-x divide-black hover:bg-gray-50">
-                  <td className="p-2 border border-black uppercase font-black">{tec}</td>
-                  
-                  {/* Celda editable para ingresar la ruta antes de exportar la captura */}
-                  <td className="p-1 border border-black" data-html2canvas-ignore="false">
-                    <input 
-                      type="text" 
-                      value={rutasTecnicos[tec] || ''} 
-                      onChange={e => handleRutaChange(tec, e.target.value)}
-                      placeholder="Escribe la ruta asignada aquí..." 
-                      className="w-full bg-transparent p-1 font-bold text-gray-800 outline-none placeholder-gray-300 uppercase"
-                    />
-                  </td>
-                  
-                  <td className="p-2 text-center border border-black text-emerald-700 bg-emerald-50/40 font-black text-sm">{matrizEnvejecimiento[tec].menos24}</td>
-                  <td className="p-2 text-center border border-black text-orange-600 bg-orange-50/40 font-black text-sm">{matrizEnvejecimiento[tec].mas24}</td>
-                  <td className="p-2 text-center border border-black text-red-600 bg-red-50/40 font-black text-sm">{matrizEnvejecimiento[tec].mas72}</td>
-                  <td className="p-2 text-center border border-black text-red-800 bg-red-100/40 font-black text-sm">{matrizEnvejecimiento[tec].mas100}</td>
-                  <td className="p-2 text-center border border-black bg-gray-100 font-black text-gray-900 text-sm">{matrizEnvejecimiento[tec].total}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="p-6 bg-white overflow-x-auto">
+          <div ref={tablaEnvejecimientoRef} className="bg-white p-2 rounded-xl min-w-[800px]">
+            <div className="border border-slate-300 rounded-xl overflow-hidden shadow-sm">
+              <table className="w-full text-left text-sm border-collapse bg-white">
+                <thead className="text-white font-bold uppercase text-xs tracking-wider">
+                  <tr className="divide-x divide-slate-200 border-b border-slate-700">
+                    <th className="p-3 bg-slate-800 w-1/5">Técnico</th>
+                    <th className="p-3 bg-slate-800 w-1/3">Dirección de la Ruta Real de Trabajo</th>
+                    <th className="p-3 text-center bg-emerald-600 w-24">-24 Hrs</th>
+                    <th className="p-3 text-center bg-orange-500 w-24">+24 Hrs</th>
+                    <th className="p-3 text-center bg-red-600 w-24">+72 Hrs</th>
+                    <th className="p-3 text-center bg-red-800 w-24">+100 Hrs</th>
+                    <th className="p-3 text-center bg-slate-900 w-24">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 text-slate-800 font-medium">
+                  {listaTecnicosActivos.map(tec => (
+                    <tr key={tec} className="divide-x divide-slate-200 hover:bg-slate-50 transition-colors">
+                      <td className="p-3 uppercase font-bold text-slate-900">{tec}</td>
+                      
+                      <td className="p-2" data-html2canvas-ignore="false">
+                        <input 
+                          type="text" 
+                          value={rutasTecnicos[tec] || ''} 
+                          onChange={e => handleRutaChange(tec, e.target.value)}
+                          placeholder="Escribe la ruta asignada aquí..." 
+                          className="w-full bg-transparent p-1.5 font-semibold text-blue-900 outline-none border-b border-dashed border-gray-300 focus:border-blue-500 placeholder-gray-400"
+                        />
+                      </td>
+                      
+                      <td className="p-3 text-center text-emerald-700 bg-emerald-50/50 font-bold">{matrizEnvejecimiento[tec].menos24 === 0 ? '-' : matrizEnvejecimiento[tec].menos24}</td>
+                      <td className="p-3 text-center text-orange-700 bg-orange-50/50 font-bold">{matrizEnvejecimiento[tec].mas24 === 0 ? '-' : matrizEnvejecimiento[tec].mas24}</td>
+                      <td className="p-3 text-center text-red-600 bg-red-50/50 font-bold">{matrizEnvejecimiento[tec].mas72 === 0 ? '-' : matrizEnvejecimiento[tec].mas72}</td>
+                      <td className="p-3 text-center text-red-900 bg-red-100/50 font-bold">{matrizEnvejecimiento[tec].mas100 === 0 ? '-' : matrizEnvejecimiento[tec].mas100}</td>
+                      <td className="p-3 text-center bg-slate-50 font-black text-slate-900">{matrizEnvejecimiento[tec].total}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-slate-100 font-black text-slate-900 border-t-2 border-slate-300">
+                  <tr className="divide-x divide-slate-200">
+                    <td className="p-3 uppercase text-right text-xs" colSpan="2">
+                      <span className="mr-4 text-slate-500 font-bold">Resumen Global:</span>
+                      Total Operativo
+                    </td>
+                    <td className="p-3 text-center text-emerald-700">{totalesEnv.menos24}</td>
+                    <td className="p-3 text-center text-orange-700">{totalesEnv.mas24}</td>
+                    <td className="p-3 text-center text-red-700">{totalesEnv.mas72}</td>
+                    <td className="p-3 text-center text-red-900">{totalesEnv.mas100}</td>
+                    <td className="p-3 text-center bg-slate-200 text-blue-800 text-base">{totalesEnv.total}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
 
