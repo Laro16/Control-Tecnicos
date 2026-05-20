@@ -19,17 +19,15 @@ export default function ModuloTablas({ allTickets }) {
   }
 
   // ============================================================================
-  // IA BLINDADA: EXTRACTOR INTELIGENTE DE RUTAS CON GOOGLE GEMINI
+  // IA BLINDADA CON ESCALAMIENTO DE MODELOS (Gemini 2.0 -> 2.5)
   // ============================================================================
   async function generarRutaConIA(tecnico, ticketsActivos) {
     setAiLoadingTecnico(tecnico)
 
     try {
-      // Usando tu variable de entorno en Vercel, o el respaldo si falla localmente
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY || "AIzaSyBid0ywBM9bTeUwX4iGWGRRBrO2LBlM0dc";
       
       const ticketsTecnico = ticketsActivos.filter(t => t.tecnico === tecnico)
-      // Agrupar todas las direcciones en un solo bloque de texto
       const direcciones = ticketsTecnico.map(t => t['DIRECCIÓN']).filter(d => d && d !== '-').join(' | ')
 
       if (!direcciones || direcciones.trim() === '') {
@@ -38,7 +36,6 @@ export default function ModuloTablas({ allTickets }) {
         return
       }
 
-      // El "Prompt" o instrucción estricta que le damos a la Inteligencia Artificial
       const prompt = `
         Actúa como un experto en logística en Guatemala. Analiza la siguiente lista de direcciones desordenadas y extrae únicamente la ruta principal de trabajo.
         Reglas estrictas:
@@ -53,18 +50,31 @@ export default function ModuloTablas({ allTickets }) {
         Direcciones a procesar: ${direcciones}
       `;
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+      const requestBody = {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.1 } 
+      };
+
+      // INTENTO 1: Usar Gemini 2.0 Flash
+      let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.1 } // Control para que sea más estricta
-        })
+        body: JSON.stringify(requestBody)
       });
+      let data = await response.json();
 
-      const data = await response.json();
+      // Si Gemini 2.0 no está disponible o no se encuentra, intentamos con Gemini 2.5 Flash
+      if (!response.ok && data.error?.message?.includes("is not found")) {
+        console.warn("gemini-2.0-flash no disponible. Escanlando a gemini-2.5-flash...");
+        response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody)
+        });
+        data = await response.json();
+      }
       
-      // Control de errores de HTTP (Ej. Llave inválida o límite de cuota)
+      // Control de errores HTTP final
       if (!response.ok) {
         throw new Error(data.error?.message || "Error en la conexión con los servidores de Google.");
       }
@@ -73,12 +83,10 @@ export default function ModuloTablas({ allTickets }) {
       if (data && data.candidates && data.candidates.length > 0) {
         const candidate = data.candidates[0];
         
-        // Verificar si Google bloqueó la respuesta por sus filtros internos de seguridad
         if (candidate.finishReason === "SAFETY") {
            throw new Error("Google bloqueó la respuesta debido a palabras no permitidas en las direcciones.");
         }
         
-        // Verificar que el contenido de texto realmente exista
         if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
            let respuestaIA = candidate.content.parts[0].text.trim();
            // Limpiamos asteriscos o formato markdown residual
