@@ -7,6 +7,8 @@ export default function ModuloTablas({ allTickets }) {
   const [fechaFin, setFechaFin] = useState('')
   
   const [rutasTecnicos, setRutasTecnicos] = useState({})
+  
+  // Estado para mostrar que la IA está pensando (spin)
   const [aiLoadingTecnico, setAiLoadingTecnico] = useState(null)
 
   const tablaFinalizadasRef = useRef()
@@ -21,59 +23,67 @@ export default function ModuloTablas({ allTickets }) {
   // ============================================================================
   async function generarRutaConIA(tecnico, ticketsActivos) {
     setAiLoadingTecnico(tecnico)
+
     try {
+      // Usando tu variable de entorno en Vercel, o el respaldo si falla localmente
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY || "AIzaSyBid0ywBM9bTeUwX4iGWGRRBrO2LBlM0dc";
       
       const ticketsTecnico = ticketsActivos.filter(t => t.tecnico === tecnico)
+      // Agrupar todas las direcciones en un solo bloque de texto
       const direcciones = ticketsTecnico.map(t => t['DIRECCIÓN']).filter(d => d && d !== '-').join(' | ')
 
       if (!direcciones || direcciones.trim() === '') {
-        alert("Este técnico no tiene direcciones para analizar.");
-        setAiLoadingTecnico(null);
-        return;
+        alert("Este técnico no tiene direcciones válidas para procesar.")
+        setAiLoadingTecnico(null)
+        return
       }
 
-      const prompt = `Actúa como un logístico en Guatemala. 
-      Analiza esta lista de direcciones: ${direcciones}
-      
-      Instrucciones estrictas:
-      1. Extrae solo los nombres de los municipios, departamentos o zonas principales.
-      2. Ignora calles, callejones, aldeas pequeñas, números, links de internet (http) y referencias.
-      3. Resume en un máximo de 5 lugares clave.
-      4. Devuelve los lugares separados por guiones.
-      5. NO uses formato markdown, ni negritas, ni símbolos raros. Solo texto plano en mayúsculas.
-      Ejemplo de salida exacta: ZONA 1 - XELA - NUEVO SAN CARLOS - RETALHULEU`;
+      // El "Prompt" o instrucción estricta que le damos a la Inteligencia Artificial
+      const prompt = `
+        Actúa como un experto en logística en Guatemala. Analiza la siguiente lista de direcciones desordenadas y extrae únicamente la ruta principal de trabajo.
+        Reglas estrictas:
+        1. Identifica y extrae SOLO nombres de Municipios, Departamentos o Zonas importantes.
+        2. IGNORA por completo números, calles, avenidas, callejones, aldeas pequeñas, kilómetros o referencias como "a la par de", "frente a", "links de google maps".
+        3. Elimina lugares duplicados.
+        4. Agrupa en un máximo de 6 lugares clave.
+        5. IMPORTANTE: Devuelve ÚNICAMENTE los nombres separados por un guion medio (-). TODO EN MAYÚSCULAS. 
+        6. NO uses formato markdown, ni negritas, ni símbolos raros.
+        Ejemplo de tu respuesta: ZONA 1 - RETALHULEU - NUEVO SAN CARLOS
+        
+        Direcciones a procesar: ${direcciones}
+      `;
 
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.1 } // Más determinista y estricto
+          generationConfig: { temperature: 0.1 } // Control para que sea más estricta
         })
       });
 
       const data = await response.json();
-
-      // Manejo de errores directos de Google (Ej. Llave inválida, límite alcanzado)
+      
+      // Control de errores de HTTP (Ej. Llave inválida o límite de cuota)
       if (!response.ok) {
-        console.error("Error de Google API:", data);
         throw new Error(data.error?.message || "Error en la conexión con los servidores de Google.");
       }
 
-      // Validar si Google bloqueó la respuesta por sus filtros de seguridad internos
-      if (data.candidates && data.candidates.length > 0) {
+      // VALIDACIÓN ROBUSTA DE RESPUESTA DE LA IA
+      if (data && data.candidates && data.candidates.length > 0) {
         const candidate = data.candidates[0];
         
+        // Verificar si Google bloqueó la respuesta por sus filtros internos de seguridad
         if (candidate.finishReason === "SAFETY") {
-           throw new Error("Google bloqueó la respuesta porque una dirección contiene palabras no permitidas por sus filtros de seguridad.");
+           throw new Error("Google bloqueó la respuesta debido a palabras no permitidas en las direcciones.");
         }
         
+        // Verificar que el contenido de texto realmente exista
         if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
-           const ruta = candidate.content.parts[0].text.trim();
-           // Quitar asteriscos o markdown residual por si la IA es rebelde
-           const rutaLimpia = ruta.replace(/\*/g, '');
-           handleRutaChange(tecnico, rutaLimpia);
+           let respuestaIA = candidate.content.parts[0].text.trim();
+           // Limpiamos asteriscos o formato markdown residual
+           respuestaIA = respuestaIA.replace(/\*/g, '');
+           handleRutaChange(tecnico, respuestaIA);
         } else {
            throw new Error("La IA devolvió un formato vacío. Intenta nuevamente.");
         }
@@ -81,11 +91,11 @@ export default function ModuloTablas({ allTickets }) {
         throw new Error("La estructura de respuesta de la IA no es la esperada.");
       }
 
-    } catch (err) { 
-      console.error(err);
-      alert("Error en IA: " + err.message); 
-    } finally { 
-      setAiLoadingTecnico(null) 
+    } catch (error) {
+      console.error(error);
+      alert("Error IA: " + error.message);
+    } finally {
+      setAiLoadingTecnico(null)
     }
   }
 
@@ -264,7 +274,7 @@ export default function ModuloTablas({ allTickets }) {
       </div>
 
       {/* ========================================================= */}
-      {/* TABLA 2: ENVEJECIMIENTO Y RUTAS EDITABLES               */}
+      {/* TABLA 2: ENVEJECIMIENTO Y RUTAS EDITABLES CON IA          */}
       {/* ========================================================= */}
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="flex justify-between items-center bg-slate-50 px-6 py-4 border-b border-gray-200">
