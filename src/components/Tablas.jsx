@@ -5,6 +5,7 @@ import { Calendar, Image, BarChart2, Sparkles, RotateCcw } from 'lucide-react'
 export default function ModuloTablas({ allTickets }) {
   const [fechaInicio, setFechaInicio] = useState('')
   const [fechaFin, setFechaFin] = useState('')
+  
   const [rutasTecnicos, setRutasTecnicos] = useState({})
   const [aiLoadingTecnico, setAiLoadingTecnico] = useState(null)
 
@@ -15,118 +16,340 @@ export default function ModuloTablas({ allTickets }) {
     setRutasTecnicos(prev => ({ ...prev, [tecnico]: valor }))
   }
 
+  // ============================================================================
+  // IA BLINDADA: EXTRACTOR INTELIGENTE DE RUTAS CON GOOGLE GEMINI
+  // ============================================================================
   async function generarRutaConIA(tecnico, ticketsActivos) {
     setAiLoadingTecnico(tecnico)
     try {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-      if (!apiKey) throw new Error("API Key no configurada.");
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY || "AIzaSyBid0ywBM9bTeUwX4iGWGRRBrO2LBlM0dc";
       
       const ticketsTecnico = ticketsActivos.filter(t => t.tecnico === tecnico)
       const direcciones = ticketsTecnico.map(t => t['DIRECCIÓN']).filter(d => d && d !== '-').join(' | ')
 
-      const prompt = `Analiza estas direcciones: ${direcciones}. Extrae máximo 6 municipios o zonas clave. Ignora calles, números, links. Devuelve SOLO una línea con los lugares separados por guiones. Ejemplo: ZONA 1 - XELA - RETALHULEU.`
+      if (!direcciones || direcciones.trim() === '') {
+        alert("Este técnico no tiene direcciones para analizar.");
+        setAiLoadingTecnico(null);
+        return;
+      }
+
+      const prompt = `Actúa como un logístico en Guatemala. 
+      Analiza esta lista de direcciones: ${direcciones}
+      
+      Instrucciones estrictas:
+      1. Extrae solo los nombres de los municipios, departamentos o zonas principales.
+      2. Ignora calles, callejones, aldeas pequeñas, números, links de internet (http) y referencias.
+      3. Resume en un máximo de 5 lugares clave.
+      4. Devuelve los lugares separados por guiones.
+      5. NO uses formato markdown, ni negritas, ni símbolos raros. Solo texto plano en mayúsculas.
+      Ejemplo de salida exacta: ZONA 1 - XELA - NUEVO SAN CARLOS - RETALHULEU`;
 
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+        body: JSON.stringify({ 
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.1 } // Más determinista y estricto
+        })
       });
 
       const data = await response.json();
-      const ruta = data.candidates[0].content.parts[0].text.trim();
-      handleRutaChange(tecnico, ruta);
-    } catch (err) { alert("Error IA: " + err.message); } 
-    finally { setAiLoadingTecnico(null) }
+
+      // Manejo de errores directos de Google (Ej. Llave inválida, límite alcanzado)
+      if (!response.ok) {
+        console.error("Error de Google API:", data);
+        throw new Error(data.error?.message || "Error en la conexión con los servidores de Google.");
+      }
+
+      // Validar si Google bloqueó la respuesta por sus filtros de seguridad internos
+      if (data.candidates && data.candidates.length > 0) {
+        const candidate = data.candidates[0];
+        
+        if (candidate.finishReason === "SAFETY") {
+           throw new Error("Google bloqueó la respuesta porque una dirección contiene palabras no permitidas por sus filtros de seguridad.");
+        }
+        
+        if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
+           const ruta = candidate.content.parts[0].text.trim();
+           // Quitar asteriscos o markdown residual por si la IA es rebelde
+           const rutaLimpia = ruta.replace(/\*/g, '');
+           handleRutaChange(tecnico, rutaLimpia);
+        } else {
+           throw new Error("La IA devolvió un formato vacío. Intenta nuevamente.");
+        }
+      } else {
+        throw new Error("La estructura de respuesta de la IA no es la esperada.");
+      }
+
+    } catch (err) { 
+      console.error(err);
+      alert("Error en IA: " + err.message); 
+    } finally { 
+      setAiLoadingTecnico(null) 
+    }
   }
 
-  // --- Lógica de Datos ---
-  const ticketsFinalizados = allTickets.filter(t => t.ESTADO_LIMPIO.includes('FINALIZADA'))
-  const columnasFechas = Array.from(new Set(ticketsFinalizados.map(t => t.FECHA_TEXTO))).sort()
+  // ============================================================================
+  // 1. LÓGICA TABLA 1: ÓRDENES FINALIZADAS
+  // ============================================================================
+  const ticketsFinalizados = allTickets.filter(t => {
+    if (!t.ESTADO_LIMPIO.includes('FINALIZADA')) return false
+    if (!t.FECHA_OBJ || !fechaInicio || !fechaFin) return true
+    const start = new Date(fechaInicio + 'T00:00:00')
+    const end = new Date(fechaFin + 'T23:59:59')
+    return t.FECHA_OBJ >= start && t.FECHA_OBJ <= end
+  })
+
+  const columnasFechas = Array.from(new Set(ticketsFinalizados.map(t => t.FECHA_TEXTO)))
+    .sort((a, b) => {
+      const pA = a.split('/'); const pB = b.split('/')
+      return new Date(pA[2], pA[1]-1, pA[0]) - new Date(pB[2], pB[1]-1, pB[0])
+    })
+
   const listaTecnicosFinalizados = Array.from(new Set(ticketsFinalizados.map(t => t.tecnico))).sort()
-  
+
   const matrizFinalizadas = {}
   listaTecnicosFinalizados.forEach(tec => {
     matrizFinalizadas[tec] = { totales: 0 }
     columnasFechas.forEach(f => { matrizFinalizadas[tec][f] = 0 })
   })
-  ticketsFinalizados.forEach(t => { if(matrizFinalizadas[t.tecnico]) { matrizFinalizadas[t.tecnico][t.FECHA_TEXTO]++; matrizFinalizadas[t.tecnico].totales++ }})
 
-  const ticketsActivos = allTickets.filter(t => !t.ESTADO_LIMPIO.includes('FINALIZADA')).map(t => ({ 
-    ...t, tecnico: (t.tecnico === 'SIN TÉCNICO' || !t.tecnico || t.tecnico === '-') ? 'SIN ASIGNAR' : t.tecnico 
-  }))
-  const listaTecnicosActivos = Array.from(new Set(ticketsActivos.map(t => t.tecnico))).sort()
-
-  const matrizEnvejecimiento = {}
-  listaTecnicosActivos.forEach(tec => { matrizEnvejecimiento[tec] = { m24:0, p24:0, p72:0, p100:0, total:0 } })
-  ticketsActivos.forEach(t => {
-    const h = parseFloat(t['TIEMPO_TRANSCURRIDO']) || 0
-    if(matrizEnvejecimiento[t.tecnico]) {
-      matrizEnvejecimiento[t.tecnico].total++
-      if (h < 24) matrizEnvejecimiento[t.tecnico].m24++
-      else if (h < 48) matrizEnvejecimiento[t.tecnico].p24++
-      else if (h < 72) matrizEnvejecimiento[t.tecnico].p72++
-      else matrizEnvejecimiento[t.tecnico].p100++
+  ticketsFinalizados.forEach(t => {
+    if (matrizFinalizadas[t.tecnico]) {
+      matrizFinalizadas[t.tecnico][t.FECHA_TEXTO]++
+      matrizFinalizadas[t.tecnico].totales++
     }
   })
 
+  const totalesFecha = {}
+  let granTotalFinalizadas = 0
+  columnasFechas.forEach(f => {
+    totalesFecha[f] = listaTecnicosFinalizados.reduce((sum, tec) => sum + (matrizFinalizadas[tec][f] || 0), 0)
+    granTotalFinalizadas += totalesFecha[f]
+  })
+
+
+  // ============================================================================
+  // 2. LÓGICA TABLA 2: RUTAS Y ENVEJECIMIENTO (Incluye Agencia)
+  // ============================================================================
+  const ticketsActivos = allTickets.filter(t => 
+    t.ESTADO_LIMPIO.includes('TECNICO') || 
+    t.ESTADO_LIMPIO.includes('PROCESO') || 
+    t.ESTADO_LIMPIO.includes('AGENCIA')
+  ).map(t => {
+    let tec = t.tecnico;
+    if (tec === 'SIN TÉCNICO' || !tec || tec === '-') {
+      tec = 'SIN ASIGNAR'
+    }
+    return { ...t, tecnico: tec }
+  })
+
+  const listaTecnicosActivos = Array.from(new Set(ticketsActivos.map(t => t.tecnico))).sort()
+
+  const matrizEnvejecimiento = {}
+  listaTecnicosActivos.forEach(tec => {
+    matrizEnvejecimiento[tec] = { menos24: 0, mas24: 0, mas72: 0, mas100: 0, total: 0 }
+  })
+
+  ticketsActivos.forEach(t => {
+    const horas = parseFloat(t['TIEMPO_TRANSCURRIDO']) || 0
+    const tec = t.tecnico
+
+    if (matrizEnvejecimiento[tec]) {
+      matrizEnvejecimiento[tec].total++
+      if (horas >= 0 && horas < 24) matrizEnvejecimiento[tec].menos24++
+      else if (horas >= 24 && horas < 48) matrizEnvejecimiento[tec].mas24++
+      else if (horas >= 48 && horas < 72) matrizEnvejecimiento[tec].mas72++
+      else if (horas >= 72) matrizEnvejecimiento[tec].mas100++
+    }
+  })
+
+  const totalesEnv = { menos24: 0, mas24: 0, mas72: 0, mas100: 0, total: 0 }
+  listaTecnicosActivos.forEach(tec => {
+    totalesEnv.menos24 += matrizEnvejecimiento[tec].menos24
+    totalesEnv.mas24 += matrizEnvejecimiento[tec].mas24
+    totalesEnv.mas72 += matrizEnvejecimiento[tec].mas72
+    totalesEnv.mas100 += matrizEnvejecimiento[tec].mas100
+    totalesEnv.total += matrizEnvejecimiento[tec].total
+  })
+
+  // ============================================================================
+  // EXPORTADOR DE IMAGEN
+  // ============================================================================
+  async function capturarTabla(ref, nombre) {
+    if (!ref.current) return
+    const canvas = await html2canvas(ref.current, { backgroundColor: '#ffffff', scale: 2 })
+    const link = document.createElement('a')
+    link.download = `${nombre}.png`
+    link.href = canvas.toDataURL('image/png')
+    link.click()
+  }
+
+  if (allTickets.length === 0) {
+    return (
+      <div className="text-center py-20 text-gray-400 font-bold bg-white rounded-2xl border border-gray-200 shadow-sm">
+        <BarChart2 size={64} className="mx-auto mb-4 text-gray-300" />
+        <p className="text-lg text-gray-500">Sube un archivo en la pestaña "Técnicos"</p>
+        <p className="text-sm font-medium mt-1">Las tablas analíticas se generarán automáticamente.</p>
+      </div>
+    )
+  }
+
   return (
-    <div className="space-y-8">
-      {/* Tabla 1 Finalizadas */}
-      <div className="bg-white border-2 border-black rounded-xl shadow-lg overflow-hidden" ref={tablaFinalizadasRef}>
-        <div className="bg-slate-900 text-white p-3 font-black text-sm uppercase text-center border-b-2 border-black">Órdenes Finalizadas por Técnico</div>
-        <table className="w-full text-center border-collapse border-2 border-black text-[11px]">
-          <thead className="font-black bg-slate-200">
-            <tr>
-              <th className="border-2 border-black p-2">TÉCNICO</th>
-              {columnasFechas.map(f => <th key={f} className="border-2 border-black p-2">{f}</th>)}
-              <th className="border-2 border-black p-2">TOTAL</th>
-            </tr>
-          </thead>
-          <tbody>
-            {listaTecnicosFinalizados.map(tec => (
-              <tr key={tec} className="font-bold">
-                <td className="border-2 border-black p-2 text-left uppercase">{tec}</td>
-                {columnasFechas.map(f => <td key={f} className="border-2 border-black p-2">{matrizFinalizadas[tec][f] || 0}</td>)}
-                <td className="border-2 border-black p-2 bg-slate-100">{matrizFinalizadas[tec].totales}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <div className="space-y-8 fade-in">
+      
+      {/* SECCIÓN INTERACTIVA DE FECHAS */}
+      <div className="bg-white p-5 rounded-2xl border border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+        <div className="text-sm font-black text-slate-800 uppercase tracking-wide flex items-center gap-2">
+          <Calendar size={18} className="text-blue-600" /> Control de Rangos de Cierre Diario
+        </div>
+        <div className="flex items-center gap-3">
+          <input type="date" value={fechaInicio} onChange={e => setFechaInicio(e.target.value)} className="border border-gray-300 rounded-lg p-2 text-sm font-bold outline-none text-slate-700 bg-slate-50 focus:border-blue-500 focus:bg-white transition" />
+          <span className="text-slate-400 font-black text-sm">a</span>
+          <input type="date" value={fechaFin} onChange={e => setFechaFin(e.target.value)} className="border border-gray-300 rounded-lg p-2 text-sm font-bold outline-none text-slate-700 bg-slate-50 focus:border-blue-500 focus:bg-white transition" />
+        </div>
       </div>
 
-      {/* Tabla 2 Envejecimiento */}
-      <div className="bg-white border-2 border-black rounded-xl shadow-lg overflow-hidden" ref={tablaEnvejecimientoRef}>
-        <div className="bg-slate-900 text-white p-3 font-black text-sm uppercase text-center border-b-2 border-black">Control de Envejecimiento Operativo</div>
-        <table className="w-full text-center border-collapse border-2 border-black text-[11px]">
-          <thead className="font-black bg-slate-200">
-            <tr>
-              <th className="border-2 border-black p-2">TÉCNICO</th>
-              <th className="border-2 border-black p-2 w-48">RUTA (AUTO-IA)</th>
-              <th className="border-2 border-black p-2 text-green-700">-24</th>
-              <th className="border-2 border-black p-2 text-orange-600">+24</th>
-              <th className="border-2 border-black p-2 text-red-600">+72</th>
-              <th className="border-2 border-black p-2 text-red-900">+100</th>
-              <th className="border-2 border-black p-2">TOTAL</th>
-            </tr>
-          </thead>
-          <tbody>
-            {listaTecnicosActivos.map(tec => (
-              <tr key={tec} className="font-bold">
-                <td className="border-2 border-black p-2 text-left uppercase">{tec}</td>
-                <td className="border-2 border-black p-1 relative">
-                  <textarea rows="2" value={rutasTecnicos[tec] || ''} onChange={e => handleRutaChange(tec, e.target.value)} className="w-full text-[10px] uppercase p-1 outline-none resize-none" />
-                  <button onClick={() => generarRutaConIA(tec, ticketsActivos)} className="absolute top-1 right-1 p-0.5 bg-purple-100 rounded text-purple-700"><Sparkles size={10}/></button>
-                </td>
-                <td className="border-2 border-black p-2">{matrizEnvejecimiento[tec].m24 || '-'}</td>
-                <td className="border-2 border-black p-2">{matrizEnvejecimiento[tec].p24 || '-'}</td>
-                <td className="border-2 border-black p-2">{matrizEnvejecimiento[tec].p72 || '-'}</td>
-                <td className="border-2 border-black p-2">{matrizEnvejecimiento[tec].p100 || '-'}</td>
-                <td className="border-2 border-black p-2 bg-slate-100">{matrizEnvejecimiento[tec].total}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/* ========================================================= */}
+      {/* TABLA 1: ÓRDENES FINALIZADAS                            */}
+      {/* ========================================================= */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="flex justify-between items-center bg-slate-50 px-6 py-4 border-b border-gray-200">
+          <div className="text-sm font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+            1. Monitoreo de Órdenes Finalizadas
+          </div>
+          <button onClick={() => capturarTabla(tablaFinalizadasRef, 'Reporte_Liquidaciones')} className="flex items-center gap-1.5 bg-slate-800 text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-slate-900 transition shadow-sm">
+            <Image size={14} /> Capturar Tabla
+          </button>
+        </div>
+
+        <div className="p-6 bg-white overflow-x-auto">
+          <div ref={tablaFinalizadasRef} className="bg-white p-1 rounded-xl">
+            <div className="border-2 border-slate-800 rounded-xl overflow-hidden shadow-sm">
+              <table className="w-full text-left text-xs border-collapse bg-white">
+                <thead className="bg-slate-800 text-white font-black uppercase text-sm tracking-wider">
+                  <tr className="divide-x divide-slate-700 border-b-2 border-slate-800">
+                    <th className="p-2.5 whitespace-nowrap">Técnico</th>
+                    {columnasFechas.map(f => (
+                      <th key={f} className="p-2.5 text-center whitespace-nowrap">{f}</th>
+                    ))}
+                    <th className="p-2.5 text-center bg-slate-900 whitespace-nowrap">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-700 text-slate-900 font-bold text-[12px]">
+                  {listaTecnicosFinalizados.map(tec => (
+                    <tr key={tec} className="divide-x divide-slate-700 hover:bg-blue-50 transition-colors">
+                      <td className="p-2.5 uppercase font-black text-slate-900 whitespace-nowrap">{tec}</td>
+                      {columnasFechas.map(f => (
+                        <td key={f} className="p-2.5 text-center font-black text-slate-800 whitespace-nowrap">{matrizFinalizadas[tec][f] === 0 ? <span className="text-gray-300">-</span> : matrizFinalizadas[tec][f]}</td>
+                      ))}
+                      <td className="p-2.5 text-center bg-slate-100 font-black text-blue-800 text-sm whitespace-nowrap">{matrizFinalizadas[tec].totales}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-slate-200 font-black text-slate-900 border-t-2 border-slate-800">
+                  <tr className="divide-x divide-slate-700 text-sm">
+                    <td className="p-2.5 uppercase text-right font-black whitespace-nowrap">Total General</td>
+                    {columnasFechas.map(f => (
+                      <td key={f} className="p-2.5 text-center text-blue-900 font-black whitespace-nowrap">{totalesFecha[f]}</td>
+                    ))}
+                    <td className="p-2.5 text-center bg-slate-300 text-emerald-800 font-black text-base whitespace-nowrap">{granTotalFinalizadas}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
       </div>
+
+      {/* ========================================================= */}
+      {/* TABLA 2: ENVEJECIMIENTO Y RUTAS EDITABLES               */}
+      {/* ========================================================= */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="flex justify-between items-center bg-slate-50 px-6 py-4 border-b border-gray-200">
+          <div className="text-sm font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-orange-500"></div>
+            2. Control de Envejecimiento Operativo y Rutas
+          </div>
+          <button onClick={() => capturarTabla(tablaEnvejecimientoRef, 'Reporte_Rutas_Diarias')} className="flex items-center gap-1.5 bg-slate-800 text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-slate-900 transition shadow-sm">
+            <Image size={14} /> Capturar Tabla
+          </button>
+        </div>
+
+        <div className="p-6 bg-white overflow-x-auto">
+          <div ref={tablaEnvejecimientoRef} className="bg-white p-1 rounded-xl min-w-[800px]">
+            <div className="border-2 border-slate-800 rounded-xl overflow-hidden shadow-sm">
+              <table className="w-full text-left text-sm border-collapse bg-white table-fixed">
+                <thead className="text-white font-black uppercase text-sm tracking-wider">
+                  <tr className="divide-x divide-slate-700 bg-slate-800 border-b-2 border-slate-800">
+                    <th className="p-2.5 whitespace-nowrap w-48">Técnico</th>
+                    <th className="p-2.5 min-w-[280px]">Dirección de la Ruta Real de Trabajo</th>
+                    <th className="p-2.5 text-center bg-emerald-600 whitespace-nowrap w-20">-24 Hrs</th>
+                    <th className="p-2.5 text-center bg-orange-500 whitespace-nowrap w-20">+24 Hrs</th>
+                    <th className="p-2.5 text-center bg-red-600 whitespace-nowrap w-20">+72 Hrs</th>
+                    <th className="p-2.5 text-center bg-red-800 whitespace-nowrap w-20">+100 Hrs</th>
+                    <th className="p-2.5 text-center bg-slate-900 whitespace-nowrap w-20">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-700 text-slate-800 font-bold text-[12px]">
+                  {listaTecnicosActivos.map(tec => {
+                    const valorRuta = rutasTecnicos[tec] !== undefined ? rutasTecnicos[tec] : ''
+                    
+                    return (
+                      <tr key={tec} className="divide-x divide-slate-700 hover:bg-slate-50 transition-colors">
+                        <td className="p-2.5 uppercase font-black text-slate-900 whitespace-nowrap">{tec}</td>
+                        
+                        <td className="p-1 relative group" data-html2canvas-ignore="false">
+                          <div className="flex items-center justify-between mb-0.5 px-1 opacity-0 group-hover:opacity-100 transition-opacity absolute right-1 top-1">
+                            <button 
+                              onClick={() => generarRutaConIA(tec, ticketsActivos)}
+                              disabled={aiLoadingTecnico === tec}
+                              className="flex items-center gap-1 text-[9px] font-black text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded shadow-sm hover:bg-purple-200 transition disabled:opacity-50"
+                              title="Extraer ruta con IA"
+                            >
+                              {aiLoadingTecnico === tec ? <RotateCcw size={10} className="animate-spin" /> : <Sparkles size={10} />}
+                              {aiLoadingTecnico === tec ? 'PROCESANDO...' : 'IA'}
+                            </button>
+                          </div>
+                          
+                          <textarea 
+                            rows="2"
+                            value={valorRuta} 
+                            onChange={e => handleRutaChange(tec, e.target.value)}
+                            placeholder="Escribe la ruta o presiona IA ↗" 
+                            className="w-full bg-transparent p-1 pt-3 font-bold text-blue-900 outline-none border-b border-dashed border-transparent hover:border-slate-400 focus:border-blue-500 placeholder-slate-300 text-[10px] uppercase leading-tight resize-none overflow-hidden"
+                          />
+                        </td>
+                        
+                        <td className="p-2.5 text-center text-emerald-800 bg-emerald-50/50 font-black text-sm whitespace-nowrap">{matrizEnvejecimiento[tec].menos24 === 0 ? '-' : matrizEnvejecimiento[tec].menos24}</td>
+                        <td className="p-2.5 text-center text-orange-800 bg-orange-50/50 font-black text-sm whitespace-nowrap">{matrizEnvejecimiento[tec].mas24 === 0 ? '-' : matrizEnvejecimiento[tec].mas24}</td>
+                        <td className="p-2.5 text-center text-red-700 bg-red-50/50 font-black text-sm whitespace-nowrap">{matrizEnvejecimiento[tec].mas72 === 0 ? '-' : matrizEnvejecimiento[tec].mas72}</td>
+                        <td className="p-2.5 text-center text-red-950 bg-red-100/50 font-black text-sm whitespace-nowrap">{matrizEnvejecimiento[tec].mas100 === 0 ? '-' : matrizEnvejecimiento[tec].mas100}</td>
+                        <td className="p-2.5 text-center bg-slate-100 font-black text-slate-900 text-sm whitespace-nowrap">{matrizEnvejecimiento[tec].total}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+                <tfoot className="bg-slate-200 font-black text-slate-900 border-t-2 border-slate-800">
+                  <tr className="divide-x divide-slate-700 text-sm">
+                    <td className="p-2.5 uppercase text-right font-black whitespace-nowrap" colSpan="2">
+                      <span className="mr-4 text-slate-500 font-bold text-xs">Resumen Global:</span>
+                      Total Operativo
+                    </td>
+                    <td className="p-2.5 text-center text-emerald-800 font-black whitespace-nowrap">{totalesEnv.menos24}</td>
+                    <td className="p-2.5 text-center text-orange-800 font-black whitespace-nowrap">{totalesEnv.mas24}</td>
+                    <td className="p-2.5 text-center text-red-700 font-black whitespace-nowrap">{totalesEnv.mas72}</td>
+                    <td className="p-2.5 text-center text-red-950 font-black whitespace-nowrap">{totalesEnv.mas100}</td>
+                    <td className="p-2.5 text-center bg-slate-300 text-blue-900 text-base font-black whitespace-nowrap">{totalesEnv.total}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
   )
 }
