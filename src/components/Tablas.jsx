@@ -7,8 +7,6 @@ export default function ModuloTablas({ allTickets }) {
   const [fechaFin, setFechaFin] = useState('')
   
   const [rutasTecnicos, setRutasTecnicos] = useState({})
-  
-  // Estado para mostrar que la IA está pensando (spin)
   const [aiLoadingTecnico, setAiLoadingTecnico] = useState(null)
 
   const tablaFinalizadasRef = useRef()
@@ -19,7 +17,7 @@ export default function ModuloTablas({ allTickets }) {
   }
 
   // ============================================================================
-  // IA BLINDADA CON ESCALAMIENTO DE MODELOS (Gemini 2.0 -> 2.5)
+  // IA BLINDADA CON GEMINI 1.5 FLASH (Capa Gratuita Global)
   // ============================================================================
   async function generarRutaConIA(tecnico, ticketsActivos) {
     setAiLoadingTecnico(tecnico)
@@ -50,47 +48,40 @@ export default function ModuloTablas({ allTickets }) {
         Direcciones a procesar: ${direcciones}
       `;
 
-      const requestBody = {
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.1 } 
-      };
-
-      // INTENTO 1: Usar Gemini 2.0 Flash
-      let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+      // Utilizamos forzosamente gemini-1.5-flash que es el que tiene la capa de "limit: 15" real
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.1 } 
+        })
       });
-      let data = await response.json();
 
-      // Si Gemini 2.0 no está disponible o no se encuentra, intentamos con Gemini 2.5 Flash
-      if (!response.ok && data.error?.message?.includes("is not found")) {
-        console.warn("gemini-2.0-flash no disponible. Escanlando a gemini-2.5-flash...");
-        response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestBody)
-        });
-        data = await response.json();
-      }
-      
-      // Control de errores HTTP final
+      const data = await response.json();
+
+      // Manejo del error específico que te salió en la consola (429 o Limit 0)
       if (!response.ok) {
+        if (response.status === 429 || data.error?.message?.includes("exceeded")) {
+          throw new Error("Límite de velocidad alcanzado o Cuota Agotada. Espera 1 minuto y vuelve a intentar. No le des clic muy rápido a los técnicos.");
+        }
+        if (data.error?.message?.includes("is not found")) {
+           throw new Error("Google desactivó temporalmente este modelo para tu región. Prueba más tarde o crea una llave nueva en AI Studio.");
+        }
         throw new Error(data.error?.message || "Error en la conexión con los servidores de Google.");
       }
 
-      // VALIDACIÓN ROBUSTA DE RESPUESTA DE LA IA
+      // Validación de la respuesta
       if (data && data.candidates && data.candidates.length > 0) {
         const candidate = data.candidates[0];
         
         if (candidate.finishReason === "SAFETY") {
-           throw new Error("Google bloqueó la respuesta debido a palabras no permitidas en las direcciones.");
+           throw new Error("Google bloqueó la respuesta debido a palabras extrañas o no permitidas en las direcciones.");
         }
         
         if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
            let respuestaIA = candidate.content.parts[0].text.trim();
-           // Limpiamos asteriscos o formato markdown residual
-           respuestaIA = respuestaIA.replace(/\*/g, '');
+           respuestaIA = respuestaIA.replace(/\*/g, ''); // Limpiar asteriscos
            handleRutaChange(tecnico, respuestaIA);
         } else {
            throw new Error("La IA devolvió un formato vacío. Intenta nuevamente.");
@@ -148,7 +139,7 @@ export default function ModuloTablas({ allTickets }) {
 
 
   // ============================================================================
-  // 2. LÓGICA TABLA 2: RUTAS Y ENVEJECIMIENTO (Incluye Agencia)
+  // 2. LÓGICA TABLA 2: RUTAS Y ENVEJECIMIENTO
   // ============================================================================
   const ticketsActivos = allTickets.filter(t => 
     t.ESTADO_LIMPIO.includes('TECNICO') || 
