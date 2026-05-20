@@ -17,13 +17,18 @@ export default function ModuloTablas({ allTickets }) {
   }
 
   // ============================================================================
-  // IA BLINDADA CON AUTO-DESCUBRIMIENTO DE MODELOS
+  // IA BLINDADA CON AUTO-DESCUBRIMIENTO DE MODELOS (API KEY SEGURA)
   // ============================================================================
   async function generarRutaConIA(tecnico, ticketsActivos) {
     setAiLoadingTecnico(tecnico)
 
     try {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY || "AIzaSyBid0ywBM9bTeUwX4iGWGRRBrO2LBlM0dc";
+      // Lee la llave exclusivamente desde las variables de entorno
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+      
+      if (!apiKey) {
+        throw new Error("La API Key no está configurada. Asegúrate de agregar VITE_GEMINI_API_KEY en Vercel o en tu archivo .env local.");
+      }
       
       const ticketsTecnico = ticketsActivos.filter(t => t.tecnico === tecnico)
       const direcciones = ticketsTecnico.map(t => t['DIRECCIÓN']).filter(d => d && d !== '-').join(' | ')
