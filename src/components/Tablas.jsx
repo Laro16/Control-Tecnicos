@@ -17,7 +17,7 @@ export default function ModuloTablas({ allTickets }) {
   }
 
   // ============================================================================
-  // IA BLINDADA CON GEMINI 1.5 FLASH (Capa Gratuita Global)
+  // IA BLINDADA CON AUTO-DESCUBRIMIENTO DE MODELOS
   // ============================================================================
   async function generarRutaConIA(tecnico, ticketsActivos) {
     setAiLoadingTecnico(tecnico)
@@ -34,6 +34,25 @@ export default function ModuloTablas({ allTickets }) {
         return
       }
 
+      // PASO 1: Obtener la lista dinámica de modelos disponibles para tu API Key
+      const modelsRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+      const modelsData = await modelsRes.json();
+
+      if (!modelsRes.ok) {
+        throw new Error(modelsData.error?.message || "No se pudo verificar la lista de modelos de tu API Key.");
+      }
+
+      // Filtramos solo los modelos que sirven para generar texto
+      const modelosValidos = modelsData.models.filter(m => 
+        m.supportedGenerationMethods && 
+        m.supportedGenerationMethods.includes("generateContent") &&
+        (m.name.includes("flash") || m.name.includes("pro"))
+      );
+
+      if (modelosValidos.length === 0) {
+        throw new Error("Tu API Key no tiene ningún modelo de texto habilitado.");
+      }
+
       const prompt = `
         Actúa como un experto en logística en Guatemala. Analiza la siguiente lista de direcciones desordenadas y extrae únicamente la ruta principal de trabajo.
         Reglas estrictas:
@@ -48,35 +67,48 @@ export default function ModuloTablas({ allTickets }) {
         Direcciones a procesar: ${direcciones}
       `;
 
-      // Utilizamos forzosamente gemini-1.5-flash que es el que tiene la capa de "limit: 15" real
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.1 } 
-        })
-      });
+      const requestBody = {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.1 } 
+      };
 
-      const data = await response.json();
+      let exito = false;
+      let dataFinal = null;
 
-      // Manejo del error específico que te salió en la consola (429 o Limit 0)
-      if (!response.ok) {
-        if (response.status === 429 || data.error?.message?.includes("exceeded")) {
-          throw new Error("Límite de velocidad alcanzado o Cuota Agotada. Espera 1 minuto y vuelve a intentar. No le des clic muy rápido a los técnicos.");
+      // PASO 2: Bucle de supervivencia. Prueba los modelos uno por uno hasta que Google acepte uno.
+      for (const modelo of modelosValidos) {
+        console.log(`Intentando usar modelo: ${modelo.name}...`);
+        
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/${modelo.name}:generateContent?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody)
+        });
+
+        const data = await response.json();
+
+        // Si la respuesta es exitosa (200 OK), rompemos el ciclo
+        if (response.ok) {
+          exito = true;
+          dataFinal = data;
+          console.log(`¡Éxito con ${modelo.name}!`);
+          break;
+        } else {
+          // Si falla (Ej. Cuota Excedida o 404), la consola nos avisa pero seguimos con el siguiente
+          console.warn(`Fallo en ${modelo.name}: ${data.error?.message}`);
         }
-        if (data.error?.message?.includes("is not found")) {
-           throw new Error("Google desactivó temporalmente este modelo para tu región. Prueba más tarde o crea una llave nueva en AI Studio.");
-        }
-        throw new Error(data.error?.message || "Error en la conexión con los servidores de Google.");
       }
 
-      // Validación de la respuesta
-      if (data && data.candidates && data.candidates.length > 0) {
-        const candidate = data.candidates[0];
+      if (!exito) {
+        throw new Error("Se probaron todos los modelos disponibles en tu cuenta, pero Google rechazó las peticiones por falta de cuota gratuita. Revisa https://aistudio.google.com/ para habilitar facturación si es necesario.");
+      }
+
+      // VALIDACIÓN DE LA RESPUESTA EXITOSA
+      if (dataFinal && dataFinal.candidates && dataFinal.candidates.length > 0) {
+        const candidate = dataFinal.candidates[0];
         
         if (candidate.finishReason === "SAFETY") {
-           throw new Error("Google bloqueó la respuesta debido a palabras extrañas o no permitidas en las direcciones.");
+           throw new Error("Google bloqueó la respuesta debido a palabras no permitidas en las direcciones.");
         }
         
         if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
