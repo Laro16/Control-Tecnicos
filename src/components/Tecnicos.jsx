@@ -1,10 +1,8 @@
 import { useState, useRef } from 'react'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
-import html2canvas from 'html2canvas'
 import { 
-  Upload, Clipboard, FileText, FileSpreadsheet, 
-  ChevronDown, Wrench, Filter, Calendar, Image, DownloadCloud
+  Upload, Clipboard, FileText, FileSpreadsheet, ChevronDown, Wrench, Filter, DownloadCloud
 } from 'lucide-react'
 
 const TODAY = () => {
@@ -20,7 +18,6 @@ function simplificarCliente(cliente) {
   return cliente
 }
 
-// Procesa formatos de texto "DD/MM/YYYY" o "DD-MM-YYYY" a un objeto de control de fechas real
 function normalizarFechaExcel(fechaTexto) {
   if (!fechaTexto) return null
   let limpio = String(fechaTexto).trim().replace(/-/g, '/')
@@ -69,20 +66,12 @@ function TicketBadge({ estado }) {
   return <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${cls}`}>{estado}</span>
 }
 
-export default function ModuloTecnicos() {
-  const [allTickets, setAllTickets] = useState([]) 
+export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchivo, setNombreArchivo }) {
   const [dragging, setDragging] = useState(false)
   const [expandido, setExpandido] = useState({})
-  const [nombreArchivo, setNombreArchivo] = useState('')
-  
-  const [fechaInicio, setFechaInicio] = useState('')
-  const [fechaFin, setFechaFin] = useState('')
-  
   const [filtroTecnico, setFiltroTecnico] = useState('Todos')
   const [filtroEstadoGlobal, setFiltroEstadoGlobal] = useState('Todos')
-
   const fileRef = useRef()
-  const tablaDinamicaRef = useRef()
 
   function procesarExcel(file) {
     if (!file) return
@@ -133,8 +122,6 @@ export default function ModuloTecnicos() {
           if (esAsignadoAgencia) tecnico = tecnico || 'SIN TÉCNICO'
 
           let clienteOriginal = String(fila['CLIENTE'] || fila['NOMBRE CLIENTE'] || '-').trim()
-          
-          // Mapear fecha de cierre o realización para las finalizadas
           let fechaRaw = fila['FECHA REALIZADA'] || fila['FECHA REALIZACION'] || fila['FECHA'] || ''
           const fechaEstructura = normalizarFechaExcel(fechaRaw)
           
@@ -149,8 +136,8 @@ export default function ModuloTecnicos() {
             'MODELO': fila['MODELO'] || '-',
             'ESTADO': estadoOriginal,
             'ESTADO_LIMPIO': estadoLimpio,
+            'TIEMPO_TRANSCURRIDO': fila['TIEMPO TRANSCURRIDO'] || fila['TIEMPO'] || '0',
             'FECHA_TEXTO': fechaEstructura ? fechaEstructura.display : (fechaRaw || '-'),
-            'FECHA_ISO': fechaEstructura ? fechaEstructura.iso : null,
             'FECHA_OBJ': fechaEstructura ? fechaEstructura.dateObj : null,
             'DESCRIPCIÓN INICIAL': fila['DESCRIPCIÓN INICIAL'] || fila['DESCRIPCION INICIAL'] || '-',
             'DESCRIPCIÓN': fila['DESCRIPCIÓN'] || fila['DESCRIPCION'] || fila['COMENTARIO'] || '-'
@@ -163,15 +150,6 @@ export default function ModuloTecnicos() {
       } else {
         setAllTickets(listaTemporal)
         setFiltroTecnico('Todos')
-        
-        // Configurar los selectores de fecha con el rango detectado en el archivo
-        const fechasValidas = listaTemporal.map(t => t.FECHA_OBJ).filter(d => d !== null)
-        if (fechasValidas.length > 0) {
-          const minDate = new Date(Math.min(...fechasValidas))
-          const maxDate = new Date(Math.max(...fechasValidas))
-          setFechaInicio(minDate.toISOString().split('T')[0])
-          setFechaFin(maxDate.toISOString().split('T')[0])
-        }
       }
     }
     reader.readAsArrayBuffer(file)
@@ -179,61 +157,6 @@ export default function ModuloTecnicos() {
 
   function onFileChange(e) { if (e.target.files[0]) procesarExcel(e.target.files[0]) }
   function onDrop(e) { e.preventDefault(); setDragging(false); if (e.dataTransfer.files[0]) procesarExcel(e.dataTransfer.files[0]) }
-
-  // 1. LÓGICA DE LA TABLA DINÁMICA (Solo "Orden Finalizada" por Fechas en Columnas)
-  const ticketsFinalizadosFiltrados = allTickets.filter(t => {
-    if (!t.ESTADO_LIMPIO.includes('FINALIZADA')) return false
-    if (!t.FECHA_OBJ || !fechaInicio || !fechaFin) return true
-    const start = new Date(fechaInicio + 'T00:00:00')
-    const end = new Date(fechaFin + 'T23:59:59')
-    return t.FECHA_OBJ >= start && t.FECHA_OBJ <= end
-  })
-
-  // Obtener fechas únicas de órdenes finalizadas ordenadas cronológicamente
-  const columnasFechas = Array.from(new Set(ticketsFinalizadosFiltrados.map(t => t.FECHA_TEXTO)))
-    .sort((a, b) => {
-      const fA = normalizarFechaExcel(a)
-      const fB = normalizarFechaExcel(b)
-      if (fA && fB) return fA.dateObj - fB.dateObj
-      return 0
-    })
-
-  const listaTecnicosFinalizados = Array.from(new Set(ticketsFinalizadosFiltrados.map(t => t.tecnico))).sort()
-
-  // Construir matriz dinámica cruzada: [tecnico][fecha] = cantidad
-  const matrizDinamica = {}
-  listaTecnicosFinalizados.forEach(tec => {
-    matrizDinamica[tec] = { totales: 0 }
-    columnasFechas.forEach(f => { matrizDinamica[tec][f] = 0 })
-  })
-
-  ticketsFinalizadosFiltrados.forEach(t => {
-    if (matrizDinamica[t.tecnico] && matrizDinamica[t.tecnico][t.FECHA_TEXTO] !== undefined) {
-      matrizDinamica[t.tecnico][t.FECHA_TEXTO]++
-      matrizDinamica[t.tecnico].totales++
-    }
-  })
-
-  // 2. LÓGICA DE TARJETAS DE TRABAJO PENDIENTE (Excluye "Orden Finalizada")
-  const ticketsPendientesTotales = allTickets.filter(t => !t.ESTADO_LIMPIO.includes('FINALIZADA'))
-
-  const gruposPendientesAgrupados = {}
-  ticketsPendientesTotales.forEach(t => {
-    if (!gruposPendientesAgrupados[t.tecnico]) gruposPendientesAgrupados[t.tecnico] = []
-    gruposPendientesAgrupados[t.tecnico].push(t)
-  })
-
-  const tecnicosConPendientes = Object.keys(gruposPendientesAgrupados).sort()
-
-  async function capturarTablaDinamica() {
-    const el = tablaDinamicaRef.current
-    if (!el) return
-    const canvas = await html2canvas(el, { backgroundColor: '#ffffff', scale: 2 })
-    const link = document.createElement('a')
-    link.download = `Reporte_Finalizadas_${TODAY().replace('/','_')}.png`
-    link.href = canvas.toDataURL('image/png')
-    link.click()
-  }
 
   function descargarExcelCompleto() {
     if (allTickets.length === 0) return
@@ -329,13 +252,23 @@ export default function ModuloTecnicos() {
       y += wrapped.length * 5 + 4
       count++
     })
-    if(count === 1) return alert("No se detectaron tickets con estado 'En Proceso'.")
+    if(count === 1) return alert("No hay tickets en proceso.")
     doc.save(`Global_En_Proceso_${TODAY().replace('/','')}.pdf`)
   }
 
+  // Filtrar exclusivamente cargas activas pendientes de cierre físico
+  const ticketsPendientesTotales = allTickets.filter(t => !t.ESTADO_LIMPIO.includes('FINALIZADA'))
+
+  const gruposPendientesAgrupados = {}
+  ticketsPendientesTotales.forEach(t => {
+    if (!gruposPendientesAgrupados[t.tecnico]) gruposPendientesAgrupados[t.tecnico] = []
+    gruposPendientesAgrupados[t.tecnico].push(t)
+  })
+
+  const tecnicosConPendientes = Object.keys(gruposPendientesAgrupados).sort()
+
   return (
     <div className="space-y-6">
-      {/* Barra superior de carga */}
       <div className="flex flex-col sm:flex-row gap-3 items-stretch">
         <div
           className={`border-2 border-dashed rounded-xl transition-all duration-200 p-4 flex-1 flex items-center justify-center gap-4 cursor-pointer bg-white ${dragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-400'}`}
@@ -357,55 +290,6 @@ export default function ModuloTecnicos() {
 
       {allTickets.length > 0 && (
         <>
-          {/* CONTROL DE TABLA DINÁMICA: SÓLO FINALIZADAS */}
-          <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-200 space-y-4 fade-in">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-3">
-              <div className="flex items-center gap-2 text-gray-800 font-black text-xs uppercase">
-                <Calendar size={16} className="text-blue-600" />
-                Filtro Cronológico de Órdenes Finalizadas
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <input type="date" value={fechaInicio} onChange={e => setFechaInicio(e.target.value)} className="border border-gray-300 rounded-lg p-1.5 text-xs font-bold outline-none bg-gray-50" />
-                <span className="text-gray-400 font-bold text-xs">a</span>
-                <input type="date" value={fechaFin} onChange={e => setFechaFin(e.target.value)} className="border border-gray-300 rounded-lg p-1.5 text-xs font-bold outline-none bg-gray-50" />
-              </div>
-            </div>
-
-            <div ref={tablaDinamicaRef} className="p-2 bg-white rounded-xl">
-              <div className="overflow-x-auto border border-gray-200 rounded-xl">
-                <table className="w-full text-left text-xs min-w-[500px]">
-                  <thead className="bg-gray-900 text-white font-bold uppercase text-[10px] tracking-wider">
-                    <tr>
-                      <th className="p-3 border-r border-gray-800">Técnicos</th>
-                      {columnasFechas.map(f => (
-                        <th key={f} className="p-3 text-center border-r border-gray-800 bg-gray-800">{f}</th>
-                      ))}
-                      <th className="p-3 text-center bg-emerald-700">Total Liquidado</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100 font-bold text-gray-700">
-                    {listaTecnicosFinalizados.map(tec => (
-                      <tr key={tec} className="hover:bg-gray-50 transition-colors">
-                        <td className="p-3 uppercase text-gray-900 border-r font-black">{tec}</td>
-                        {columnasFechas.map(f => (
-                          <td key={f} className="p-3 text-center border-r border-gray-100 font-black text-gray-800">{matrizDinamica[tec][f] || 0}</td>
-                        ))}
-                        <td className="p-3 text-center bg-emerald-50/60 font-black text-emerald-700 text-sm">{matrizDinamica[tec].totales}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <div className="flex justify-end pt-1">
-              <button onClick={capturarTablaDinamica} className="flex items-center gap-1.5 text-xs bg-gray-900 hover:bg-black text-white font-bold px-4 py-2 rounded-xl transition shadow-sm">
-                <Image size={14} /> Capturar Tabla de Cierre diario
-              </button>
-            </div>
-          </div>
-
-          {/* CONTROL DE FILTROS SECCIÓN TARJETAS PENDIENTES */}
           <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 space-y-4">
             <div className="space-y-2">
               <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1"><Filter size={12}/> Desplegar Técnico en Detalle</label>
@@ -421,7 +305,6 @@ export default function ModuloTecnicos() {
               <div className="space-y-2">
                 <label className="text-xs font-bold text-gray-500 uppercase">Filtro de Estado de Trabajo Pendiente</label>
                 <div className="flex flex-wrap gap-2">
-                  {/* REQUISITO 3: Eliminado "En Proceso" de los botones de filtro */}
                   {['Todos', 'Asignada a Técnico', 'Asignada a Agencia'].map(est => (
                     <button key={est} onClick={() => setFiltroEstadoGlobal(est)} className={`text-xs px-3 py-1.5 rounded-lg font-bold transition border ${filtroEstadoGlobal === est ? 'bg-blue-100 text-blue-800 border-blue-200' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>{est}</button>
                   ))}
@@ -433,11 +316,9 @@ export default function ModuloTecnicos() {
             </div>
           </div>
 
-          {/* BLOQUE DE TARJETAS ACCORDION */}
           {tecnicosConPendientes
             .filter(tecnico => filtroTecnico === 'Todos' || filtroTecnico === tecnico)
             .map(tecnico => {
-              // Filtrado inteligente: Si el filtro es "Asignada a Técnico", incluye "TECNICO" y "PROCESO"
               const tickets = gruposPendientesAgrupados[tecnico].filter(t => {
                 if (filtroEstadoGlobal === 'Todos') return true
                 if (filtroEstadoGlobal === 'Asignada a Técnico') {
@@ -456,11 +337,11 @@ export default function ModuloTecnicos() {
                       <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-600"><Wrench size={16} /></div>
                       <div>
                         <p className="font-black text-gray-900 text-base uppercase leading-tight">{tecnico}</p>
-                        <p className="text-xs font-bold text-gray-400">{tickets.length} órden{tickets.length !== 1 ? 'es' : ''} pendiente{tickets.length !== 1 ? 's' : ''}</p>
+                        <p className="text-xs font-bold text-gray-400">{tickets.length} orden{tickets.length !== 1 ? 'es' : ''} pendiente{tickets.length !== 1 ? 's' : ''}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <button onClick={() => {navigator.clipboard.writeText(buildMessage(tecnico, tickets)); alert('Copiado al portapapeles')}} className="text-xs px-3 py-1.5 rounded-lg bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold shadow-sm">Copiar Lista</button>
+                      <button onClick={() => {navigator.clipboard.writeText(buildMessage(tecnico, tickets)); alert('Copiado')}} className="text-xs px-3 py-1.5 rounded-lg bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold shadow-sm">Copiar Lista</button>
                       <button onClick={() => generarPDFIndividual(tecnico, tickets)} className="text-xs px-3 py-1.5 rounded-lg bg-red-50 text-red-700 font-bold border border-red-100">PDF</button>
                       <button onClick={() => generarExcelTecnico(tecnico, tickets)} className="text-xs px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 font-bold border border-emerald-100">Excel</button>
                       <button onClick={() => setExpandido(p => ({ ...p, [tecnico]: !p[tecnico] }))} className="p-1.5 hover:bg-gray-200 rounded-lg transition"><ChevronDown size={16} className={`transition-transform ${expandido[tecnico] ? 'rotate-180' : ''}`} /></button>
@@ -478,7 +359,6 @@ export default function ModuloTecnicos() {
                             </div>
                             <p className="text-sm text-gray-800"><span className="font-bold text-gray-900">NEGOCIO:</span> {t['NEGOCIO']}</p>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-600 mt-1">
-                              {/* REQUISITO 5: Dirección limpia como texto plano */}
                               <p><span className="font-bold text-gray-800">📍 DIR:</span> {t['DIRECCIÓN'] || '-'}</p>
                               <p><span className="font-bold text-gray-800">📞 TEL:</span> {t['TELÉFONO']}</p>
                               <p><span className="font-bold text-gray-800">👤 CLIENTE:</span> {t['CLIENTE']}</p>
@@ -498,7 +378,6 @@ export default function ModuloTecnicos() {
                               </div>
                             )}
                           </div>
-                          {/* REQUISITO 4: Línea divisoria robusta */}
                           {i !== tickets.length - 1 && <div className="my-5 border-b border-gray-200 border-dashed w-full"></div>}
                         </div>
                       ))}
@@ -508,13 +387,6 @@ export default function ModuloTecnicos() {
               )
             })}
         </>
-      )}
-
-      {allTickets.length === 0 && (
-        <div className="text-center py-20 text-gray-300">
-          <Wrench size={54} className="mx-auto mb-3" />
-          <p className="text-sm font-bold">Carga un archivo de órdenes para inicializar las matrices operativas</p>
-        </div>
       )}
     </div>
   )
