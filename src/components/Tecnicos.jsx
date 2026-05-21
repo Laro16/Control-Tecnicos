@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import { 
@@ -193,10 +193,17 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
         setAllTickets(listaTemporal)
         setFiltroTecnico('Todos')
         
+        // AQUÍ ESTÁ LA CORRECCIÓN: Filtramos solo los tickets activos ANTES de buscar municipios
+        const ticketsActivosParaRuta = listaTemporal.filter(t => 
+          t.ESTADO_LIMPIO.includes('TECNICO') || 
+          t.ESTADO_LIMPIO.includes('PROCESO') || 
+          t.ESTADO_LIMPIO.includes('AGENCIA')
+        )
+
         const nuevasRutas = {}
         const ticketsPorTecnico = {}
         
-        listaTemporal.forEach(t => {
+        ticketsActivosParaRuta.forEach(t => {
           if(!ticketsPorTecnico[t.tecnico]) ticketsPorTecnico[t.tecnico] = []
           ticketsPorTecnico[t.tecnico].push(t)
         })
@@ -212,11 +219,10 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
               const regex = new RegExp(`\\b${escaped}\\b`, 'i')
               
               if (regex.test(textoBuscar)) {
-                encontrados.add(muniOriginal.toUpperCase()) // Extrae en mayúsculas
+                encontrados.add(muniOriginal.toUpperCase())
               }
             })
           })
-          // AHORA DEVUELVE HASTA 10 COINCIDENCIAS
           nuevasRutas[tec] = Array.from(encontrados).slice(0, 10).join(' - ')
         })
         setRutasTecnicos(nuevasRutas)
@@ -268,15 +274,14 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
     const fecha = TODAY()
     let y = 15
 
-    // Función interna para imprimir etiqueta (negrita + color) y valor
     const printLine = (label, value, xOffset, colorFondo) => {
       doc.setFont('helvetica', 'bold')
-      doc.setTextColor(...colorFondo) // Color de la etiqueta
+      doc.setTextColor(...colorFondo) 
       doc.text(label, xOffset, y)
       const labelWidth = doc.getTextWidth(label)
       
       doc.setFont('helvetica', 'normal')
-      doc.setTextColor(60, 60, 60) // Gris oscuro estándar para los datos
+      doc.setTextColor(60, 60, 60) 
       const textoReal = String(value)
       
       const maxAncho = 196 - (xOffset + labelWidth) - 5
@@ -286,7 +291,6 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
       y += lineas.length * 4.5
     }
 
-    // Encabezado
     doc.setFont('helvetica', 'bold').setFontSize(14).setTextColor(0, 0, 0)
     doc.text(`TÉCNICO: ${tecnico}`, 14, y)
     y += 7
@@ -304,23 +308,20 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
     doc.setDrawColor(200).line(14, y, 196, y)
     y += 6
 
-    // Listado de tickets
     tickets.forEach((t, i) => {
       if (y > 265) { doc.addPage(); y = 15 }
       
-      // Número y Referencia
-      doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(0, 80, 180) // Azul oscuro
+      doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(0, 80, 180) 
       doc.text(`#${i+1}  Ref: ${t['N° REFERENCIA'] || '-'}`, 14, y)
       y += 5
 
       doc.setFontSize(9)
       
       printLine('Negocio: ', t['NEGOCIO'] || '-', 14, [0, 0, 0])
-      printLine('Dirección: ', t['DIRECCIÓN'] || '-', 14, [180, 50, 50]) // Rojo oscuro
-      printLine('Teléfono: ', t['TELÉFONO'] || '-', 14, [30, 120, 30]) // Verde oscuro
-      printLine('Cliente: ', t['CLIENTE'] || '-', 14, [100, 50, 150]) // Morado
+      printLine('Dirección: ', t['DIRECCIÓN'] || '-', 14, [180, 50, 50]) 
+      printLine('Teléfono: ', t['TELÉFONO'] || '-', 14, [30, 120, 30]) 
+      printLine('Cliente: ', t['CLIENTE'] || '-', 14, [100, 50, 150]) 
       
-      // Serie y modelo en la misma línea
       doc.setFont('helvetica', 'bold').setTextColor(0, 130, 150)
       doc.text('Serie: ', 14, y)
       let w1 = doc.getTextWidth('Serie: ')
@@ -335,12 +336,12 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
       doc.text(String(t['MODELO'] || '-'), 14 + w1 + w2 + w3, y)
       y += 4.5
 
-      printLine('Estado actual: ', t['ESTADO'] || '-', 14, [200, 100, 0]) // Naranja oscuro
-      printLine('Descripción Inicial: ', t['DESCRIPCIÓN INICIAL'] || '-', 14, [80, 80, 80]) // Gris
+      printLine('Estado actual: ', t['ESTADO'] || '-', 14, [200, 100, 0]) 
+      printLine('Descripción Inicial: ', t['DESCRIPCIÓN INICIAL'] || '-', 14, [80, 80, 80]) 
       
       if (t['ESTADO_LIMPIO'].includes('PROCESO')) {
         const comentarioProceso = (t['DESCRIPCIÓN'] && t['DESCRIPCIÓN'] !== '-') ? t['DESCRIPCIÓN'] : 'Sin datos'
-        printLine('Comentario (En Proceso): ', comentarioProceso, 14, [180, 140, 0]) // Amarillo mostaza
+        printLine('Comentario (En Proceso): ', comentarioProceso, 14, [180, 140, 0]) 
       }
 
       y += 2
@@ -475,7 +476,6 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
                     </div>
                     
                     <div className="flex flex-col sm:flex-row items-end sm:items-center gap-3 w-full md:w-auto">
-                      {/* CONTENEDOR NO EDITABLE DE RUTAS */}
                       <div className="w-full sm:w-auto relative bg-white border border-gray-200 rounded-lg px-3 py-1.5 flex items-center gap-2 shadow-sm min-h-[34px]">
                         <MapPin size={14} className="text-blue-500 shrink-0" />
                         <span className="text-xs font-bold text-gray-700 uppercase">
