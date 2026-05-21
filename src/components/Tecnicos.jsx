@@ -66,7 +66,8 @@ function TicketBadge({ estado }) {
   return <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${cls}`}>{estado}</span>
 }
 
-export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchivo, setNombreArchivo }) {
+// Se agregaron fechaSubidaExcel y setFechaSubidaExcel a los props
+export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchivo, setNombreArchivo, fechaSubidaExcel, setFechaSubidaExcel }) {
   const [dragging, setDragging] = useState(false)
   const [expandido, setExpandido] = useState({})
   const [filtroTecnico, setFiltroTecnico] = useState('Todos')
@@ -150,6 +151,11 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
       } else {
         setAllTickets(listaTemporal)
         setFiltroTecnico('Todos')
+        
+        // Guardar la fecha y hora de la actualización exitosa
+        const ahora = new Date()
+        const fechaFormateada = `${ahora.toLocaleDateString()} a las ${ahora.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`
+        setFechaSubidaExcel(fechaFormateada)
       }
     }
     reader.readAsArrayBuffer(file)
@@ -274,13 +280,23 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
           className={`border-2 border-dashed rounded-xl transition-all duration-200 p-4 flex-1 flex items-center justify-center gap-4 cursor-pointer bg-white ${dragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-400'}`}
           onClick={() => fileRef.current.click()} onDragOver={e => { e.preventDefault(); setDragging(true) }} onDragLeave={() => setDragging(false)} onDrop={onDrop}
         >
-          <Upload size={20} className="text-blue-500" />
+          <Upload size={24} className="text-blue-500 shrink-0" />
           <div className="text-left text-xs">
             <p className="font-bold text-gray-700">Arrastra o selecciona el archivo del sistema</p>
-            {nombreArchivo && <p className="font-black text-blue-600 mt-0.5">{nombreArchivo}</p>}
+            {nombreArchivo && (
+              <div className="mt-1">
+                <p className="font-black text-blue-600 truncate max-w-[200px] sm:max-w-xs">{nombreArchivo}</p>
+                {fechaSubidaExcel && (
+                  <p className="text-green-600 font-bold text-[10px] mt-0.5">
+                    Última carga: {fechaSubidaExcel}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
           <input ref={fileRef} type="file" className="hidden" onChange={onFileChange} />
         </div>
+        
         {allTickets.length > 0 && (
           <button onClick={descargarExcelCompleto} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition">
             <DownloadCloud size={16} /> Descargar Excel Completo
