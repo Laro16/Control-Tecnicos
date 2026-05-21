@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import * as XLSX from 'xlsx'
-import { Calendar, BarChart2, Copy } from 'lucide-react'
+import { Calendar, BarChart2, Copy, X, CheckCircle2 } from 'lucide-react'
 
 function normalizarTexto(texto) {
   if (!texto) return ''
@@ -13,6 +13,10 @@ export default function ModuloTablas({ allTickets }) {
   
   const [rutasTecnicos, setRutasTecnicos] = useState({})
   const [baseMunicipios, setBaseMunicipios] = useState([])
+
+  // Estados para las nuevas funciones visuales
+  const [toast, setToast] = useState(null)
+  const [modalDetalles, setModalDetalles] = useState(null)
 
   const tablaFinalizadasRef = useRef()
   const tablaEnvejecimientoRef = useRef()
@@ -90,8 +94,8 @@ export default function ModuloTablas({ allTickets }) {
     return autoRutas
   }, [baseMunicipios, allTickets])
 
-  // 3. Función nativa para Copiar la Tabla y pegarla en un Correo
-  function copiarTablaAlPortapapeles(ref) {
+  // 3. Función para Copiar Tabla con Aviso Silencioso (Toast)
+  function copiarTablaAlPortapapeles(ref, nombreTabla) {
     if (!ref.current) return
     try {
       const range = document.createRange()
@@ -101,21 +105,28 @@ export default function ModuloTablas({ allTickets }) {
       selection.addRange(range)
       document.execCommand('copy')
       selection.removeAllRanges()
-      alert('✅ Tabla copiada exitosamente. Ya puedes pegarla en tu correo (Ctrl+V).')
+      
+      // Mostrar aviso silencioso que se quita solo en 3 segundos
+      setToast(`✅ ${nombreTabla} copiada al portapapeles.`)
+      setTimeout(() => setToast(null), 3000)
     } catch (err) {
-      alert('Hubo un error al intentar copiar la tabla.')
+      setToast('❌ Hubo un error al copiar la tabla.')
+      setTimeout(() => setToast(null), 3000)
     }
   }
 
   // ============================================================================
-  // PREPARACIÓN DE DATOS - TABLA 1: FINALIZADAS CON BURBUJAS
+  // PREPARACIÓN DE DATOS - TABLA 1: FINALIZADAS
   // ============================================================================
   const ticketsFinalizados = allTickets.filter(t => {
     if (!t.ESTADO_LIMPIO.includes('FINALIZADA')) return false
     if (!t.FECHA_OBJ || !fechaInicio || !fechaFin) return true
+    
     const start = new Date(fechaInicio + 'T00:00:00')
     const end = new Date(fechaFin + 'T23:59:59')
-    return t.FECHA_OBJ >= start && t.FECHA_OBJ <= end
+    const fechaTicket = new Date(t.FECHA_OBJ)
+    
+    return fechaTicket >= start && fechaTicket <= end
   })
 
   const columnasFechas = Array.from(new Set(ticketsFinalizados.map(t => t.FECHA_TEXTO)))
@@ -129,15 +140,17 @@ export default function ModuloTablas({ allTickets }) {
   const matrizFinalizadas = {}
   listaTecnicosFinalizados.forEach(tec => {
     matrizFinalizadas[tec] = { totales: 0 }
-    // En lugar de solo números, guardamos los detalles para la burbuja
     columnasFechas.forEach(f => { matrizFinalizadas[tec][f] = { count: 0, detalles: [] } })
   })
 
   ticketsFinalizados.forEach(t => {
     if (matrizFinalizadas[t.tecnico]) {
       matrizFinalizadas[t.tecnico][t.FECHA_TEXTO].count++
-      // Agregamos el detalle (Negocio y Dirección) a la lista de ese día
-      matrizFinalizadas[t.tecnico][t.FECHA_TEXTO].detalles.push(`• ${t['NEGOCIO']} (${t['DIRECCIÓN'] || 'Sin Dir'})`)
+      // Ahora guardamos un objeto en lugar de un texto plano para mejor control visual
+      matrizFinalizadas[t.tecnico][t.FECHA_TEXTO].detalles.push({
+        negocio: t['NEGOCIO'] || '-',
+        direccion: t['DIRECCIÓN'] || '-'
+      })
       matrizFinalizadas[t.tecnico].totales++
     }
   })
@@ -196,8 +209,44 @@ export default function ModuloTablas({ allTickets }) {
   }
 
   return (
-    <div className="space-y-6 fade-in">
+    <div className="space-y-6 fade-in relative">
       
+      {/* AVISO TOAST FLOTANTE Y SILENCIOSO */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 bg-slate-900 text-white px-5 py-3 rounded-xl shadow-2xl z-[100] flex items-center gap-3 font-bold text-sm animate-fade-in-up">
+          <CheckCircle2 size={18} className="text-emerald-400" />
+          {toast}
+        </div>
+      )}
+
+      {/* MODAL PARA DETALLES DE DIRECCIONES (AL HACER CLIC) */}
+      {modalDetalles && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setModalDetalles(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="bg-slate-800 px-5 py-3.5 flex justify-between items-center border-b border-slate-900">
+              <h3 className="text-white font-black text-sm tracking-wide">
+                {modalDetalles.tec} <span className="text-slate-400 font-normal">| {modalDetalles.fecha}</span>
+              </h3>
+              <button onClick={() => setModalDetalles(null)} className="text-slate-300 hover:text-white transition-colors bg-slate-700 p-1.5 rounded-lg"><X size={16}/></button>
+            </div>
+            
+            <div className="p-4 max-h-[60vh] overflow-y-auto space-y-3">
+              {modalDetalles.detalles.map((det, idx) => {
+                // Truncamos la dirección a 25 caracteres máximo
+                const dirCorta = det.direccion.length > 25 ? det.direccion.substring(0, 25) + '...' : det.direccion;
+                
+                return (
+                  <div key={idx} className="bg-slate-50 border border-slate-100 p-3 rounded-xl flex flex-col gap-0.5">
+                    <span className="font-black text-slate-800 text-[11px] uppercase leading-tight">{det.negocio}</span>
+                    <span className="font-bold text-slate-500 text-[10px] leading-tight">📍 {dirCorta}</span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* CONTROLES DE FECHAS */}
       <div className="bg-white p-4 rounded-xl border border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
         <div className="text-sm font-black text-slate-800 uppercase tracking-wide flex items-center gap-2">
@@ -219,12 +268,11 @@ export default function ModuloTablas({ allTickets }) {
             <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
             1. Monitoreo de Órdenes Finalizadas
           </div>
-          <button onClick={() => copiarTablaAlPortapapeles(tablaFinalizadasRef)} className="flex items-center gap-1.5 bg-slate-800 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg hover:bg-slate-900 transition shadow-sm">
+          <button onClick={() => copiarTablaAlPortapapeles(tablaFinalizadasRef, 'Tabla de Órdenes')} className="flex items-center gap-1.5 bg-slate-800 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg hover:bg-slate-900 transition shadow-sm">
             <Copy size={12} /> Copiar Tabla
           </button>
         </div>
 
-        {/* El min-w-max en la tabla y overflow-x-auto evitan que se corte */}
         <div className="p-3 bg-white overflow-x-auto w-full">
           <div ref={tablaFinalizadasRef} className="bg-white border border-slate-800 rounded overflow-hidden">
             <table className="w-full text-left text-xs border-collapse min-w-max">
@@ -243,13 +291,16 @@ export default function ModuloTablas({ allTickets }) {
                     <td className="px-2 py-1 uppercase font-black text-slate-900 whitespace-nowrap">{tec}</td>
                     {columnasFechas.map(f => {
                       const dataDia = matrizFinalizadas[tec][f]
-                      const titleBurbuja = dataDia.count > 0 ? `Órdenes Finalizadas de ${tec} el ${f}:\n${dataDia.detalles.join('\n')}` : 'Sin órdenes'
                       
                       return (
                         <td 
                           key={f} 
-                          title={titleBurbuja} // Esta es la burbujita nativa
-                          className={`px-2 py-1 text-center font-black whitespace-nowrap cursor-help ${dataDia.count > 0 ? 'text-blue-700 hover:bg-blue-100' : 'text-slate-300'}`}
+                          onClick={() => {
+                            if (dataDia.count > 0) {
+                              setModalDetalles({ tec, fecha: f, detalles: dataDia.detalles })
+                            }
+                          }}
+                          className={`px-2 py-1 text-center font-black whitespace-nowrap ${dataDia.count > 0 ? 'text-blue-700 hover:bg-blue-100 cursor-pointer' : 'text-slate-300'}`}
                         >
                           {dataDia.count === 0 ? '-' : dataDia.count}
                         </td>
@@ -282,14 +333,13 @@ export default function ModuloTablas({ allTickets }) {
             <div className="w-2 h-2 rounded-full bg-orange-500"></div>
             2. Envejecimiento Operativo y Rutas Diarias
           </div>
-          <button onClick={() => copiarTablaAlPortapapeles(tablaEnvejecimientoRef)} className="flex items-center gap-1.5 bg-slate-800 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg hover:bg-slate-900 transition shadow-sm">
+          <button onClick={() => copiarTablaAlPortapapeles(tablaEnvejecimientoRef, 'Tabla de Rutas y Envejecimiento')} className="flex items-center gap-1.5 bg-slate-800 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg hover:bg-slate-900 transition shadow-sm">
             <Copy size={12} /> Copiar Tabla
           </button>
         </div>
 
         <div className="p-3 bg-white overflow-x-auto w-full">
           <div ref={tablaEnvejecimientoRef} className="bg-white border border-slate-800 rounded overflow-hidden">
-            {/* min-w-max asegura que las rutas se vean bien */}
             <table className="w-full text-left border-collapse min-w-max">
               <thead className="bg-slate-800 text-white font-black uppercase text-[10px] tracking-wider">
                 <tr className="divide-x divide-slate-700 border-b border-slate-800">
@@ -304,7 +354,6 @@ export default function ModuloTablas({ allTickets }) {
               </thead>
               <tbody className="divide-y divide-slate-300 text-slate-800 font-bold text-[11px]">
                 {listaTecnicosActivos.map(tec => {
-                  // Si existe un valor editado a mano se usa ese, sino toma la ruta automática
                   const valorRuta = rutasTecnicos[tec] !== undefined ? rutasTecnicos[tec] : (rutasAutomaticas[tec] || '')
                   
                   return (
