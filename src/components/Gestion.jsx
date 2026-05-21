@@ -10,6 +10,8 @@ const PRIORIDADES = ['Baja', 'Media', 'Alta']
 const ESTADOS_TAREA = ['Pendiente', 'En proceso', 'Realizado', 'Cancelado']
 const ESTADOS_PARTICULAR = ['Pendiente de pago', 'Pagado', 'En Proceso', 'Completada', 'Cancelado']
 
+const DOCS_PARTICULAR = ['Cotizacion', 'Voucher de Pago', 'Recibo de caja', 'Orden de servicio fisica', 'Orden de servicio SRS']
+
 const VACIO_TAREA = { tipo: 'Tarea', titulo: '', descripcion: '', fecha: '', prioridad: 'Media', estado: 'Pendiente' }
 const VACIO_PARTICULAR = { tipo: 'Particular', titulo: '', descripcion: '', fecha: '', prioridad: 'Media', estado: 'Pendiente de pago', orden: '', correlativo: '', negocio: '', nit: '', direccion: '' }
 
@@ -30,7 +32,10 @@ export default function ModuloPendientes() {
   const [filtro, setFiltro] = useState('Todos')
   const [vistaActual, setVistaActual] = useState('Tarea')
   const [error, setError] = useState('')
-  const [archivosSubir, setArchivosSubir] = useState([])
+  
+  const [archivosSubir, setArchivosSubir] = useState([]) // Para Tareas
+  const [archivosParticular, setArchivosParticular] = useState({}) // Para Particulares { 'Cotizacion': File, ... }
+  
   const [subiendoFiles, setSubiendoFiles] = useState(false)
   const [imgPreview, setImgPreview] = useState(null)
 
@@ -44,17 +49,24 @@ export default function ModuloPendientes() {
     setCargando(false)
   }
 
+  function obtenerFechaHoy() {
+    return new Date().toISOString().split('T')[0]
+  }
+
   function abrirNuevo() {
-    setForm(vistaActual === 'Tarea' ? VACIO_TAREA : VACIO_PARTICULAR)
+    const hoy = obtenerFechaHoy()
+    setForm(vistaActual === 'Tarea' ? { ...VACIO_TAREA, fecha: hoy } : { ...VACIO_PARTICULAR, fecha: hoy })
     setEditId(null)
     setArchivosSubir([])
+    setArchivosParticular({})
     setModal(true)
   }
 
   function abrirEditar(item) {
-    setForm(item)
+    setForm({ ...item, fecha: item.fecha || obtenerFechaHoy() }) // Asegurar fecha si viene vacía de la BD
     setEditId(item.id)
     setArchivosSubir([])
+    setArchivosParticular({})
     setModal(true)
   }
 
@@ -100,17 +112,43 @@ export default function ModuloPendientes() {
 
     try {
       let urlsNuevas = []
-      for (const fileRaw of archivosSubir) {
-        const file = await comprimirImagen(fileRaw)
-        const fileExt = file.name.split('.').pop()
-        const fileName = `${Math.random()}.${fileExt}`
-        const filePath = `${form.tipo}/${fileName}`
 
-        const { error: uploadError } = await supabase.storage.from('adjuntos').upload(filePath, file)
-        if (uploadError) throw new Error('Error subiendo archivo: ' + uploadError.message)
-        
-        const { data: { publicUrl } } = supabase.storage.from('adjuntos').getPublicUrl(filePath)
-        urlsNuevas.push({ nombre: fileRaw.name, url: publicUrl })
+      // 1. Subir archivos si es Tarea
+      if (form.tipo === 'Tarea') {
+        for (const fileRaw of archivosSubir) {
+          const file = await comprimirImagen(fileRaw)
+          const fileExt = file.name.split('.').pop()
+          const fileName = `${Math.random()}.${fileExt}`
+          const filePath = `Tarea/${fileName}`
+
+          const { error: uploadError } = await supabase.storage.from('adjuntos').upload(filePath, file)
+          if (uploadError) throw new Error('Error subiendo archivo: ' + uploadError.message)
+          
+          const { data: { publicUrl } } = supabase.storage.from('adjuntos').getPublicUrl(filePath)
+          urlsNuevas.push({ nombre: fileRaw.name, url: publicUrl })
+        }
+      }
+
+      // 2. Subir archivos clasificados si es Particular
+      if (form.tipo === 'Particular') {
+        for (const [etiqueta, fileRaw] of Object.entries(archivosParticular)) {
+          const file = await comprimirImagen(fileRaw)
+          const fileExt = file.name.split('.').pop()
+          const fileName = `${Math.random()}.${fileExt}`
+          const filePath = `Particular/${fileName}`
+
+          const { error: uploadError } = await supabase.storage.from('adjuntos').upload(filePath, file)
+          if (uploadError) throw new Error('Error subiendo archivo: ' + uploadError.message)
+          
+          const { data: { publicUrl } } = supabase.storage.from('adjuntos').getPublicUrl(filePath)
+          
+          // Renombrar dinámicamente si es Voucher
+          let nombreFinal = etiqueta === 'Voucher de Pago' 
+            ? `Pago - ORDEN: ${form.orden || 'N/A'} - CORR: ${form.correlativo || 'N/A'}.${fileExt}`
+            : `${etiqueta}.${fileExt}`
+
+          urlsNuevas.push({ nombre: nombreFinal, url: publicUrl, tipoDoc: etiqueta })
+        }
       }
 
       const archivosFinales = editId ? [...(form.archivos || []), ...urlsNuevas] : urlsNuevas
@@ -231,20 +269,25 @@ export default function ModuloPendientes() {
                       <button onClick={() => descargarZIP(item)} className="text-xs font-bold flex items-center gap-1.5 text-blue-700 bg-blue-100 px-3 py-1.5 rounded-lg hover:bg-blue-200 transition shadow-sm"><DownloadCloud size={14}/> Descargar ZIP</button>
                     </div>
                     
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-col gap-2">
                       {item.archivos.map((arch, idx) => {
-                        const url = typeof arch === 'string' ? JSON.parse(arch).url : arch.url;
-                        const nombre = typeof arch === 'string' ? JSON.parse(arch).nombre : arch.nombre;
+                        const archObj = typeof arch === 'string' ? JSON.parse(arch) : arch;
+                        const url = archObj.url;
+                        const nombre = archObj.nombre;
+                        const tipoDoc = archObj.tipoDoc || 'Adjunto';
                         const isImage = url.match(/\.(jpeg|jpg|gif|png|webp)$/i) || nombre.match(/\.(jpeg|jpg|gif|png|webp)$/i);
                         
                         return (
-                          <div key={idx} className="flex items-center gap-2 bg-white border border-gray-300 shadow-sm rounded-lg px-2.5 py-1.5 text-xs max-w-full hover:border-blue-300 transition">
-                            {isImage ? (
-                              <button onClick={() => setImgPreview(url)} className="text-blue-600 hover:text-blue-800 flex items-center gap-1.5 truncate max-w-[130px] font-bold"><ImageIcon size={14} className="shrink-0"/> <span className="truncate">{nombre}</span></button>
-                            ) : (
-                              <a href={url} target="_blank" rel="noopener noreferrer" className="text-gray-700 hover:text-gray-900 flex items-center gap-1.5 truncate max-w-[130px] font-bold"><FileText size={14} className="shrink-0"/> <span className="truncate">{nombre}</span></a>
-                            )}
-                            <a href={url} target="_blank" rel="noopener noreferrer" download className="text-gray-400 hover:text-gray-700 border-l border-gray-200 pl-2 ml-1"><Download size={14} /></a>
+                          <div key={idx} className="flex items-center justify-between bg-white border border-gray-300 shadow-sm rounded-lg px-3 py-2 text-xs hover:border-blue-300 transition">
+                            <div className="flex items-center gap-2 overflow-hidden">
+                              {item.tipo === 'Particular' && <span className="bg-blue-100 text-blue-800 font-black px-2 py-1 rounded truncate shrink-0 max-w-[100px]">{tipoDoc}</span>}
+                              {isImage ? (
+                                <button onClick={() => setImgPreview(url)} className="text-blue-600 hover:text-blue-800 flex items-center gap-1.5 truncate font-bold"><ImageIcon size={14} className="shrink-0"/> <span className="truncate">{nombre}</span></button>
+                              ) : (
+                                <a href={url} target="_blank" rel="noopener noreferrer" className="text-gray-700 hover:text-gray-900 flex items-center gap-1.5 truncate font-bold"><FileText size={14} className="shrink-0"/> <span className="truncate">{nombre}</span></a>
+                              )}
+                            </div>
+                            <a href={url} target="_blank" rel="noopener noreferrer" download={nombre} className="text-blue-600 hover:text-blue-800 bg-blue-50 p-1.5 rounded-md ml-2 shrink-0"><Download size={14} /></a>
                           </div>
                         )
                       })}
@@ -296,25 +339,62 @@ export default function ModuloPendientes() {
                 <textarea value={form.descripcion} onChange={e => setForm(p => ({ ...p, descripcion: e.target.value }))} rows={4} className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none resize-none font-medium text-gray-800 bg-gray-50 focus:bg-white transition" placeholder="Detalles adicionales..." />
               </div>
 
+              {/* SECCIÓN DE ARCHIVOS DEPENDIENDO DEL TIPO */}
               <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                <label className="block text-xs font-bold text-gray-700 mb-2">Adjuntar Nuevos Archivos</label>
-                <input type="file" multiple onChange={(e) => setArchivosSubir(Array.from(e.target.files))} className="w-full text-sm text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200 cursor-pointer transition" />
                 
-                {/* Visualizar archivos seleccionados para subir con opción a quitar */}
-                {archivosSubir.length > 0 && (
-                  <div className="mt-3 space-y-2">
-                    <p className="text-xs font-bold text-blue-600">Listos para subir:</p>
-                    {archivosSubir.map((arch, idx) => (
-                      <div key={idx} className="flex items-center justify-between bg-blue-50 border border-blue-100 rounded-lg p-2">
-                        <span className="text-xs text-blue-800 font-bold truncate max-w-[85%]">{arch.name}</span>
-                        <button type="button" onClick={() => quitarArchivoParaSubir(idx)} className="text-blue-500 hover:text-red-500 p-1"><Trash2 size={14} /></button>
+                {form.tipo === 'Tarea' ? (
+                  <>
+                    <label className="block text-xs font-bold text-gray-700 mb-2">Adjuntar Nuevos Archivos</label>
+                    <input type="file" multiple onChange={(e) => setArchivosSubir(Array.from(e.target.files))} className="w-full text-sm text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200 cursor-pointer transition" />
+                    
+                    {archivosSubir.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        <p className="text-xs font-bold text-blue-600">Listos para subir:</p>
+                        {archivosSubir.map((arch, idx) => (
+                          <div key={idx} className="flex items-center justify-between bg-blue-50 border border-blue-100 rounded-lg p-2">
+                            <span className="text-xs text-blue-800 font-bold truncate max-w-[85%]">{arch.name}</span>
+                            <button type="button" onClick={() => quitarArchivoParaSubir(idx)} className="text-blue-500 hover:text-red-500 p-1"><Trash2 size={14} /></button>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <label className="block text-xs font-bold text-gray-700 mb-2">Documentos del Servicio (Opcionales)</label>
+                    <div className="space-y-3">
+                      {DOCS_PARTICULAR.map(doc => {
+                        const existente = form.archivos?.findIndex(a => {
+                          const obj = typeof a === 'string' ? JSON.parse(a) : a;
+                          return obj.tipoDoc === doc || obj.nombre.includes(doc);
+                        });
+
+                        return (
+                          <div key={doc} className="flex flex-col gap-1.5">
+                            <span className="text-xs font-bold text-blue-900">{doc}</span>
+                            
+                            {existente !== undefined && existente !== -1 ? (
+                              <div className="flex items-center justify-between bg-white border border-green-300 rounded-lg p-2 shadow-sm">
+                                <span className="text-xs text-green-700 font-bold truncate">✅ Documento guardado en BD</span>
+                                <button type="button" onClick={() => eliminarArchivoExistente(existente)} className="text-red-500 hover:text-red-700 bg-red-50 p-1.5 rounded transition" title="Eliminar de la BD"><Trash2 size={14}/></button>
+                              </div>
+                            ) : archivosParticular[doc] ? (
+                              <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-2 shadow-sm">
+                                <span className="text-xs text-blue-700 font-bold truncate">{archivosParticular[doc].name}</span>
+                                <button type="button" onClick={() => setArchivosParticular(p => { const n = {...p}; delete n[doc]; return n; })} className="text-red-500 hover:text-red-700 p-1 bg-white rounded"><Trash2 size={14}/></button>
+                              </div>
+                            ) : (
+                              <input type="file" onChange={e => setArchivosParticular(p => ({...p, [doc]: e.target.files[0]}))} className="text-xs text-gray-600 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-bold file:bg-white file:border-gray-200 file:text-gray-700 hover:file:bg-gray-100 cursor-pointer border border-gray-200 rounded-lg w-full" />
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </>
                 )}
 
-                {/* Mostrar y gestionar archivos que ya están en la base de datos */}
-                {editId && form.archivos?.length > 0 && (
+                {/* Mostrar archivos ya guardados para Tareas (en Particular se muestran arriba) */}
+                {editId && form.tipo === 'Tarea' && form.archivos?.length > 0 && (
                   <div className="mt-4 pt-3 border-t border-gray-200 space-y-2">
                     <p className="text-xs font-bold text-gray-500">Archivos ya guardados en este registro:</p>
                     {form.archivos.map((arch, idx) => {
