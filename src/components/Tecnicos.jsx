@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import { 
@@ -10,7 +10,6 @@ const TODAY = () => {
   return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`
 }
 
-// Función para quitar tildes y pasar a mayúsculas
 function normalizarTexto(texto) {
   if (!texto) return ''
   return String(texto).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim()
@@ -59,8 +58,9 @@ function buildMessage(tecnico, tickets, rutaDefinida) {
     msg += `🧊 *SERIE:* ${t['SERIE'] || '-'}  📦 *MODELO:* ${t['MODELO'] || '-'}\n`
     msg += `📝 *DESCRIPCIÓN INICIAL:*\n${t['DESCRIPCIÓN INICIAL'] || '-'}\n`
     
-    if (t['ESTADO_LIMPIO'].includes('PROCESO') && t['DESCRIPCIÓN'] !== '-') {
-      msg += `\n⚠️ *COMENTARIO EN PROCESO:*\n${t['DESCRIPCIÓN']}\n`
+    if (t['ESTADO_LIMPIO'].includes('PROCESO')) {
+      const comentarioProceso = (t['DESCRIPCIÓN'] && t['DESCRIPCIÓN'] !== '-') ? t['DESCRIPCIÓN'] : 'Sin datos';
+      msg += `\n⚠️ *COMENTARIO EN PROCESO:*\n${comentarioProceso}\n`
     }
   })
   msg += `\n━━━━━━━━━━━━━━━━━━━━━━━━`
@@ -86,7 +86,6 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
 
   const fileRef = useRef()
 
-  // Cargar el Excel de rutas automáticamente desde la carpeta public/ al iniciar
   useEffect(() => {
     async function cargarRutasDelRepo() {
       try {
@@ -104,7 +103,7 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
         for (let row of rawMatrix) {
           for (let cell of row) {
             if (typeof cell === 'string' && cell.trim().length > 2) {
-              munis.add(cell.trim()) // Guardamos el nombre original con tildes para mostrarlo bonito
+              munis.add(cell.trim())
             }
           }
         }
@@ -194,7 +193,6 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
         setAllTickets(listaTemporal)
         setFiltroTecnico('Todos')
         
-        // Identificar rutas usando texto normalizado (sin tildes, en mayúsculas)
         const nuevasRutas = {}
         const ticketsPorTecnico = {}
         
@@ -206,26 +204,28 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
         Object.keys(ticketsPorTecnico).forEach(tec => {
           let encontrados = new Set()
           ticketsPorTecnico[tec].forEach(t => {
-            // Unimos Dirección y Negocio y lo normalizamos
             const textoBuscar = normalizarTexto(`${t['DIRECCIÓN']} ${t['NEGOCIO']}`)
             
             baseMunicipios.forEach(muniOriginal => {
-              const muniLimpio = normalizarTexto(muniOriginal) // Normalizamos el municipio del Excel
+              const muniLimpio = normalizarTexto(muniOriginal) 
               const escaped = muniLimpio.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
               const regex = new RegExp(`\\b${escaped}\\b`, 'i')
               
               if (regex.test(textoBuscar)) {
-                encontrados.add(muniOriginal) // Guardamos el original para que mantenga sus tildes y mayúsculas
+                encontrados.add(muniOriginal.toUpperCase()) // Extrae en mayúsculas
               }
             })
           })
-          nuevasRutas[tec] = Array.from(encontrados).slice(0, 8).join(', ')
+          // AHORA DEVUELVE HASTA 10 COINCIDENCIAS
+          nuevasRutas[tec] = Array.from(encontrados).slice(0, 10).join(' - ')
         })
         setRutasTecnicos(nuevasRutas)
 
         const ahora = new Date()
         const fechaFormateada = `${ahora.toLocaleDateString()} a las ${ahora.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`
-        setFechaSubidaExcel(fechaFormateada)
+        if (setFechaSubidaExcel) {
+          setFechaSubidaExcel(fechaFormateada)
+        }
       }
     }
     reader.readAsArrayBuffer(file)
@@ -260,57 +260,92 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
     XLSX.writeFile(wb, `Tickets_Pendientes_${tecnico.replace(/\s+/g,'_')}.xlsx`)
   }
 
+  // ==========================================
+  // GENERADOR PDF CON COLORES Y NEGRITAS (ESTILO WEB)
+  // ==========================================
   function generarPDFIndividual(tecnico, tickets, rutaDefinida) {
     const doc = new jsPDF({ unit: 'mm', format: 'a4' })
     const fecha = TODAY()
     let y = 15
 
-    doc.setFont('helvetica', 'bold').setFontSize(14)
+    // Función interna para imprimir etiqueta (negrita + color) y valor
+    const printLine = (label, value, xOffset, colorFondo) => {
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(...colorFondo) // Color de la etiqueta
+      doc.text(label, xOffset, y)
+      const labelWidth = doc.getTextWidth(label)
+      
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(60, 60, 60) // Gris oscuro estándar para los datos
+      const textoReal = String(value)
+      
+      const maxAncho = 196 - (xOffset + labelWidth) - 5
+      const lineas = doc.splitTextToSize(textoReal, maxAncho)
+      doc.text(lineas, xOffset + labelWidth + 1, y)
+      
+      y += lineas.length * 4.5
+    }
+
+    // Encabezado
+    doc.setFont('helvetica', 'bold').setFontSize(14).setTextColor(0, 0, 0)
     doc.text(`TÉCNICO: ${tecnico}`, 14, y)
     y += 7
-    doc.setFontSize(10).setFont('helvetica', 'normal')
+    doc.setFontSize(10).setFont('helvetica', 'normal').setTextColor(100, 100, 100)
     doc.text(`Fecha Envío: ${fecha}  |  Órdenes Pendientes: ${tickets.length}`, 14, y)
     y += 5
 
     if (rutaDefinida && rutaDefinida.trim() !== '') {
-      doc.setFont('helvetica', 'bold')
-      doc.text(`Ruta Asignada: ${rutaDefinida.trim()}`, 14, y)
-      y += 5
+      doc.setFont('helvetica', 'bold').setTextColor(0, 100, 200)
+      const lineasRuta = doc.splitTextToSize(`Ruta Asignada: ${rutaDefinida.trim()}`, 180)
+      doc.text(lineasRuta, 14, y)
+      y += lineasRuta.length * 5
     }
 
-    doc.setDrawColor(180).line(14, y, 196, y)
+    doc.setDrawColor(200).line(14, y, 196, y)
     y += 6
 
+    // Listado de tickets
     tickets.forEach((t, i) => {
       if (y > 265) { doc.addPage(); y = 15 }
-      doc.setFont('helvetica', 'bold').setFontSize(10)
+      
+      // Número y Referencia
+      doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(0, 80, 180) // Azul oscuro
       doc.text(`#${i+1}  Ref: ${t['N° REFERENCIA'] || '-'}`, 14, y)
       y += 5
 
-      doc.setFont('helvetica', 'normal').setFontSize(9)
-      const lines = [
-        `Negocio: ${t['NEGOCIO'] || '-'}`,
-        `Dirección: ${t['DIRECCIÓN'] || '-'}`,
-        `Teléfono: ${t['TELÉFONO'] || '-'}`,
-        `Cliente: ${t['CLIENTE'] || '-'}`,
-        `Serie: ${t['SERIE'] || '-'}   Modelo: ${t['MODELO'] || '-'}`,
-        `Estado actual: ${t['ESTADO'] || '-'}`,
-        `Descripción Inicial: ${t['DESCRIPCIÓN INICIAL'] || '-'}`,
-      ]
+      doc.setFontSize(9)
       
-      if (t['ESTADO_LIMPIO'].includes('PROCESO') && t['DESCRIPCIÓN'] !== '-') {
-        lines.push(`Comentario en Proceso: ${t['DESCRIPCIÓN']}`)
+      printLine('Negocio: ', t['NEGOCIO'] || '-', 14, [0, 0, 0])
+      printLine('Dirección: ', t['DIRECCIÓN'] || '-', 14, [180, 50, 50]) // Rojo oscuro
+      printLine('Teléfono: ', t['TELÉFONO'] || '-', 14, [30, 120, 30]) // Verde oscuro
+      printLine('Cliente: ', t['CLIENTE'] || '-', 14, [100, 50, 150]) // Morado
+      
+      // Serie y modelo en la misma línea
+      doc.setFont('helvetica', 'bold').setTextColor(0, 130, 150)
+      doc.text('Serie: ', 14, y)
+      let w1 = doc.getTextWidth('Serie: ')
+      doc.setFont('helvetica', 'normal').setTextColor(60, 60, 60)
+      doc.text(String(t['SERIE'] || '-'), 14 + w1, y)
+      
+      let w2 = doc.getTextWidth(String(t['SERIE'] || '-')) + 10
+      doc.setFont('helvetica', 'bold').setTextColor(0, 130, 150)
+      doc.text('Modelo: ', 14 + w1 + w2, y)
+      let w3 = doc.getTextWidth('Modelo: ')
+      doc.setFont('helvetica', 'normal').setTextColor(60, 60, 60)
+      doc.text(String(t['MODELO'] || '-'), 14 + w1 + w2 + w3, y)
+      y += 4.5
+
+      printLine('Estado actual: ', t['ESTADO'] || '-', 14, [200, 100, 0]) // Naranja oscuro
+      printLine('Descripción Inicial: ', t['DESCRIPCIÓN INICIAL'] || '-', 14, [80, 80, 80]) // Gris
+      
+      if (t['ESTADO_LIMPIO'].includes('PROCESO')) {
+        const comentarioProceso = (t['DESCRIPCIÓN'] && t['DESCRIPCIÓN'] !== '-') ? t['DESCRIPCIÓN'] : 'Sin datos'
+        printLine('Comentario (En Proceso): ', comentarioProceso, 14, [180, 140, 0]) // Amarillo mostaza
       }
 
-      lines.forEach(l => {
-        const wrapped = doc.splitTextToSize(l, 180)
-        if (y > 270) { doc.addPage(); y = 15 }
-        doc.text(wrapped, 14, y)
-        y += wrapped.length * 4.5
-      })
       y += 2
-      doc.setDrawColor(210).line(14, y, 196, y)
-      y += 4
+      doc.setDrawColor(220).line(14, y, 196, y)
+      y += 5
     })
     doc.save(`Tickets_Pendientes_${tecnico.replace(/\s+/g,'_')}.pdf`)
   }
@@ -330,7 +365,10 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
       doc.text(`#${count} - TÉCNICO: ${t.tecnico} | Ref: ${t['N° REFERENCIA'] || '-'}`, 14, y)
       y += 5
       doc.setFont('helvetica', 'normal').setFontSize(9)
-      const wrapped = doc.splitTextToSize(`Negocio: ${t['NEGOCIO']} | Comentario de Proceso: ${t['DESCRIPCIÓN'] !== '-' ? t['DESCRIPCIÓN'] : t['DESCRIPCIÓN INICIAL']}`, 180)
+      
+      const descr = (t['DESCRIPCIÓN'] && t['DESCRIPCIÓN'] !== '-') ? t['DESCRIPCIÓN'] : 'Sin datos'
+      const wrapped = doc.splitTextToSize(`Negocio: ${t['NEGOCIO']} | Comentario: ${descr}`, 180)
+      
       doc.text(wrapped, 14, y)
       y += wrapped.length * 5 + 4
       count++
@@ -352,7 +390,6 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
   return (
     <div className="space-y-6">
       
-      {/* Zona Superior de Controles y Subida */}
       <div className="flex flex-col sm:flex-row gap-3 items-stretch">
         <div
           className={`border-2 border-dashed rounded-xl transition-all duration-200 p-4 flex-1 flex items-center justify-center gap-4 cursor-pointer bg-white ${dragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-400'}`}
@@ -438,16 +475,12 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
                     </div>
                     
                     <div className="flex flex-col sm:flex-row items-end sm:items-center gap-3 w-full md:w-auto">
-                      <div className="w-full sm:w-64 relative">
-                        <MapPin size={14} className="absolute left-2.5 top-2 text-gray-400" />
-                        <input 
-                          type="text" 
-                          value={rutasTecnicos[tecnico] || ''} 
-                          onChange={e => setRutasTecnicos(p => ({ ...p, [tecnico]: e.target.value }))}
-                          className="w-full border border-gray-300 rounded-lg pl-8 pr-3 py-1.5 text-xs outline-none font-bold text-gray-800 bg-white focus:border-blue-500 transition"
-                          placeholder="Municipios manuales..."
-                          title="Ruta Identificada. Puedes editarla a tu gusto."
-                        />
+                      {/* CONTENEDOR NO EDITABLE DE RUTAS */}
+                      <div className="w-full sm:w-auto relative bg-white border border-gray-200 rounded-lg px-3 py-1.5 flex items-center gap-2 shadow-sm min-h-[34px]">
+                        <MapPin size={14} className="text-blue-500 shrink-0" />
+                        <span className="text-xs font-bold text-gray-700 uppercase">
+                          {rutasTecnicos[tecnico] || 'SIN RUTA DETECTADA'}
+                        </span>
                       </div>
                       
                       <div className="flex items-center gap-2 shrink-0">
@@ -483,9 +516,10 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
                                 <span className="font-bold text-gray-800 block mb-0.5">DESCRIPCIÓN INICIAL:</span>{t['DESCRIPCIÓN INICIAL']}
                               </div>
                             )}
-                            {t['ESTADO_LIMPIO'].includes('PROCESO') && t['DESCRIPCIÓN'] !== '-' && (
+                            {t['ESTADO_LIMPIO'].includes('PROCESO') && (
                               <div className="mt-2 text-xs text-yellow-800 bg-yellow-50 rounded px-3 py-2 border-l-2 border-yellow-300">
-                                <span className="font-bold block mb-0.5">COMENTARIO DE AVANCE (En Proceso):</span>{t['DESCRIPCIÓN']}
+                                <span className="font-bold block mb-0.5">COMENTARIO DE AVANCE (En Proceso):</span>
+                                {t['DESCRIPCIÓN'] && t['DESCRIPCIÓN'] !== '-' ? t['DESCRIPCIÓN'] : 'Sin datos'}
                               </div>
                             )}
                           </div>
