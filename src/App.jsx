@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import ModuloTecnicos from './components/Tecnicos'
 import ModuloPendientes from './components/Gestion'
 import ModuloTablas from './components/Tablas'
@@ -7,9 +7,24 @@ import { Wrench, ClipboardList, BarChart3 } from 'lucide-react'
 export default function App() {
   const [tab, setTab] = useState('tecnicos')
   
-  // Estado compartido del archivo Excel para que ninguna pestaña pierda información
-  const [allTickets, setAllTickets] = useState([])
-  const [nombreArchivo, setNombreArchivo] = useState('')
+  // Cargar datos iniciales desde la memoria del navegador (localStorage)
+  const [allTickets, setAllTickets] = useState(() => {
+    const guardado = localStorage.getItem('tickets_data')
+    return guardado ? JSON.parse(guardado) : []
+  })
+  const [nombreArchivo, setNombreArchivo] = useState(() => {
+    return localStorage.getItem('tickets_filename') || ''
+  })
+  const [fechaSubidaExcel, setFechaSubidaExcel] = useState(() => {
+    return localStorage.getItem('tickets_date') || ''
+  })
+
+  // Guardar en la memoria del navegador cada vez que cambien los datos
+  useEffect(() => {
+    localStorage.setItem('tickets_data', JSON.stringify(allTickets))
+    localStorage.setItem('tickets_filename', nombreArchivo)
+    localStorage.setItem('tickets_date', fechaSubidaExcel)
+  }, [allTickets, nombreArchivo, fechaSubidaExcel])
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans antialiased text-gray-800">
@@ -51,7 +66,9 @@ export default function App() {
             allTickets={allTickets} 
             setAllTickets={setAllTickets} 
             nombreArchivo={nombreArchivo} 
-            setNombreArchivo={setNombreArchivo} 
+            setNombreArchivo={setNombreArchivo}
+            fechaSubidaExcel={fechaSubidaExcel}
+            setFechaSubidaExcel={setFechaSubidaExcel}
           />
         </div>
         <div className={tab === 'tablas' ? 'block' : 'hidden'}>
@@ -59,7 +76,9 @@ export default function App() {
             allTickets={allTickets} 
             setAllTickets={setAllTickets} 
             nombreArchivo={nombreArchivo} 
-            setNombreArchivo={setNombreArchivo} 
+            setNombreArchivo={setNombreArchivo}
+            fechaSubidaExcel={fechaSubidaExcel}
+            setFechaSubidaExcel={setFechaSubidaExcel}
           />
         </div>
         <div className={tab === 'pendientes' ? 'block' : 'hidden'}>
