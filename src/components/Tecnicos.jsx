@@ -52,10 +52,10 @@ function buildMessage(tecnico, tickets, rutaDefinida) {
     if (i > 0) msg += `\n━━━━━━━━━━━━━━━━━━━━━━━━\n`
     msg += `\n📌 *REFERENCIA:* ${t['N° REFERENCIA'] || '-'}\n`
     msg += `🏪 *NEGOCIO:* ${t['NEGOCIO'] || '-'}\n`
+    msg += `📝 *DESCRIPCIÓN INICIAL:*\n${t['DESCRIPCIÓN INICIAL'] || '-'}\n`
     msg += `📍 *DIRECCIÓN:* ${t['DIRECCIÓN'] || '-'}\n`
     msg += `📞 *TELÉFONO:* ${t['TELÉFONO'] || '-'}\n`
     msg += `👤 *CLIENTE:* ${t['CLIENTE'] || '-'}\n`
-    msg += `📝 *DESCRIPCIÓN INICIAL:*\n${t['DESCRIPCIÓN INICIAL'] || '-'}\n`
     msg += `🧊 *SERIE:* ${t['SERIE'] || '-'}  📦 *MODELO:* ${t['MODELO'] || '-'}\n`
     
     if (t['ESTADO_LIMPIO'].includes('PROCESO')) {
@@ -348,11 +348,10 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
       doc.setFontSize(9)
       
       printLine('Negocio: ', t['NEGOCIO'] || '-', 14, [0, 0, 0])
+      printLine('Descripción Inicial: ', t['DESCRIPCIÓN INICIAL'] || '-', 14, [80, 80, 80]) 
       printLine('Dirección: ', t['DIRECCIÓN'] || '-', 14, [180, 50, 50]) 
       printLine('Teléfono: ', t['TELÉFONO'] || '-', 14, [30, 120, 30]) 
-      printLine('Descripción Inicial: ', t['DESCRIPCIÓN INICIAL'] || '-', 14, [80, 80, 80]) 
       
-      // Re-agregamos Serie y Modelo justo debajo de Descripción Inicial
       doc.setFont('helvetica', 'bold').setTextColor(0, 130, 150)
       doc.text('Serie: ', 14, y)
       let w1 = doc.getTextWidth('Serie: ')
@@ -538,6 +537,13 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
                               <TicketBadge estado={t['ESTADO']} />
                             </div>
                             <p className="text-sm text-gray-800"><span className="font-bold text-gray-900">NEGOCIO:</span> {t['NEGOCIO']}</p>
+                            
+                            {t['DESCRIPCIÓN INICIAL'] && t['DESCRIPCIÓN INICIAL'] !== '-' && (
+                              <div className="mt-1 mb-2 text-xs text-gray-600 bg-gray-50 rounded px-3 py-2 border-l-2 border-blue-200">
+                                <span className="font-bold text-gray-800 block mb-0.5">DESCRIPCIÓN INICIAL:</span>{t['DESCRIPCIÓN INICIAL']}
+                              </div>
+                            )}
+
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-600 mt-1">
                               <p><span className="font-bold text-gray-800">📍 DIR:</span> {t['DIRECCIÓN'] || '-'}</p>
                               <p><span className="font-bold text-gray-800">📞 TEL:</span> {t['TELÉFONO']}</p>
@@ -547,11 +553,7 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
                                 <p><span className="font-bold text-gray-800">📦 MOD:</span> {t['MODELO'] || '-'}</p>
                               </div>
                             </div>
-                            {t['DESCRIPCIÓN INICIAL'] && t['DESCRIPCIÓN INICIAL'] !== '-' && (
-                              <div className="mt-2 text-xs text-gray-600 bg-gray-50 rounded px-3 py-2 border-l-2 border-blue-200">
-                                <span className="font-bold text-gray-800 block mb-0.5">DESCRIPCIÓN INICIAL:</span>{t['DESCRIPCIÓN INICIAL']}
-                              </div>
-                            )}
+                            
                             {t['ESTADO_LIMPIO'].includes('PROCESO') && (
                               <div className="mt-2 text-xs text-yellow-800 bg-yellow-50 rounded px-3 py-2 border-l-2 border-yellow-300">
                                 <span className="font-bold block mb-0.5">COMENTARIO DE AVANCE (En Proceso):</span>
