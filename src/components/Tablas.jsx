@@ -1,137 +1,109 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import html2canvas from 'html2canvas'
-import { Calendar, Image, BarChart2, Sparkles, RotateCcw } from 'lucide-react'
+import * as XLSX from 'xlsx'
+import { Calendar, Image, BarChart2, MapPin } from 'lucide-react'
+
+// Función para quitar tildes y pasar a mayúsculas
+function normalizarTexto(texto) {
+  if (!texto) return ''
+  return String(texto).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim()
+}
 
 export default function ModuloTablas({ allTickets }) {
   const [fechaInicio, setFechaInicio] = useState('')
   const [fechaFin, setFechaFin] = useState('')
   
   const [rutasTecnicos, setRutasTecnicos] = useState({})
-  const [aiLoadingTecnico, setAiLoadingTecnico] = useState(null)
+  const [baseMunicipios, setBaseMunicipios] = useState([])
 
   const tablaFinalizadasRef = useRef()
   const tablaEnvejecimientoRef = useRef()
+
+  // ============================================================================
+  // CARGA AUTOMÁTICA DEL EXCEL DE RUTAS (DESDE CARPETA PUBLIC)
+  // ============================================================================
+  useEffect(() => {
+    async function cargarRutasDelRepo() {
+      try {
+        const response = await fetch('/Rutas.xlsx')
+        if (!response.ok) {
+          console.warn('No se encontró el archivo Rutas.xlsx en la carpeta public.')
+          return
+        }
+        const arrayBuffer = await response.arrayBuffer()
+        const wb = XLSX.read(arrayBuffer, { type: 'array' })
+        
+        // Buscar específicamente en Hoja1 (o la primera si le cambiaste el nombre)
+        const nombreHoja = wb.SheetNames.includes('Hoja1') ? 'Hoja1' : wb.SheetNames[0]
+        const ws = wb.Sheets[nombreHoja]
+        const rawMatrix = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
+        
+        let colIndex = -1
+        let munis = new Set()
+
+        // Encontrar la columna que se llama "DATOS"
+        for (let i = 0; i < rawMatrix.length; i++) {
+          const rowNormalizada = rawMatrix[i].map(c => normalizarTexto(c))
+          const idx = rowNormalizada.indexOf('DATOS')
+          
+          if (idx !== -1) {
+            colIndex = idx
+            // Leer todos los datos hacia abajo de esa columna
+            for (let j = i + 1; j < rawMatrix.length; j++) {
+              const cellVal = rawMatrix[j][colIndex]
+              if (typeof cellVal === 'string' && cellVal.trim().length > 2) {
+                munis.add(cellVal.trim()) // Guardamos el original para mostrarlo bonito
+              }
+            }
+            break
+          }
+        }
+        
+        setBaseMunicipios(Array.from(munis))
+      } catch (error) {
+        console.error('Error al cargar Rutas.xlsx:', error)
+      }
+    }
+    cargarRutasDelRepo()
+  }, [])
 
   function handleRutaChange(tecnico, valor) {
     setRutasTecnicos(prev => ({ ...prev, [tecnico]: valor }))
   }
 
   // ============================================================================
-  // IA BLINDADA CON AUTO-DESCUBRIMIENTO DE MODELOS (API KEY SEGURA)
+  // EXTRACCIÓN DE RUTA LOCAL BASADA EN COINCIDENCIAS (SIN IA)
   // ============================================================================
-  async function generarRutaConIA(tecnico, ticketsActivos) {
-    setAiLoadingTecnico(tecnico)
+  function extraerRutaLocal(tecnico, ticketsActivos) {
+    if (baseMunicipios.length === 0) {
+      alert("La base de rutas no se ha cargado. Verifica que Rutas.xlsx esté en la carpeta public y tenga la columna DATOS.")
+      return
+    }
 
-    try {
-      // Lee la llave exclusivamente desde las variables de entorno
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    const ticketsTecnico = ticketsActivos.filter(t => t.tecnico === tecnico)
+    let encontrados = new Set()
+
+    ticketsTecnico.forEach(t => {
+      // Unimos Dirección y Negocio y lo normalizamos (sin tildes, mayúsculas)
+      const textoBuscar = normalizarTexto(`${t['DIRECCIÓN']} ${t['NEGOCIO']}`)
       
-      if (!apiKey) {
-        throw new Error("La API Key no está configurada. Asegúrate de agregar VITE_GEMINI_API_KEY en Vercel o en tu archivo .env local.");
-      }
-      
-      const ticketsTecnico = ticketsActivos.filter(t => t.tecnico === tecnico)
-      const direcciones = ticketsTecnico.map(t => t['DIRECCIÓN']).filter(d => d && d !== '-').join(' | ')
-
-      if (!direcciones || direcciones.trim() === '') {
-        alert("Este técnico no tiene direcciones válidas para procesar.")
-        setAiLoadingTecnico(null)
-        return
-      }
-
-      // PASO 1: Obtener la lista dinámica de modelos disponibles para tu API Key
-      const modelsRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
-      const modelsData = await modelsRes.json();
-
-      if (!modelsRes.ok) {
-        throw new Error(modelsData.error?.message || "No se pudo verificar la lista de modelos de tu API Key.");
-      }
-
-      // Filtramos solo los modelos que sirven para generar texto
-      const modelosValidos = modelsData.models.filter(m => 
-        m.supportedGenerationMethods && 
-        m.supportedGenerationMethods.includes("generateContent") &&
-        (m.name.includes("flash") || m.name.includes("pro"))
-      );
-
-      if (modelosValidos.length === 0) {
-        throw new Error("Tu API Key no tiene ningún modelo de texto habilitado.");
-      }
-
-      const prompt = `
-        Actúa como un experto en logística en Guatemala. Analiza la siguiente lista de direcciones desordenadas y extrae únicamente la ruta principal de trabajo.
-        Reglas estrictas:
-        1. Identifica y extrae SOLO nombres de Municipios, Departamentos o Zonas importantes.
-        2. IGNORA por completo números, calles, avenidas, callejones, aldeas pequeñas, kilómetros o referencias como "a la par de", "frente a", "links de google maps".
-        3. Elimina lugares duplicados.
-        4. Agrupa en un máximo de 6 lugares clave.
-        5. IMPORTANTE: Devuelve ÚNICAMENTE los nombres separados por un guion medio (-). TODO EN MAYÚSCULAS. 
-        6. NO uses formato markdown, ni negritas, ni símbolos raros.
-        Ejemplo de tu respuesta: ZONA 1 - RETALHULEU - NUEVO SAN CARLOS
+      baseMunicipios.forEach(muniOriginal => {
+        const muniLimpio = normalizarTexto(muniOriginal)
+        const escaped = muniLimpio.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        const regex = new RegExp(`\\b${escaped}\\b`, 'i')
         
-        Direcciones a procesar: ${direcciones}
-      `;
-
-      const requestBody = {
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.1 } 
-      };
-
-      let exito = false;
-      let dataFinal = null;
-
-      // PASO 2: Bucle de supervivencia. Prueba los modelos uno por uno hasta que Google acepte uno.
-      for (const modelo of modelosValidos) {
-        console.log(`Intentando usar modelo: ${modelo.name}...`);
-        
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/${modelo.name}:generateContent?key=${apiKey}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestBody)
-        });
-
-        const data = await response.json();
-
-        // Si la respuesta es exitosa (200 OK), rompemos el ciclo
-        if (response.ok) {
-          exito = true;
-          dataFinal = data;
-          console.log(`¡Éxito con ${modelo.name}!`);
-          break;
-        } else {
-          // Si falla (Ej. Cuota Excedida o 404), la consola nos avisa pero seguimos con el siguiente
-          console.warn(`Fallo en ${modelo.name}: ${data.error?.message}`);
+        if (regex.test(textoBuscar)) {
+          encontrados.add(muniOriginal.toUpperCase()) // Extrae y lo pone en mayúsculas
         }
-      }
+      })
+    })
 
-      if (!exito) {
-        throw new Error("Se probaron todos los modelos disponibles en tu cuenta, pero Google rechazó las peticiones por falta de cuota gratuita. Revisa https://aistudio.google.com/ para habilitar facturación si es necesario.");
-      }
+    const rutaExtraida = Array.from(encontrados).slice(0, 8).join(' - ')
 
-      // VALIDACIÓN DE LA RESPUESTA EXITOSA
-      if (dataFinal && dataFinal.candidates && dataFinal.candidates.length > 0) {
-        const candidate = dataFinal.candidates[0];
-        
-        if (candidate.finishReason === "SAFETY") {
-           throw new Error("Google bloqueó la respuesta debido a palabras no permitidas en las direcciones.");
-        }
-        
-        if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
-           let respuestaIA = candidate.content.parts[0].text.trim();
-           respuestaIA = respuestaIA.replace(/\*/g, ''); // Limpiar asteriscos
-           handleRutaChange(tecnico, respuestaIA);
-        } else {
-           throw new Error("La IA devolvió un formato vacío. Intenta nuevamente.");
-        }
-      } else {
-        throw new Error("La estructura de respuesta de la IA no es la esperada.");
-      }
-
-    } catch (error) {
-      console.error(error);
-      alert("Error IA: " + error.message);
-    } finally {
-      setAiLoadingTecnico(null)
+    if (rutaExtraida) {
+      handleRutaChange(tecnico, rutaExtraida)
+    } else {
+      alert("No se detectaron coincidencias de municipios exactos para las direcciones de este técnico.")
     }
   }
 
@@ -173,7 +145,6 @@ export default function ModuloTablas({ allTickets }) {
     totalesFecha[f] = listaTecnicosFinalizados.reduce((sum, tec) => sum + (matrizFinalizadas[tec][f] || 0), 0)
     granTotalFinalizadas += totalesFecha[f]
   })
-
 
   // ============================================================================
   // 2. LÓGICA TABLA 2: RUTAS Y ENVEJECIMIENTO
@@ -257,7 +228,7 @@ export default function ModuloTablas({ allTickets }) {
       </div>
 
       {/* ========================================================= */}
-      {/* TABLA 1: ÓRDENES FINALIZADAS                            */}
+      {/* TABLA 1: ÓRDENES FINALIZADAS                              */}
       {/* ========================================================= */}
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="flex justify-between items-center bg-slate-50 px-6 py-4 border-b border-gray-200">
@@ -310,7 +281,7 @@ export default function ModuloTablas({ allTickets }) {
       </div>
 
       {/* ========================================================= */}
-      {/* TABLA 2: ENVEJECIMIENTO Y RUTAS EDITABLES CON IA          */}
+      {/* TABLA 2: ENVEJECIMIENTO Y RUTAS EDITABLES                 */}
       {/* ========================================================= */}
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="flex justify-between items-center bg-slate-50 px-6 py-4 border-b border-gray-200">
@@ -349,13 +320,12 @@ export default function ModuloTablas({ allTickets }) {
                         <td className="p-1 relative group" data-html2canvas-ignore="false">
                           <div className="flex items-center justify-between mb-0.5 px-1 opacity-0 group-hover:opacity-100 transition-opacity absolute right-1 top-1">
                             <button 
-                              onClick={() => generarRutaConIA(tec, ticketsActivos)}
-                              disabled={aiLoadingTecnico === tec}
-                              className="flex items-center gap-1 text-[9px] font-black text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded shadow-sm hover:bg-purple-200 transition disabled:opacity-50"
-                              title="Extraer ruta con IA"
+                              onClick={() => extraerRutaLocal(tec, ticketsActivos)}
+                              className="flex items-center gap-1 text-[9px] font-black text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded shadow-sm hover:bg-emerald-200 transition"
+                              title="Extraer ruta de base de datos local"
                             >
-                              {aiLoadingTecnico === tec ? <RotateCcw size={10} className="animate-spin" /> : <Sparkles size={10} />}
-                              {aiLoadingTecnico === tec ? 'PROCESANDO...' : 'IA'}
+                              <MapPin size={10} />
+                              EXTRAER
                             </button>
                           </div>
                           
@@ -363,7 +333,7 @@ export default function ModuloTablas({ allTickets }) {
                             rows="2"
                             value={valorRuta} 
                             onChange={e => handleRutaChange(tec, e.target.value)}
-                            placeholder="Escribe la ruta o presiona IA ↗" 
+                            placeholder="Escribe la ruta o presiona EXTRAER ↗" 
                             className="w-full bg-transparent p-1 pt-3 font-bold text-blue-900 outline-none border-b border-dashed border-transparent hover:border-slate-400 focus:border-blue-500 placeholder-slate-300 text-[10px] uppercase leading-tight resize-none overflow-hidden"
                           />
                         </td>
