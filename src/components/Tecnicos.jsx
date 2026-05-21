@@ -55,8 +55,8 @@ function buildMessage(tecnico, tickets, rutaDefinida) {
     msg += `📍 *DIRECCIÓN:* ${t['DIRECCIÓN'] || '-'}\n`
     msg += `📞 *TELÉFONO:* ${t['TELÉFONO'] || '-'}\n`
     msg += `👤 *CLIENTE:* ${t['CLIENTE'] || '-'}\n`
-    msg += `🧊 *SERIE:* ${t['SERIE'] || '-'}  📦 *MODELO:* ${t['MODELO'] || '-'}\n`
     msg += `📝 *DESCRIPCIÓN INICIAL:*\n${t['DESCRIPCIÓN INICIAL'] || '-'}\n`
+    msg += `🧊 *SERIE:* ${t['SERIE'] || '-'}  📦 *MODELO:* ${t['MODELO'] || '-'}\n`
     
     if (t['ESTADO_LIMPIO'].includes('PROCESO')) {
       const comentarioProceso = (t['DESCRIPCIÓN'] && t['DESCRIPCIÓN'] !== '-') ? t['DESCRIPCIÓN'] : 'Sin datos';
@@ -296,9 +296,6 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
     XLSX.writeFile(wb, `Tickets_Pendientes_${tecnico.replace(/\s+/g,'_')}.xlsx`)
   }
 
-  // ==========================================
-  // GENERADOR PDF ACTUALIZADO CON NUEVA ESTRUCTURA
-  // ==========================================
   function generarPDFIndividual(tecnico, tickets, rutaDefinida) {
     const doc = new jsPDF({ unit: 'mm', format: 'a4' })
     const fecha = TODAY()
@@ -341,7 +338,6 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
     tickets.forEach((t, i) => {
       if (y > 255) { doc.addPage(); y = 15 }
       
-      // Encabezado: Ticket + Referencia e inmediatamente el Cliente al lado derecho
       doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(0, 80, 180) 
       const headerText = `#${i+1}  Ref: ${t['N° REFERENCIA'] || '-'}`
       doc.text(headerText, 14, y)
@@ -351,11 +347,26 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
 
       doc.setFontSize(9)
       
-      // Impresión en el orden estricto solicitado
       printLine('Negocio: ', t['NEGOCIO'] || '-', 14, [0, 0, 0])
       printLine('Dirección: ', t['DIRECCIÓN'] || '-', 14, [180, 50, 50]) 
       printLine('Teléfono: ', t['TELÉFONO'] || '-', 14, [30, 120, 30]) 
       printLine('Descripción Inicial: ', t['DESCRIPCIÓN INICIAL'] || '-', 14, [80, 80, 80]) 
+      
+      // Re-agregamos Serie y Modelo justo debajo de Descripción Inicial
+      doc.setFont('helvetica', 'bold').setTextColor(0, 130, 150)
+      doc.text('Serie: ', 14, y)
+      let w1 = doc.getTextWidth('Serie: ')
+      doc.setFont('helvetica', 'normal').setTextColor(60, 60, 60)
+      doc.text(String(t['SERIE'] || '-'), 14 + w1, y)
+      
+      let w2 = doc.getTextWidth(String(t['SERIE'] || '-')) + 10
+      doc.setFont('helvetica', 'bold').setTextColor(0, 130, 150)
+      doc.text('Modelo: ', 14 + w1 + w2, y)
+      let w3 = doc.getTextWidth('Modelo: ')
+      doc.setFont('helvetica', 'normal').setTextColor(60, 60, 60)
+      doc.text(String(t['MODELO'] || '-'), 14 + w1 + w2 + w3, y)
+      y += 4.5
+
       printLine('Estado actual: ', t['ESTADO'] || '-', 14, [200, 100, 0]) 
       
       if (t['ESTADO_LIMPIO'].includes('PROCESO')) {
