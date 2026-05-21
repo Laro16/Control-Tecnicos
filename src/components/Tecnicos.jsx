@@ -1,8 +1,8 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import { 
-  Upload, Clipboard, FileText, FileSpreadsheet, ChevronDown, Wrench, Filter, DownloadCloud
+  Upload, Clipboard, FileText, FileSpreadsheet, ChevronDown, Wrench, Filter, DownloadCloud, MapPin
 } from 'lucide-react'
 
 const TODAY = () => {
@@ -10,9 +10,15 @@ const TODAY = () => {
   return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`
 }
 
+// Función para quitar tildes y pasar a mayúsculas
+function normalizarTexto(texto) {
+  if (!texto) return ''
+  return String(texto).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim()
+}
+
 function simplificarCliente(cliente) {
   if (!cliente) return '-'
-  const upper = cliente.toUpperCase()
+  const upper = normalizarTexto(cliente)
   if (upper.includes('COMERCIALIZADORA Y PRODUCTORA DE BEBIDAS LOS VOLCANES')) return 'Los Volcanes'
   if (upper.includes('CERVECERIA CENTROAMERICANA')) return 'Cervecería'
   return cliente
@@ -36,9 +42,12 @@ function normalizarFechaExcel(fechaTexto) {
   return null
 }
 
-function buildMessage(tecnico, tickets) {
+function buildMessage(tecnico, tickets, rutaDefinida) {
   const fecha = TODAY()
   let msg = `🔧 *TÉCNICO: ${tecnico}*\n📅 *FECHA:* ${fecha}\n`
+  if (rutaDefinida && rutaDefinida.trim() !== '') {
+    msg += `🗺️ *RUTA:* ${rutaDefinida.trim()}\n`
+  }
   msg += `━━━━━━━━━━━━━━━━━━━━━━━━\n`
   tickets.forEach((t, i) => {
     if (i > 0) msg += `\n━━━━━━━━━━━━━━━━━━━━━━━━\n`
@@ -59,20 +68,53 @@ function buildMessage(tecnico, tickets) {
 }
 
 function TicketBadge({ estado }) {
-  const estNormalizado = (estado || '').toString().toLowerCase()
+  const estNormalizado = normalizarTexto(estado)
   let cls = 'badge-asignada'
-  if (estNormalizado.includes('proceso')) cls = 'badge-proceso'
-  if (estNormalizado.includes('agencia')) cls = 'badge-agencia'
+  if (estNormalizado.includes('PROCESO')) cls = 'badge-proceso'
+  if (estNormalizado.includes('AGENCIA')) cls = 'badge-agencia'
   return <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${cls}`}>{estado}</span>
 }
 
-// Se agregaron fechaSubidaExcel y setFechaSubidaExcel a los props
 export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchivo, setNombreArchivo, fechaSubidaExcel, setFechaSubidaExcel }) {
   const [dragging, setDragging] = useState(false)
   const [expandido, setExpandido] = useState({})
   const [filtroTecnico, setFiltroTecnico] = useState('Todos')
   const [filtroEstadoGlobal, setFiltroEstadoGlobal] = useState('Todos')
+  
+  const [baseMunicipios, setBaseMunicipios] = useState([])
+  const [rutasTecnicos, setRutasTecnicos] = useState({})
+
   const fileRef = useRef()
+
+  // Cargar el Excel de rutas automáticamente desde la carpeta public/ al iniciar
+  useEffect(() => {
+    async function cargarRutasDelRepo() {
+      try {
+        const response = await fetch('/Rutas.xlsx')
+        if (!response.ok) {
+          console.warn('No se encontró el archivo Rutas.xlsx en la carpeta public.')
+          return
+        }
+        const arrayBuffer = await response.arrayBuffer()
+        const wb = XLSX.read(arrayBuffer, { type: 'array' })
+        const ws = wb.Sheets[wb.SheetNames[0]]
+        const rawMatrix = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
+        
+        let munis = new Set()
+        for (let row of rawMatrix) {
+          for (let cell of row) {
+            if (typeof cell === 'string' && cell.trim().length > 2) {
+              munis.add(cell.trim()) // Guardamos el nombre original con tildes para mostrarlo bonito
+            }
+          }
+        }
+        setBaseMunicipios(Array.from(munis))
+      } catch (error) {
+        console.error('Error al cargar Rutas.xlsx:', error)
+      }
+    }
+    cargarRutasDelRepo()
+  }, [])
 
   function procesarExcel(file) {
     if (!file) return
@@ -89,7 +131,7 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
 
       for (let i = 0; i < rawMatrix.length; i++) {
         const row = rawMatrix[i]
-        const upperRow = row.map(cell => String(cell).trim().toUpperCase())
+        const upperRow = row.map(cell => normalizarTexto(cell))
         if (upperRow.includes('ESTADO')) {
           headerRowIndex = i
           headerKeys = upperRow
@@ -110,7 +152,7 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
         headerKeys.forEach((key, index) => { if (key) fila[key] = row[index] })
 
         let estadoOriginal = String(fila['ESTADO'] || '').trim()
-        let estadoLimpio = estadoOriginal.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        let estadoLimpio = normalizarTexto(estadoOriginal)
 
         const esAsignadoTecnico = estadoLimpio.includes('ASIGNAD') && estadoLimpio.includes('TECNICO')
         const esEnProceso = estadoLimpio.includes('PROCESO')
@@ -152,7 +194,35 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
         setAllTickets(listaTemporal)
         setFiltroTecnico('Todos')
         
-        // Guardar la fecha y hora de la actualización exitosa
+        // Identificar rutas usando texto normalizado (sin tildes, en mayúsculas)
+        const nuevasRutas = {}
+        const ticketsPorTecnico = {}
+        
+        listaTemporal.forEach(t => {
+          if(!ticketsPorTecnico[t.tecnico]) ticketsPorTecnico[t.tecnico] = []
+          ticketsPorTecnico[t.tecnico].push(t)
+        })
+
+        Object.keys(ticketsPorTecnico).forEach(tec => {
+          let encontrados = new Set()
+          ticketsPorTecnico[tec].forEach(t => {
+            // Unimos Dirección y Negocio y lo normalizamos
+            const textoBuscar = normalizarTexto(`${t['DIRECCIÓN']} ${t['NEGOCIO']}`)
+            
+            baseMunicipios.forEach(muniOriginal => {
+              const muniLimpio = normalizarTexto(muniOriginal) // Normalizamos el municipio del Excel
+              const escaped = muniLimpio.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+              const regex = new RegExp(`\\b${escaped}\\b`, 'i')
+              
+              if (regex.test(textoBuscar)) {
+                encontrados.add(muniOriginal) // Guardamos el original para que mantenga sus tildes y mayúsculas
+              }
+            })
+          })
+          nuevasRutas[tec] = Array.from(encontrados).slice(0, 8).join(', ')
+        })
+        setRutasTecnicos(nuevasRutas)
+
         const ahora = new Date()
         const fechaFormateada = `${ahora.toLocaleDateString()} a las ${ahora.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`
         setFechaSubidaExcel(fechaFormateada)
@@ -190,7 +260,7 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
     XLSX.writeFile(wb, `Tickets_Pendientes_${tecnico.replace(/\s+/g,'_')}.xlsx`)
   }
 
-  function generarPDFIndividual(tecnico, tickets) {
+  function generarPDFIndividual(tecnico, tickets, rutaDefinida) {
     const doc = new jsPDF({ unit: 'mm', format: 'a4' })
     const fecha = TODAY()
     let y = 15
@@ -201,6 +271,13 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
     doc.setFontSize(10).setFont('helvetica', 'normal')
     doc.text(`Fecha Envío: ${fecha}  |  Órdenes Pendientes: ${tickets.length}`, 14, y)
     y += 5
+
+    if (rutaDefinida && rutaDefinida.trim() !== '') {
+      doc.setFont('helvetica', 'bold')
+      doc.text(`Ruta Asignada: ${rutaDefinida.trim()}`, 14, y)
+      y += 5
+    }
+
     doc.setDrawColor(180).line(14, y, 196, y)
     y += 6
 
@@ -262,7 +339,6 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
     doc.save(`Global_En_Proceso_${TODAY().replace('/','')}.pdf`)
   }
 
-  // Filtrar exclusivamente cargas activas pendientes de cierre físico
   const ticketsPendientesTotales = allTickets.filter(t => !t.ESTADO_LIMPIO.includes('FINALIZADA'))
 
   const gruposPendientesAgrupados = {}
@@ -275,6 +351,8 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
 
   return (
     <div className="space-y-6">
+      
+      {/* Zona Superior de Controles y Subida */}
       <div className="flex flex-col sm:flex-row gap-3 items-stretch">
         <div
           className={`border-2 border-dashed rounded-xl transition-all duration-200 p-4 flex-1 flex items-center justify-center gap-4 cursor-pointer bg-white ${dragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-400'}`}
@@ -282,7 +360,7 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
         >
           <Upload size={24} className="text-blue-500 shrink-0" />
           <div className="text-left text-xs">
-            <p className="font-bold text-gray-700">Arrastra o selecciona el archivo del sistema</p>
+            <p className="font-bold text-gray-700">Arrastra o selecciona el archivo del sistema (Tickets)</p>
             {nombreArchivo && (
               <div className="mt-1">
                 <p className="font-black text-blue-600 truncate max-w-[200px] sm:max-w-xs">{nombreArchivo}</p>
@@ -298,9 +376,11 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
         </div>
         
         {allTickets.length > 0 && (
-          <button onClick={descargarExcelCompleto} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition">
-            <DownloadCloud size={16} /> Descargar Excel Completo
-          </button>
+          <div className="flex items-center shrink-0">
+            <button onClick={descargarExcelCompleto} className="h-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition">
+              <DownloadCloud size={16} /> Excel Completo
+            </button>
+          </div>
         )}
       </div>
 
@@ -340,7 +420,7 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
                 if (filtroEstadoGlobal === 'Asignada a Técnico') {
                   return t.ESTADO_LIMPIO.includes('TECNICO') || t.ESTADO_LIMPIO.includes('PROCESO')
                 }
-                const termino = filtroEstadoGlobal.toUpperCase().split(' ')[0]
+                const termino = normalizarTexto(filtroEstadoGlobal).split(' ')[0]
                 return t.ESTADO_LIMPIO.includes(termino)
               })
               
@@ -348,19 +428,34 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
 
               return (
                 <div key={tecnico} className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden fade-in">
-                  <div className="flex items-center justify-between px-5 py-4 bg-gray-50 border-b border-gray-200">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between px-5 py-4 bg-gray-50 border-b border-gray-200 gap-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-600"><Wrench size={16} /></div>
+                      <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 shrink-0"><Wrench size={16} /></div>
                       <div>
                         <p className="font-black text-gray-900 text-base uppercase leading-tight">{tecnico}</p>
                         <p className="text-xs font-bold text-gray-400">{tickets.length} orden{tickets.length !== 1 ? 'es' : ''} pendiente{tickets.length !== 1 ? 's' : ''}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => {navigator.clipboard.writeText(buildMessage(tecnico, tickets)); alert('Copiado')}} className="text-xs px-3 py-1.5 rounded-lg bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold shadow-sm">Copiar Lista</button>
-                      <button onClick={() => generarPDFIndividual(tecnico, tickets)} className="text-xs px-3 py-1.5 rounded-lg bg-red-50 text-red-700 font-bold border border-red-100">PDF</button>
-                      <button onClick={() => generarExcelTecnico(tecnico, tickets)} className="text-xs px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 font-bold border border-emerald-100">Excel</button>
-                      <button onClick={() => setExpandido(p => ({ ...p, [tecnico]: !p[tecnico] }))} className="p-1.5 hover:bg-gray-200 rounded-lg transition"><ChevronDown size={16} className={`transition-transform ${expandido[tecnico] ? 'rotate-180' : ''}`} /></button>
+                    
+                    <div className="flex flex-col sm:flex-row items-end sm:items-center gap-3 w-full md:w-auto">
+                      <div className="w-full sm:w-64 relative">
+                        <MapPin size={14} className="absolute left-2.5 top-2 text-gray-400" />
+                        <input 
+                          type="text" 
+                          value={rutasTecnicos[tecnico] || ''} 
+                          onChange={e => setRutasTecnicos(p => ({ ...p, [tecnico]: e.target.value }))}
+                          className="w-full border border-gray-300 rounded-lg pl-8 pr-3 py-1.5 text-xs outline-none font-bold text-gray-800 bg-white focus:border-blue-500 transition"
+                          placeholder="Municipios manuales..."
+                          title="Ruta Identificada. Puedes editarla a tu gusto."
+                        />
+                      </div>
+                      
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button onClick={() => {navigator.clipboard.writeText(buildMessage(tecnico, tickets, rutasTecnicos[tecnico])); alert('Copiado')}} className="text-xs px-3 py-1.5 rounded-lg bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold shadow-sm">Copiar</button>
+                        <button onClick={() => generarPDFIndividual(tecnico, tickets, rutasTecnicos[tecnico])} className="text-xs px-3 py-1.5 rounded-lg bg-red-50 text-red-700 font-bold border border-red-100">PDF</button>
+                        <button onClick={() => generarExcelTecnico(tecnico, tickets)} className="text-xs px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 font-bold border border-emerald-100">Excel</button>
+                        <button onClick={() => setExpandido(p => ({ ...p, [tecnico]: !p[tecnico] }))} className="p-1.5 hover:bg-gray-200 rounded-lg transition"><ChevronDown size={16} className={`transition-transform ${expandido[tecnico] ? 'rotate-180' : ''}`} /></button>
+                      </div>
                     </div>
                   </div>
 
