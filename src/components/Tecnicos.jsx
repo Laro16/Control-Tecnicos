@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import { 
@@ -115,6 +115,37 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
     cargarRutasDelRepo()
   }, [])
 
+  const rutasAutomaticas = useMemo(() => {
+    const autoRutas = {}
+    if (baseMunicipios.length === 0 || allTickets.length === 0) return autoRutas
+
+    const ticketsActivos = allTickets.filter(t => 
+      t.ESTADO_LIMPIO.includes('TECNICO') || t.ESTADO_LIMPIO.includes('PROCESO') || t.ESTADO_LIMPIO.includes('AGENCIA')
+    )
+
+    const ticketsPorTecnico = {}
+    ticketsActivos.forEach(t => {
+      let tec = t.tecnico === 'SIN TÉCNICO' || !t.tecnico || t.tecnico === '-' ? 'SIN ASIGNAR' : t.tecnico
+      if(!ticketsPorTecnico[tec]) ticketsPorTecnico[tec] = []
+      ticketsPorTecnico[tec].push(t)
+    })
+
+    Object.keys(ticketsPorTecnico).forEach(tec => {
+      let encontrados = new Set()
+      ticketsPorTecnico[tec].forEach(t => {
+        const textoBuscar = normalizarTexto(`${t['DIRECCIÓN']} ${t['NEGOCIO']}`)
+        baseMunicipios.forEach(muniOriginal => {
+          const muniLimpio = normalizarTexto(muniOriginal)
+          const escaped = muniLimpio.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          const regex = new RegExp(`\\b${escaped}\\b`, 'i')
+          if (regex.test(textoBuscar)) encontrados.add(muniOriginal.toUpperCase())
+        })
+      })
+      autoRutas[tec] = Array.from(encontrados).slice(0, 10).join(' - ')
+    })
+    return autoRutas
+  }, [baseMunicipios, allTickets])
+
   function procesarExcel(file) {
     if (!file) return
     setNombreArchivo(file.name)
@@ -193,7 +224,6 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
         setAllTickets(listaTemporal)
         setFiltroTecnico('Todos')
         
-        // AQUÍ ESTÁ LA CORRECCIÓN: Filtramos solo los tickets activos ANTES de buscar municipios
         const ticketsActivosParaRuta = listaTemporal.filter(t => 
           t.ESTADO_LIMPIO.includes('TECNICO') || 
           t.ESTADO_LIMPIO.includes('PROCESO') || 
@@ -267,16 +297,16 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
   }
 
   // ==========================================
-  // GENERADOR PDF CON COLORES Y NEGRITAS (ESTILO WEB)
+  // GENERADOR PDF ACTUALIZADO CON NUEVA ESTRUCTURA
   // ==========================================
   function generarPDFIndividual(tecnico, tickets, rutaDefinida) {
     const doc = new jsPDF({ unit: 'mm', format: 'a4' })
     const fecha = TODAY()
     let y = 15
 
-    const printLine = (label, value, xOffset, colorFondo) => {
+    const printLine = (label, value, xOffset, colorRGB) => {
       doc.setFont('helvetica', 'bold')
-      doc.setTextColor(...colorFondo) 
+      doc.setTextColor(...colorRGB) 
       doc.text(label, xOffset, y)
       const labelWidth = doc.getTextWidth(label)
       
@@ -309,35 +339,24 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
     y += 6
 
     tickets.forEach((t, i) => {
-      if (y > 265) { doc.addPage(); y = 15 }
+      if (y > 255) { doc.addPage(); y = 15 }
       
+      // Encabezado: Ticket + Referencia e inmediatamente el Cliente al lado derecho
       doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(0, 80, 180) 
-      doc.text(`#${i+1}  Ref: ${t['N° REFERENCIA'] || '-'}`, 14, y)
+      const headerText = `#${i+1}  Ref: ${t['N° REFERENCIA'] || '-'}`
+      doc.text(headerText, 14, y)
+      const headerWidth = doc.getTextWidth(headerText)
+      doc.text(`   Cliente: ${t['CLIENTE'] || '-'}`, 14 + headerWidth, y)
       y += 5
 
       doc.setFontSize(9)
       
+      // Impresión en el orden estricto solicitado
       printLine('Negocio: ', t['NEGOCIO'] || '-', 14, [0, 0, 0])
       printLine('Dirección: ', t['DIRECCIÓN'] || '-', 14, [180, 50, 50]) 
       printLine('Teléfono: ', t['TELÉFONO'] || '-', 14, [30, 120, 30]) 
-      printLine('Cliente: ', t['CLIENTE'] || '-', 14, [100, 50, 150]) 
-      
-      doc.setFont('helvetica', 'bold').setTextColor(0, 130, 150)
-      doc.text('Serie: ', 14, y)
-      let w1 = doc.getTextWidth('Serie: ')
-      doc.setFont('helvetica', 'normal').setTextColor(60, 60, 60)
-      doc.text(String(t['SERIE'] || '-'), 14 + w1, y)
-      
-      let w2 = doc.getTextWidth(String(t['SERIE'] || '-')) + 10
-      doc.setFont('helvetica', 'bold').setTextColor(0, 130, 150)
-      doc.text('Modelo: ', 14 + w1 + w2, y)
-      let w3 = doc.getTextWidth('Modelo: ')
-      doc.setFont('helvetica', 'normal').setTextColor(60, 60, 60)
-      doc.text(String(t['MODELO'] || '-'), 14 + w1 + w2 + w3, y)
-      y += 4.5
-
-      printLine('Estado actual: ', t['ESTADO'] || '-', 14, [200, 100, 0]) 
       printLine('Descripción Inicial: ', t['DESCRIPCIÓN INICIAL'] || '-', 14, [80, 80, 80]) 
+      printLine('Estado actual: ', t['ESTADO'] || '-', 14, [200, 100, 0]) 
       
       if (t['ESTADO_LIMPIO'].includes('PROCESO')) {
         const comentarioProceso = (t['DESCRIPCIÓN'] && t['DESCRIPCIÓN'] !== '-') ? t['DESCRIPCIÓN'] : 'Sin datos'
@@ -387,6 +406,10 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
   })
 
   const tecnicosConPendientes = Object.keys(gruposPendientesAgrupados).sort()
+
+  const valorRutaTecnico = (tecnico) => {
+    return rutasTecnicos[tecnico] !== undefined ? rutasTecnicos[tecnico] : (rutasAutomaticas[tecnico] || '')
+  }
 
   return (
     <div className="space-y-6">
@@ -464,6 +487,8 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
               
               if (tickets.length === 0) return null
 
+              const rutaActual = valorRutaTecnico(tecnico)
+
               return (
                 <div key={tecnico} className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden fade-in">
                   <div className="flex flex-col md:flex-row md:items-center justify-between px-5 py-4 bg-gray-50 border-b border-gray-200 gap-4">
@@ -479,13 +504,13 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
                       <div className="w-full sm:w-auto relative bg-white border border-gray-200 rounded-lg px-3 py-1.5 flex items-center gap-2 shadow-sm min-h-[34px]">
                         <MapPin size={14} className="text-blue-500 shrink-0" />
                         <span className="text-xs font-bold text-gray-700 uppercase">
-                          {rutasTecnicos[tecnico] || 'SIN RUTA DETECTADA'}
+                          {rutaActual || 'SIN RUTA DETECTADA'}
                         </span>
                       </div>
                       
                       <div className="flex items-center gap-2 shrink-0">
-                        <button onClick={() => {navigator.clipboard.writeText(buildMessage(tecnico, tickets, rutasTecnicos[tecnico])); alert('Copiado')}} className="text-xs px-3 py-1.5 rounded-lg bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold shadow-sm">Copiar</button>
-                        <button onClick={() => generarPDFIndividual(tecnico, tickets, rutasTecnicos[tecnico])} className="text-xs px-3 py-1.5 rounded-lg bg-red-50 text-red-700 font-bold border border-red-100">PDF</button>
+                        <button onClick={() => {navigator.clipboard.writeText(buildMessage(tecnico, tickets, rutaActual)); alert('Copiado')}} className="text-xs px-3 py-1.5 rounded-lg bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold shadow-sm">Copiar</button>
+                        <button onClick={() => generarPDFIndividual(tecnico, tickets, rutaActual)} className="text-xs px-3 py-1.5 rounded-lg bg-red-50 text-red-700 font-bold border border-red-100">PDF</button>
                         <button onClick={() => generarExcelTecnico(tecnico, tickets)} className="text-xs px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 font-bold border border-emerald-100">Excel</button>
                         <button onClick={() => setExpandido(p => ({ ...p, [tecnico]: !p[tecnico] }))} className="p-1.5 hover:bg-gray-200 rounded-lg transition"><ChevronDown size={16} className={`transition-transform ${expandido[tecnico] ? 'rotate-180' : ''}`} /></button>
                       </div>
