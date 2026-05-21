@@ -14,7 +14,6 @@ export default function ModuloTablas({ allTickets }) {
   const [rutasTecnicos, setRutasTecnicos] = useState({})
   const [baseMunicipios, setBaseMunicipios] = useState([])
 
-  // Estados para las nuevas funciones visuales
   const [toast, setToast] = useState(null)
   const [modalDetalles, setModalDetalles] = useState(null)
 
@@ -94,7 +93,7 @@ export default function ModuloTablas({ allTickets }) {
     return autoRutas
   }, [baseMunicipios, allTickets])
 
-  // 3. Función para Copiar Tabla con Aviso Silencioso (Toast)
+  // 3. Copiar Tabla con Aviso Corto (Toast)
   function copiarTablaAlPortapapeles(ref, nombreTabla) {
     if (!ref.current) return
     try {
@@ -106,7 +105,6 @@ export default function ModuloTablas({ allTickets }) {
       document.execCommand('copy')
       selection.removeAllRanges()
       
-      // Mostrar aviso silencioso que se quita solo en 3 segundos
       setToast(`✅ ${nombreTabla} copiada al portapapeles.`)
       setTimeout(() => setToast(null), 3000)
     } catch (err) {
@@ -146,7 +144,6 @@ export default function ModuloTablas({ allTickets }) {
   ticketsFinalizados.forEach(t => {
     if (matrizFinalizadas[t.tecnico]) {
       matrizFinalizadas[t.tecnico][t.FECHA_TEXTO].count++
-      // Ahora guardamos un objeto en lugar de un texto plano para mejor control visual
       matrizFinalizadas[t.tecnico][t.FECHA_TEXTO].detalles.push({
         negocio: t['NEGOCIO'] || '-',
         direccion: t['DIRECCIÓN'] || '-'
@@ -211,32 +208,34 @@ export default function ModuloTablas({ allTickets }) {
   return (
     <div className="space-y-6 fade-in relative">
       
-      {/* AVISO TOAST FLOTANTE Y SILENCIOSO */}
+      {/* TOAST NOTIFICACIÓN SILENCIOSA */}
       {toast && (
-        <div className="fixed bottom-6 right-6 bg-slate-900 text-white px-5 py-3 rounded-xl shadow-2xl z-[100] flex items-center gap-3 font-bold text-sm animate-fade-in-up">
-          <CheckCircle2 size={18} className="text-emerald-400" />
+        <div className="fixed bottom-6 right-6 bg-slate-900 text-white px-4 py-2.5 rounded-lg shadow-2xl z-[100] flex items-center gap-2 font-bold text-xs animate-fade-in-up">
+          <CheckCircle2 size={16} className="text-emerald-400" />
           {toast}
         </div>
       )}
 
-      {/* MODAL PARA DETALLES DE DIRECCIONES (AL HACER CLIC) */}
+      {/* CUADRO DE DETALLES OPTIMIZADO (ARRIBA Y MÁS ANCHO) */}
       {modalDetalles && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setModalDetalles(null)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="bg-slate-800 px-5 py-3.5 flex justify-between items-center border-b border-slate-900">
-              <h3 className="text-white font-black text-sm tracking-wide">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-10 overflow-y-auto" onClick={() => setModalDetalles(null)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden" onClick={e => e.stopPropagation()}>
+            {/* Encabezado ultra compacto */}
+            <div className="bg-slate-800 px-4 py-2 flex justify-between items-center border-b border-slate-900">
+              <h3 className="text-white font-black text-xs uppercase tracking-wider">
                 {modalDetalles.tec} <span className="text-slate-400 font-normal">| {modalDetalles.fecha}</span>
               </h3>
-              <button onClick={() => setModalDetalles(null)} className="text-slate-300 hover:text-white transition-colors bg-slate-700 p-1.5 rounded-lg"><X size={16}/></button>
+              <button onClick={() => setModalDetalles(null)} className="text-slate-400 hover:text-white transition-colors bg-slate-700 p-1 rounded-md"><X size={14}/></button>
             </div>
             
-            <div className="p-4 max-h-[60vh] overflow-y-auto space-y-3">
+            {/* Espacio interno maximizado */}
+            <div className="p-2.5 max-h-[75vh] overflow-y-auto space-y-1.5 bg-gray-100">
               {modalDetalles.detalles.map((det, idx) => {
-                // Truncamos la dirección a 25 caracteres máximo
-                const dirCorta = det.direccion.length > 25 ? det.direccion.substring(0, 25) + '...' : det.direccion;
+                // Ahora corta a 50 letras en lugar de 25
+                const dirCorta = det.direccion.length > 50 ? det.direccion.substring(0, 50) + '...' : det.direccion;
                 
                 return (
-                  <div key={idx} className="bg-slate-50 border border-slate-100 p-3 rounded-xl flex flex-col gap-0.5">
+                  <div key={idx} className="bg-white border border-gray-200 px-3 py-1.5 rounded-lg flex flex-col gap-0.5 shadow-sm">
                     <span className="font-black text-slate-800 text-[11px] uppercase leading-tight">{det.negocio}</span>
                     <span className="font-bold text-slate-500 text-[10px] leading-tight">📍 {dirCorta}</span>
                   </div>
@@ -259,11 +258,9 @@ export default function ModuloTablas({ allTickets }) {
         </div>
       </div>
 
-      {/* ========================================================= */}
-      {/* TABLA 1: ÓRDENES FINALIZADAS                              */}
-      {/* ========================================================= */}
+      {/* TABLA 1: ÓRDENES FINALIZADAS */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="flex justify-between items-center bg-slate-50 px-5 py-3 border-b border-gray-200">
+        <div className="flex justify-between items-center bg-slate-50 px-5 py-2.5 border-b border-gray-200">
           <div className="text-xs font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
             1. Monitoreo de Órdenes Finalizadas
@@ -324,11 +321,9 @@ export default function ModuloTablas({ allTickets }) {
         </div>
       </div>
 
-      {/* ========================================================= */}
-      {/* TABLA 2: ENVEJECIMIENTO Y RUTAS EDITABLES                 */}
-      {/* ========================================================= */}
+      {/* TABLA 2: ENVEJECIMIENTO Y RUTAS EDITABLES */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="flex justify-between items-center bg-slate-50 px-5 py-3 border-b border-gray-200">
+        <div className="flex justify-between items-center bg-slate-50 px-5 py-2.5 border-b border-gray-200">
           <div className="text-xs font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-orange-500"></div>
             2. Envejecimiento Operativo y Rutas Diarias
