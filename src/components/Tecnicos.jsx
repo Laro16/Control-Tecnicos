@@ -1,7 +1,7 @@
 import { useState, useRef, useMemo } from 'react'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
-import 'jspdf-autotable'
+import autoTable from 'jspdf-autotable'
 import { 
   Upload, Clipboard, FileText, FileSpreadsheet, ChevronDown, Wrench, Filter, 
   DownloadCloud, MapPin, ShieldAlert, ShieldCheck, Copy, ChevronRight
@@ -297,7 +297,7 @@ export default function ModuloTecnicos({
       ]
     })
 
-    doc.autoTable({
+    autoTable(doc, {
       startY: rutaDefinida?.trim() ? 33 : 28,
       head: [['#', 'Ref', 'Estado', 'Información del Ticket']],
       body,
@@ -337,7 +337,7 @@ export default function ModuloTecnicos({
       ]
     })
 
-    doc.autoTable({
+    autoTable(doc, {
       startY: 27,
       head: [['#', 'Técnico', 'Ref', 'Negocio', 'Comentario']],
       body,
