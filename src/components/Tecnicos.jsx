@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo } from 'react'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import { 
-  Upload, Clipboard, FileText, FileSpreadsheet, ChevronDown, Wrench, Filter, DownloadCloud, MapPin
+  Upload, Clipboard, FileText, FileSpreadsheet, ChevronDown, Wrench, Filter, DownloadCloud, MapPin, ShieldAlert, ShieldCheck
 } from 'lucide-react'
 
 const TODAY = () => {
@@ -39,6 +39,76 @@ function normalizarFechaExcel(fechaTexto) {
     }
   }
   return null
+}
+
+// ============================================================================
+// GARANTÍA: Clientes especiales y verificación por serie
+// ============================================================================
+const CLIENTES_GARANTIA = [
+  { nombre: 'ABCO', anios: 1 },
+  { nombre: 'COMERCIALIZADORA DE ALIMENTOS Y BEBIDAS SAN MIGUEL', anios: 2 },
+  { nombre: 'DISTRIBUIDORA DE LICORES', anios: 1 },
+  { nombre: 'EMBOTELLADORA CENTRAL', anios: 2 },
+  { nombre: 'EMBOTELLADORA LA MARIPOSA', anios: 2 },
+  { nombre: 'GARANTIA IMPORTADORA Y DISTRIBUIDORA DE APARATOS ELECTRICOS', anios: 1 },
+  { nombre: 'M.D.T. INTERNACIONAL', anios: 1 },
+  { nombre: 'PRODUCTOS LACTEOS DE CENTROAMERICA', anios: 1 },
+  { nombre: 'RICZA', anios: 1 },
+  { nombre: 'SAVONA DE GUATEMALA', anios: 1 },
+  { nombre: 'SERVICOCINAS', anios: 1 },
+  { nombre: 'SUPER VITAMINAS', anios: 1 },
+  { nombre: 'UNISUPER', anios: 1 },
+  { nombre: 'VIVENDO', anios: 1 },
+]
+
+function buscarClienteGarantia(clienteTexto) {
+  if (!clienteTexto || clienteTexto === '-') return null
+  const clienteNorm = normalizarTexto(clienteTexto)
+  return CLIENTES_GARANTIA.find(c => clienteNorm.includes(normalizarTexto(c.nombre))) || null
+}
+
+function parsearFechaSerie(serie) {
+  if (!serie || serie === '-') return null
+  const limpio = String(serie).replace(/\D/g, '')
+  if (limpio.length < 6) return null
+  const anio = parseInt(limpio.substring(0, 2), 10)
+  const mes = parseInt(limpio.substring(2, 4), 10)
+  const dia = parseInt(limpio.substring(4, 6), 10)
+  if (mes < 1 || mes > 12 || dia < 1 || dia > 31) return null
+  const anioCompleto = anio >= 0 && anio <= 50 ? 2000 + anio : 1900 + anio
+  const fecha = new Date(anioCompleto, mes - 1, dia)
+  if (isNaN(fecha.getTime())) return null
+  return fecha
+}
+
+function verificarGarantia(ticket) {
+  const clienteGarantia = buscarClienteGarantia(ticket['CLIENTE'])
+  if (!clienteGarantia) return null // No es cliente con garantía especial
+
+  const fechaFab = parsearFechaSerie(ticket['SERIE'])
+  if (!fechaFab) return { esClienteGarantia: true, sinDatosSerie: true, clienteNombre: clienteGarantia.nombre, aniosGarantia: clienteGarantia.anios }
+
+  const fechaVencimiento = new Date(fechaFab)
+  fechaVencimiento.setFullYear(fechaVencimiento.getFullYear() + clienteGarantia.anios)
+
+  const hoy = new Date()
+  hoy.setHours(0, 0, 0, 0)
+
+  const vencida = hoy > fechaVencimiento
+  const diasRestantes = Math.ceil((fechaVencimiento - hoy) / (1000 * 60 * 60 * 24))
+
+  return {
+    esClienteGarantia: true,
+    sinDatosSerie: false,
+    vencida,
+    diasRestantes,
+    fechaFabricacion: fechaFab,
+    fechaVencimiento,
+    clienteNombre: clienteGarantia.nombre,
+    aniosGarantia: clienteGarantia.anios,
+    fabDisplay: `${String(fechaFab.getDate()).padStart(2,'0')}/${String(fechaFab.getMonth()+1).padStart(2,'0')}/${fechaFab.getFullYear()}`,
+    vencDisplay: `${String(fechaVencimiento.getDate()).padStart(2,'0')}/${String(fechaVencimiento.getMonth()+1).padStart(2,'0')}/${fechaVencimiento.getFullYear()}`
+  }
 }
 
 function buildMessage(tecnico, tickets, rutaDefinida) {
@@ -421,6 +491,21 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
     return rutasTecnicos[tecnico] !== undefined ? rutasTecnicos[tecnico] : (rutasAutomaticas[tecnico] || '')
   }
 
+  // Alertas de garantía vencida en tickets pendientes
+  const alertasGarantia = useMemo(() => {
+    return ticketsPendientesTotales
+      .map(t => {
+        const garantia = verificarGarantia(t)
+        if (!garantia) return null
+        return { ticket: t, garantia }
+      })
+      .filter(Boolean)
+  }, [ticketsPendientesTotales])
+
+  const alertasVencidas = alertasGarantia.filter(a => a.garantia.vencida === true)
+  const alertasVigentes = alertasGarantia.filter(a => a.garantia.vencida === false && !a.garantia.sinDatosSerie)
+  const alertasSinSerie = alertasGarantia.filter(a => a.garantia.sinDatosSerie === true)
+
   return (
     <div className="space-y-6">
       
@@ -483,6 +568,109 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
             </div>
           </div>
 
+          {/* PANEL DE ALERTAS DE GARANTÍA */}
+          {alertasGarantia.length > 0 && (
+            <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden fade-in">
+              <div className="flex items-center justify-between px-5 py-3 bg-gray-50 border-b border-gray-200">
+                <div className="flex items-center gap-2">
+                  <ShieldAlert size={16} className="text-red-600" />
+                  <span className="font-black text-gray-800 text-sm uppercase tracking-wide">Alertas de Garantía</span>
+                </div>
+                <div className="flex items-center gap-3 text-xs font-bold">
+                  {alertasVencidas.length > 0 && (
+                    <span className="bg-red-100 text-red-800 px-2.5 py-1 rounded-full border border-red-200">
+                      {alertasVencidas.length} vencida{alertasVencidas.length !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                  {alertasVigentes.length > 0 && (
+                    <span className="bg-green-100 text-green-800 px-2.5 py-1 rounded-full border border-green-200">
+                      {alertasVigentes.length} vigente{alertasVigentes.length !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                  {alertasSinSerie.length > 0 && (
+                    <span className="bg-yellow-100 text-yellow-800 px-2.5 py-1 rounded-full border border-yellow-200">
+                      {alertasSinSerie.length} sin serie
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {alertasVencidas.length > 0 && (
+                <div className="p-4 space-y-2">
+                  <p className="text-xs font-bold text-red-700 uppercase mb-3 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                    No se pueden atender bajo garantía — Garantía vencida
+                  </p>
+                  {alertasVencidas.map((a, i) => (
+                    <div key={i} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 bg-red-50 border border-red-200 rounded-lg px-4 py-2.5">
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="font-mono text-xs font-bold text-red-800 bg-red-100 px-2 py-0.5 rounded border border-red-200">#{a.ticket['N° REFERENCIA']}</span>
+                        <span className="text-xs font-bold text-gray-500">{a.ticket.tecnico}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-gray-800 truncate">{a.ticket['NEGOCIO']}</p>
+                        <p className="text-[10px] text-gray-500 font-bold truncate">Cliente: {a.ticket['CLIENTE']} — Serie: {a.ticket['SERIE']}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-[10px] font-bold text-red-700">Fab: {a.garantia.fabDisplay}</p>
+                        <p className="text-[10px] font-bold text-red-600">Venció: {a.garantia.vencDisplay}</p>
+                        <p className="text-[10px] font-black text-red-800">Garantía: {a.garantia.aniosGarantia} año{a.garantia.aniosGarantia > 1 ? 's' : ''}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {alertasVigentes.length > 0 && (
+                <div className={`p-4 space-y-2 ${alertasVencidas.length > 0 ? 'border-t border-gray-200' : ''}`}>
+                  <p className="text-xs font-bold text-green-700 uppercase mb-3 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                    Garantía vigente — Se atienden sin costo
+                  </p>
+                  {alertasVigentes.map((a, i) => (
+                    <div key={i} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 bg-green-50 border border-green-200 rounded-lg px-4 py-2.5">
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="font-mono text-xs font-bold text-green-800 bg-green-100 px-2 py-0.5 rounded border border-green-200">#{a.ticket['N° REFERENCIA']}</span>
+                        <span className="text-xs font-bold text-gray-500">{a.ticket.tecnico}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-gray-800 truncate">{a.ticket['NEGOCIO']}</p>
+                        <p className="text-[10px] text-gray-500 font-bold truncate">Cliente: {a.ticket['CLIENTE']} — Serie: {a.ticket['SERIE']}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-[10px] font-bold text-green-700">Fab: {a.garantia.fabDisplay}</p>
+                        <p className="text-[10px] font-bold text-green-600">Vence: {a.garantia.vencDisplay}</p>
+                        <p className="text-[10px] font-black text-green-800">{a.garantia.diasRestantes} días restantes</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {alertasSinSerie.length > 0 && (
+                <div className={`p-4 space-y-2 ${(alertasVencidas.length > 0 || alertasVigentes.length > 0) ? 'border-t border-gray-200' : ''}`}>
+                  <p className="text-xs font-bold text-yellow-700 uppercase mb-3 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
+                    Serie inválida o vacía — Verificar manualmente
+                  </p>
+                  {alertasSinSerie.map((a, i) => (
+                    <div key={i} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-2.5">
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="font-mono text-xs font-bold text-yellow-800 bg-yellow-100 px-2 py-0.5 rounded border border-yellow-200">#{a.ticket['N° REFERENCIA']}</span>
+                        <span className="text-xs font-bold text-gray-500">{a.ticket.tecnico}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-gray-800 truncate">{a.ticket['NEGOCIO']}</p>
+                        <p className="text-[10px] text-gray-500 font-bold truncate">Cliente: {a.ticket['CLIENTE']} — Serie: {a.ticket['SERIE'] || 'VACÍA'}</p>
+                      </div>
+                      <span className="text-[10px] font-black text-yellow-800">Garantía: {a.garantia.aniosGarantia} año{a.garantia.aniosGarantia > 1 ? 's' : ''}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {tecnicosConPendientes
             .filter(tecnico => filtroTecnico === 'Todos' || filtroTecnico === tecnico)
             .map(tecnico => {
@@ -529,12 +717,29 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
 
                   {expandido[tecnico] && (
                     <div className="p-5">
-                      {tickets.map((t, i) => (
+                      {tickets.map((t, i) => {
+                        const garantiaInfo = verificarGarantia(t)
+                        return (
                         <div key={i}>
-                          <div className="p-1 rounded-lg">
+                          <div className={`p-1 rounded-lg ${garantiaInfo?.vencida ? 'ring-2 ring-red-400 bg-red-50/40 p-3' : garantiaInfo?.sinDatosSerie ? 'ring-2 ring-yellow-300 bg-yellow-50/40 p-3' : (garantiaInfo && !garantiaInfo.vencida && !garantiaInfo.sinDatosSerie) ? 'ring-2 ring-green-300 bg-green-50/30 p-3' : ''}`}>
                             <div className="flex items-center gap-2 flex-wrap mb-2">
                               <span className="font-mono text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100">#{t['N° REFERENCIA']}</span>
                               <TicketBadge estado={t['ESTADO']} />
+                              {garantiaInfo?.vencida && (
+                                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-red-600 text-white flex items-center gap-1">
+                                  <ShieldAlert size={10} /> GARANTÍA VENCIDA
+                                </span>
+                              )}
+                              {garantiaInfo && !garantiaInfo.vencida && !garantiaInfo.sinDatosSerie && (
+                                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-green-600 text-white flex items-center gap-1">
+                                  <ShieldCheck size={10} /> GARANTÍA VIGENTE
+                                </span>
+                              )}
+                              {garantiaInfo?.sinDatosSerie && (
+                                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-yellow-500 text-white flex items-center gap-1">
+                                  <ShieldAlert size={10} /> VERIFICAR SERIE
+                                </span>
+                              )}
                             </div>
                             <p className="text-sm text-gray-800"><span className="font-bold text-gray-900">NEGOCIO:</span> {t['NEGOCIO']}</p>
                             
@@ -553,6 +758,26 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
                                 <p><span className="font-bold text-gray-800">📦 MOD:</span> {t['MODELO'] || '-'}</p>
                               </div>
                             </div>
+
+                            {/* Detalle de garantía inline */}
+                            {garantiaInfo?.vencida && (
+                              <div className="mt-2 text-xs text-red-800 bg-red-100 rounded px-3 py-2 border-l-2 border-red-500">
+                                <span className="font-black block mb-0.5">⚠️ GARANTÍA VENCIDA — NO ATENDER BAJO GARANTÍA</span>
+                                <span className="font-bold text-red-700">Fabricado: {garantiaInfo.fabDisplay} | Venció: {garantiaInfo.vencDisplay} | Garantía: {garantiaInfo.aniosGarantia} año{garantiaInfo.aniosGarantia > 1 ? 's' : ''} ({garantiaInfo.clienteNombre})</span>
+                              </div>
+                            )}
+                            {garantiaInfo && !garantiaInfo.vencida && !garantiaInfo.sinDatosSerie && (
+                              <div className="mt-2 text-xs text-green-800 bg-green-100 rounded px-3 py-2 border-l-2 border-green-500">
+                                <span className="font-black block mb-0.5">✅ GARANTÍA VIGENTE</span>
+                                <span className="font-bold text-green-700">Fabricado: {garantiaInfo.fabDisplay} | Vence: {garantiaInfo.vencDisplay} | Restan: {garantiaInfo.diasRestantes} días ({garantiaInfo.clienteNombre})</span>
+                              </div>
+                            )}
+                            {garantiaInfo?.sinDatosSerie && (
+                              <div className="mt-2 text-xs text-yellow-800 bg-yellow-100 rounded px-3 py-2 border-l-2 border-yellow-500">
+                                <span className="font-black block mb-0.5">⚠️ SERIE INVÁLIDA — VERIFICAR MANUALMENTE</span>
+                                <span className="font-bold text-yellow-700">Cliente con garantía: {garantiaInfo.clienteNombre} ({garantiaInfo.aniosGarantia} año{garantiaInfo.aniosGarantia > 1 ? 's' : ''}) — Serie no se pudo leer: "{t['SERIE']}"</span>
+                              </div>
+                            )}
                             
                             {t['ESTADO_LIMPIO'].includes('PROCESO') && (
                               <div className="mt-2 text-xs text-yellow-800 bg-yellow-50 rounded px-3 py-2 border-l-2 border-yellow-300">
@@ -563,7 +788,8 @@ export default function ModuloTecnicos({ allTickets, setAllTickets, nombreArchiv
                           </div>
                           {i !== tickets.length - 1 && <div className="my-5 border-b border-gray-200 border-dashed w-full"></div>}
                         </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   )}
                 </div>
