@@ -144,7 +144,7 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
   const EnvCell = ({ data, tec, label, colorText, colorBg, colorHover }) => (
     <td
       onClick={() => { if (data.count > 0) setModalDetalles({ tec, fecha: label, detalles: data.detalles }) }}
-      className={`px-3 py-2 text-center text-xs font-bold whitespace-nowrap border-r border-slate-200 ${colorText} ${colorBg} ${data.count > 0 ? `${colorHover} cursor-pointer` : ''}`}
+      className={`px-3 py-2 text-center text-xs font-black whitespace-nowrap border-r border-slate-200 ${colorText} ${colorBg} ${data.count > 0 ? `${colorHover} cursor-pointer` : ''}`}
     >
       {data.count === 0 ? '-' : data.count}
     </td>
@@ -236,14 +236,14 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
               </thead>
               <tbody>
                 {listaTecnicosFinalizados.map((tec, idx) => (
-                  <tr key={tec} className={`border-b-2 border-slate-300 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/80'} hover:bg-sky-50 transition-colors`}>
-                    <td className="px-3 py-2 text-[11px] uppercase font-bold text-slate-800 border-r border-slate-200 whitespace-nowrap">{tec}</td>
+                  <tr key={tec} className={`border-b-[3px] border-black ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/80'} hover:bg-sky-50 transition-colors`}>
+                    <td className="px-3 py-2 text-[11px] uppercase font-black text-slate-800 border-r border-slate-200 whitespace-nowrap">{tec}</td>
                     {columnasFechas.map(f => {
                       const d = matrizFinalizadas[tec][f]
                       return (
                         <td key={f}
                           onClick={() => { if (d.count > 0) setModalDetalles({ tec, fecha: f, detalles: d.detalles }) }}
-                          className={`px-3 py-2 text-center text-xs font-bold border-r border-slate-200 whitespace-nowrap ${d.count > 0 ? 'text-sky-700 hover:bg-sky-100 cursor-pointer' : 'text-slate-300'}`}
+                          className={`px-3 py-2 text-center text-xs font-black border-r border-slate-200 whitespace-nowrap ${d.count > 0 ? 'text-sky-700 hover:bg-sky-100 cursor-pointer' : 'text-slate-300'}`}
                         >{d.count === 0 ? '-' : d.count}</td>
                       )
                     })}
@@ -252,7 +252,7 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
                 ))}
               </tbody>
               <tfoot>
-                <tr className="bg-slate-800 text-white text-[11px] font-bold">
+                <tr className="bg-slate-800 text-white text-[11px] font-black">
                   <td className="px-3 py-2.5 uppercase text-right border-r border-slate-700">Total General</td>
                   {columnasFechas.map(f => <td key={f} className="px-3 py-2.5 text-center border-r border-slate-700 whitespace-nowrap">{totalesFecha[f]}</td>)}
                   <td className="px-3 py-2.5 text-center text-emerald-400 font-black text-sm whitespace-nowrap">{granTotalFinalizadas}</td>
@@ -295,8 +295,8 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
                 {listaTecnicosActivos.map((tec, idx) => {
                   const vr = valorRutaTecnico(tec)
                   return (
-                    <tr key={tec} className={`border-b-2 border-slate-300 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/80'} hover:bg-slate-100/60 transition-colors`}>
-                      <td className="px-3 py-2 text-[11px] uppercase font-bold text-slate-800 border-r border-slate-200 whitespace-nowrap">{tec}</td>
+                    <tr key={tec} className={`border-b-[3px] border-black ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/80'} hover:bg-slate-100/60 transition-colors`}>
+                      <td className="px-3 py-2 text-[11px] uppercase font-black text-slate-800 border-r border-slate-200 whitespace-nowrap">{tec}</td>
                       <td className="p-0 align-top border-r border-slate-200">
                         <textarea
                           rows="2"
@@ -316,7 +316,7 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
                 })}
               </tbody>
               <tfoot>
-                <tr className="bg-slate-800 text-white text-[11px] font-bold">
+                <tr className="bg-slate-800 text-white text-[11px] font-black">
                   <td className="px-3 py-2.5 uppercase text-right border-r border-slate-700" colSpan="2">Total Operativo</td>
                   <td className="px-3 py-2.5 text-center text-emerald-400 font-black border-r border-slate-700">{totalesEnv.menos24}</td>
                   <td className="px-3 py-2.5 text-center text-amber-400 font-black border-r border-slate-700">{totalesEnv.mas24}</td>
