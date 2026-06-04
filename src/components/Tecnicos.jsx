@@ -282,34 +282,58 @@ export default function ModuloTecnicos({
     // Tabla principal con autoTable
     const body = []
     tickets.forEach((t, i) => {
-      let info = `Negocio: ${t['NEGOCIO'] || '-'}\nDirección: ${t['DIRECCIÓN'] || '-'}\nTeléfono: ${t['TELÉFONO'] || '-'}\nCliente: ${t['CLIENTE'] || '-'}\nSerie: ${t['SERIE'] || '-'} | Modelo: ${t['MODELO'] || '-'}`
-      if (t['ESTADO_LIMPIO'].includes('PROCESO')) {
-        const com = (t['DESCRIPCIÓN'] && t['DESCRIPCIÓN'] !== '-') ? t['DESCRIPCIÓN'] : 'Sin datos'
-        info += `\n\nComentario (En Proceso):\n${com}`
+      const esProceso = t['ESTADO_LIMPIO'].includes('PROCESO')
+      
+      // Separador entre tickets (excepto antes del primero)
+      if (i > 0) {
+        body.push([{
+          content: '',
+          colSpan: 4,
+          styles: { 
+            fillColor: [30, 41, 59], 
+            cellPadding: 0.5,
+            minCellHeight: 1
+          }
+        }])
       }
+
+      let info = `Negocio: ${t['NEGOCIO'] || '-'}\nDirección: ${t['DIRECCIÓN'] || '-'}\nTeléfono: ${t['TELÉFONO'] || '-'}\nCliente: ${t['CLIENTE'] || '-'}\nSerie: ${t['SERIE'] || '-'} | Modelo: ${t['MODELO'] || '-'}`
+      
       // Fila principal del ticket
       body.push([
         { content: `#${i+1}`, styles: { fontStyle: 'bold', halign: 'center' } },
         { content: t['N° REFERENCIA'] || '-', styles: { fontStyle: 'bold' } },
-        { content: t['ESTADO'] || '-' },
+        { content: t['ESTADO'] || '-', styles: esProceso ? { textColor: [190, 18, 60], fontStyle: 'bold' } : {} },
         { content: info }
       ])
-      // Fila dedicada para DESCRIPCIÓN INICIAL
+
+      // Fila DESCRIPCIÓN INICIAL
       const descInicial = (t['DESCRIPCIÓN INICIAL'] && t['DESCRIPCIÓN INICIAL'] !== '-') ? t['DESCRIPCIÓN INICIAL'] : 'Sin descripción inicial'
-      body.push([
-        { 
-          content: `DESCRIPCIÓN INICIAL:  ${descInicial}`, 
-          colSpan: 4, 
-          styles: { 
-            fontStyle: 'bold', 
-            fontSize: 8, 
-            fillColor: [241, 245, 249],
-            textColor: [15, 23, 42],
+      body.push([{
+        content: `DESCRIPCIÓN INICIAL:  ${descInicial}`, 
+        colSpan: 4, 
+        styles: { 
+          fontStyle: 'bold', fontSize: 8, 
+          fillColor: [241, 245, 249], textColor: [15, 23, 42],
+          cellPadding: { top: 2, bottom: 2, left: 12, right: 5 },
+          overflow: 'linebreak'
+        } 
+      }])
+
+      // Fila COMENTARIO EN PROCESO (solo si aplica, en rojo)
+      if (esProceso) {
+        const com = (t['DESCRIPCIÓN'] && t['DESCRIPCIÓN'] !== '-') ? t['DESCRIPCIÓN'] : 'Sin datos'
+        body.push([{
+          content: `COMENTARIO EN PROCESO:  ${com}`,
+          colSpan: 4,
+          styles: {
+            fontStyle: 'bold', fontSize: 7.5,
+            fillColor: [255, 241, 242], textColor: [190, 18, 60],
             cellPadding: { top: 2, bottom: 2, left: 12, right: 5 },
             overflow: 'linebreak'
-          } 
-        }
-      ])
+          }
+        }])
+      }
     })
 
     autoTable(doc, {
@@ -327,7 +351,6 @@ export default function ModuloTecnicos({
         overflow: 'linebreak'
       },
       headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
-      alternateRowStyles: { fillColor: [248, 250, 252] },
       columnStyles: { 
         0: { halign: 'center', cellWidth: 9 },
         1: { cellWidth: 21 },
@@ -361,7 +384,7 @@ export default function ModuloTecnicos({
         t.tecnico,
         t['N° REFERENCIA'] || '-',
         t['NEGOCIO'] || '-',
-        com
+        { content: com, styles: { textColor: [190, 18, 60], fontStyle: 'bold' } }
       ]
     })
 
@@ -372,7 +395,6 @@ export default function ModuloTecnicos({
       theme: 'grid',
       styles: { fontSize: 7.5, cellPadding: 2, lineColor: [203, 213, 225], lineWidth: 0.2, textColor: [30, 41, 59], overflow: 'linebreak' },
       headStyles: { fillColor: [15, 23, 42], textColor: 255, fontStyle: 'bold', fontSize: 8 },
-      alternateRowStyles: { fillColor: [248, 250, 252] },
       columnStyles: { 0: { cellWidth: 8, halign: 'center' }, 1: { cellWidth: 28 }, 2: { cellWidth: 18 }, 3: { cellWidth: 32 }, 4: { cellWidth: 'auto' } },
       margin: { left: 14, right: 14 },
     })
