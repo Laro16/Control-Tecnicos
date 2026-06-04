@@ -1,13 +1,16 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { supabase } from './supabase.jsx'
 import ModuloTecnicos from './components/Tecnicos'
 import ModuloPendientes from './components/Gestion'
 import ModuloTablas from './components/Tablas'
-import { Wrench, ClipboardList, BarChart3 } from 'lucide-react'
+import { Wrench, ClipboardList, BarChart3, Cloud, CloudOff } from 'lucide-react'
 
 export default function App() {
   const [tab, setTab] = useState('tecnicos')
+  const [syncStatus, setSyncStatus] = useState('cargando') // 'cargando' | 'sincronizado' | 'error'
+  const nubeCargada = useRef(false)
   
-  // Cargar datos iniciales desde la memoria del navegador (localStorage)
+  // Cargar datos iniciales desde localStorage (carga rápida)
   const [allTickets, setAllTickets] = useState(() => {
     const guardado = localStorage.getItem('tickets_data')
     return guardado ? JSON.parse(guardado) : []
@@ -19,11 +22,74 @@ export default function App() {
     return localStorage.getItem('tickets_date') || ''
   })
 
-  // Guardar en la memoria del navegador cada vez que cambien los datos
+  // Al montar: intentar cargar desde Supabase (sobrescribe localStorage si hay datos)
+  useEffect(() => {
+    async function cargarDesdeNube() {
+      try {
+        const { data, error } = await supabase
+          .from('excel_sync')
+          .select('*')
+          .eq('id', 1)
+          .single()
+
+        if (data && !error) {
+          const ticketsNube = JSON.parse(data.tickets_json || '[]')
+          if (ticketsNube.length > 0) {
+            setAllTickets(ticketsNube)
+            setNombreArchivo(data.filename || '')
+            setFechaSubidaExcel(data.upload_date || '')
+          }
+          setSyncStatus('sincronizado')
+        } else {
+          // No hay datos en la nube, usar localStorage
+          setSyncStatus('sincronizado')
+        }
+      } catch (e) {
+        console.warn('No se pudo cargar desde Supabase, usando datos locales:', e)
+        setSyncStatus('error')
+      }
+      // Pequeño delay para evitar guardar de vuelta los datos que acabamos de cargar
+      setTimeout(() => { nubeCargada.current = true }, 500)
+    }
+    cargarDesdeNube()
+  }, [])
+
+  // Guardar en localStorage siempre (cache local rápido)
   useEffect(() => {
     localStorage.setItem('tickets_data', JSON.stringify(allTickets))
     localStorage.setItem('tickets_filename', nombreArchivo)
     localStorage.setItem('tickets_date', fechaSubidaExcel)
+  }, [allTickets, nombreArchivo, fechaSubidaExcel])
+
+  // Guardar en Supabase cuando el usuario sube un Excel nuevo
+  useEffect(() => {
+    if (!nubeCargada.current) return
+    if (allTickets.length === 0) return
+
+    async function guardarEnNube() {
+      try {
+        const { error } = await supabase
+          .from('excel_sync')
+          .upsert({
+            id: 1,
+            tickets_json: JSON.stringify(allTickets),
+            filename: nombreArchivo,
+            upload_date: fechaSubidaExcel,
+            updated_at: new Date().toISOString()
+          })
+        
+        if (!error) {
+          setSyncStatus('sincronizado')
+        } else {
+          console.warn('Error al guardar en Supabase:', error)
+          setSyncStatus('error')
+        }
+      } catch (e) {
+        console.warn('No se pudo guardar en Supabase:', e)
+        setSyncStatus('error')
+      }
+    }
+    guardarEnNube()
   }, [allTickets, nombreArchivo, fechaSubidaExcel])
 
   return (
@@ -35,6 +101,16 @@ export default function App() {
               <Wrench size={16} />
             </div>
             <span className="font-black text-gray-900 text-xl tracking-tight">TicketManager Pro</span>
+            {/* Indicador de sincronización */}
+            <div className="flex items-center gap-1" title={syncStatus === 'sincronizado' ? 'Datos sincronizados en la nube' : syncStatus === 'error' ? 'Sin conexión a la nube' : 'Sincronizando...'}>
+              {syncStatus === 'sincronizado' ? (
+                <Cloud size={14} className="text-green-500" />
+              ) : syncStatus === 'error' ? (
+                <CloudOff size={14} className="text-red-400" />
+              ) : (
+                <Cloud size={14} className="text-gray-300 animate-pulse" />
+              )}
+            </div>
           </div>
 
           <nav className="flex bg-gray-100 p-1 rounded-xl w-full sm:w-auto">
