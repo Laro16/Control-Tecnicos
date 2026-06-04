@@ -280,21 +280,35 @@ export default function ModuloTecnicos({
     }
 
     // Tabla principal con autoTable
-    const body = tickets.map((t, i) => {
-      let info = `Negocio: ${t['NEGOCIO'] || '-'}\nDir: ${t['DIRECCIÓN'] || '-'}\nTel: ${t['TELÉFONO'] || '-'}\nCliente: ${t['CLIENTE'] || '-'}\nSerie: ${t['SERIE'] || '-'} | Modelo: ${t['MODELO'] || '-'}`
-      if (t['DESCRIPCIÓN INICIAL'] && t['DESCRIPCIÓN INICIAL'] !== '-') {
-        info += `\n\nDesc. Inicial:\n${t['DESCRIPCIÓN INICIAL']}`
-      }
+    const body = []
+    tickets.forEach((t, i) => {
+      let info = `Negocio: ${t['NEGOCIO'] || '-'}\nDirección: ${t['DIRECCIÓN'] || '-'}\nTeléfono: ${t['TELÉFONO'] || '-'}\nCliente: ${t['CLIENTE'] || '-'}\nSerie: ${t['SERIE'] || '-'} | Modelo: ${t['MODELO'] || '-'}`
       if (t['ESTADO_LIMPIO'].includes('PROCESO')) {
         const com = (t['DESCRIPCIÓN'] && t['DESCRIPCIÓN'] !== '-') ? t['DESCRIPCIÓN'] : 'Sin datos'
         info += `\n\nComentario (En Proceso):\n${com}`
       }
-      return [
+      // Fila principal del ticket
+      body.push([
         { content: `#${i+1}`, styles: { fontStyle: 'bold', halign: 'center', cellWidth: 10 } },
         { content: t['N° REFERENCIA'] || '-', styles: { fontStyle: 'bold', cellWidth: 22 } },
         { content: t['ESTADO'] || '-', styles: { cellWidth: 28 } },
         { content: info }
-      ]
+      ])
+      // Fila dedicada para DESCRIPCIÓN INICIAL (bold, resaltada, span completo)
+      const descInicial = (t['DESCRIPCIÓN INICIAL'] && t['DESCRIPCIÓN INICIAL'] !== '-') ? t['DESCRIPCIÓN INICIAL'] : 'Sin descripción inicial'
+      body.push([
+        { 
+          content: `DESCRIPCIÓN INICIAL:  ${descInicial}`, 
+          colSpan: 4, 
+          styles: { 
+            fontStyle: 'bold', 
+            fontSize: 8, 
+            fillColor: [241, 245, 249],
+            textColor: [15, 23, 42],
+            cellPadding: { top: 2, bottom: 2, left: 12, right: 5 }
+          } 
+        }
+      ])
     })
 
     autoTable(doc, {
