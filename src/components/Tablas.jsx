@@ -144,7 +144,7 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
   const EnvCell = ({ data, tec, label, colorText, colorBg, colorHover }) => (
     <td
       onClick={() => { if (data.count > 0) setModalDetalles({ tec, fecha: label, detalles: data.detalles }) }}
-      className={`px-3 py-2 text-center text-xs font-black whitespace-nowrap border-r border-slate-200 ${colorText} ${colorBg} ${data.count > 0 ? `${colorHover} cursor-pointer` : ''}`}
+      className={`px-3 py-2 text-center text-xs font-black whitespace-nowrap border-r-2 border-r-black ${colorText} ${colorBg} ${data.count > 0 ? `${colorHover} cursor-pointer` : ''}`}
     >
       {data.count === 0 ? '-' : data.count}
     </td>
@@ -237,13 +237,13 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
               <tbody>
                 {listaTecnicosFinalizados.map((tec, idx) => (
                   <tr key={tec} className={`border-b-[3px] border-black ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/80'} hover:bg-sky-50 transition-colors`}>
-                    <td className="px-3 py-2 text-[11px] uppercase font-black text-slate-800 border-r border-slate-200 whitespace-nowrap">{tec}</td>
+                    <td className="px-3 py-2 text-[11px] uppercase font-black text-slate-800 border-r-2 border-r-black whitespace-nowrap">{tec}</td>
                     {columnasFechas.map(f => {
                       const d = matrizFinalizadas[tec][f]
                       return (
                         <td key={f}
                           onClick={() => { if (d.count > 0) setModalDetalles({ tec, fecha: f, detalles: d.detalles }) }}
-                          className={`px-3 py-2 text-center text-xs font-black border-r border-slate-200 whitespace-nowrap ${d.count > 0 ? 'text-sky-700 hover:bg-sky-100 cursor-pointer' : 'text-slate-300'}`}
+                          className={`px-3 py-2 text-center text-xs font-black border-r-2 border-r-black whitespace-nowrap ${d.count > 0 ? 'text-sky-700 hover:bg-sky-100 cursor-pointer' : 'text-slate-300'}`}
                         >{d.count === 0 ? '-' : d.count}</td>
                       )
                     })}
@@ -296,8 +296,8 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
                   const vr = valorRutaTecnico(tec)
                   return (
                     <tr key={tec} className={`border-b-[3px] border-black ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/80'} hover:bg-slate-100/60 transition-colors`}>
-                      <td className="px-3 py-2 text-[11px] uppercase font-black text-slate-800 border-r border-slate-200 whitespace-nowrap">{tec}</td>
-                      <td className="p-0 align-top border-r border-slate-200">
+                      <td className="px-3 py-2 text-[11px] uppercase font-black text-slate-800 border-r-2 border-r-black whitespace-nowrap">{tec}</td>
+                      <td className="p-0 align-top border-r-2 border-r-black">
                         <textarea
                           rows="2"
                           value={vr}
