@@ -289,12 +289,12 @@ export default function ModuloTecnicos({
       }
       // Fila principal del ticket
       body.push([
-        { content: `#${i+1}`, styles: { fontStyle: 'bold', halign: 'center', cellWidth: 10 } },
-        { content: t['N° REFERENCIA'] || '-', styles: { fontStyle: 'bold', cellWidth: 22 } },
-        { content: t['ESTADO'] || '-', styles: { cellWidth: 28 } },
+        { content: `#${i+1}`, styles: { fontStyle: 'bold', halign: 'center' } },
+        { content: t['N° REFERENCIA'] || '-', styles: { fontStyle: 'bold' } },
+        { content: t['ESTADO'] || '-' },
         { content: info }
       ])
-      // Fila dedicada para DESCRIPCIÓN INICIAL (bold, resaltada, span completo)
+      // Fila dedicada para DESCRIPCIÓN INICIAL
       const descInicial = (t['DESCRIPCIÓN INICIAL'] && t['DESCRIPCIÓN INICIAL'] !== '-') ? t['DESCRIPCIÓN INICIAL'] : 'Sin descripción inicial'
       body.push([
         { 
@@ -305,7 +305,8 @@ export default function ModuloTecnicos({
             fontSize: 8, 
             fillColor: [241, 245, 249],
             textColor: [15, 23, 42],
-            cellPadding: { top: 2, bottom: 2, left: 12, right: 5 }
+            cellPadding: { top: 2, bottom: 2, left: 12, right: 5 },
+            overflow: 'linebreak'
           } 
         }
       ])
@@ -316,10 +317,23 @@ export default function ModuloTecnicos({
       head: [['#', 'Ref', 'Estado', 'Información del Ticket']],
       body,
       theme: 'grid',
-      styles: { fontSize: 7.5, cellPadding: 2.5, lineColor: [203, 213, 225], lineWidth: 0.2, textColor: [30, 41, 59] },
+      tableWidth: 'auto',
+      styles: { 
+        fontSize: 7.5, 
+        cellPadding: 2.5, 
+        lineColor: [203, 213, 225], 
+        lineWidth: 0.2, 
+        textColor: [30, 41, 59],
+        overflow: 'linebreak'
+      },
       headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
       alternateRowStyles: { fillColor: [248, 250, 252] },
-      columnStyles: { 0: { halign: 'center' } },
+      columnStyles: { 
+        0: { halign: 'center', cellWidth: 9 },
+        1: { cellWidth: 21 },
+        2: { cellWidth: 26 },
+        3: { cellWidth: 'auto' }
+      },
       margin: { left: 14, right: 14 },
       didDrawPage: (data) => {
         doc.setFontSize(7).setTextColor(150)
@@ -356,10 +370,10 @@ export default function ModuloTecnicos({
       head: [['#', 'Técnico', 'Ref', 'Negocio', 'Comentario']],
       body,
       theme: 'grid',
-      styles: { fontSize: 7.5, cellPadding: 2, lineColor: [203, 213, 225], lineWidth: 0.2, textColor: [30, 41, 59] },
+      styles: { fontSize: 7.5, cellPadding: 2, lineColor: [203, 213, 225], lineWidth: 0.2, textColor: [30, 41, 59], overflow: 'linebreak' },
       headStyles: { fillColor: [15, 23, 42], textColor: 255, fontStyle: 'bold', fontSize: 8 },
       alternateRowStyles: { fillColor: [248, 250, 252] },
-      columnStyles: { 0: { cellWidth: 8, halign: 'center' }, 1: { cellWidth: 30 }, 2: { cellWidth: 20 }, 3: { cellWidth: 35 } },
+      columnStyles: { 0: { cellWidth: 8, halign: 'center' }, 1: { cellWidth: 28 }, 2: { cellWidth: 18 }, 3: { cellWidth: 32 }, 4: { cellWidth: 'auto' } },
       margin: { left: 14, right: 14 },
     })
     doc.save(`Global_En_Proceso_${TODAY().replace('/','')}.pdf`)
