@@ -144,7 +144,7 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
   const EnvCell = ({ data, tec, label, colorText, colorBg, colorHover }) => (
     <td
       onClick={() => { if (data.count > 0) setModalDetalles({ tec, fecha: label, detalles: data.detalles }) }}
-      className={`px-2 py-1.5 text-center font-bold whitespace-nowrap ${colorText} ${colorBg} ${data.count > 0 ? `${colorHover} cursor-pointer` : ''}`}
+      className={`px-3 py-2 text-center text-xs font-bold whitespace-nowrap border-r border-slate-200 ${colorText} ${colorBg} ${data.count > 0 ? `${colorHover} cursor-pointer` : ''}`}
     >
       {data.count === 0 ? '-' : data.count}
     </td>
@@ -210,47 +210,55 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
 
       {/* ── TABLA 1: FINALIZADAS ── */}
       <div className="card-section">
-        <div className="flex justify-between items-center px-4 py-2.5 bg-slate-50 border-b border-slate-100">
-          <div className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+        <div className="flex justify-between items-center px-4 py-2.5 bg-slate-800">
+          <div className="text-[11px] font-bold text-white uppercase tracking-wider flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400"></div>
             Órdenes Finalizadas
+            <span className="text-slate-400 font-normal ml-1">({granTotalFinalizadas})</span>
           </div>
-          <button onClick={() => copiarTablaAlPortapapeles(tablaFinalizadasRef, 'Finalizadas')} className="btn-primary flex items-center gap-1.5 text-[10px] px-2.5 py-1">
+          <button onClick={() => copiarTablaAlPortapapeles(tablaFinalizadasRef, 'Finalizadas')} className="flex items-center gap-1.5 text-[10px] px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-md transition">
             <Copy size={11} /> Copiar
           </button>
         </div>
-        <div className="p-3 overflow-x-auto">
-          <div ref={tablaFinalizadasRef} className="border border-slate-200 rounded-lg overflow-hidden">
-            <table className="w-full text-left text-xs border-collapse min-w-max">
-              <thead className="bg-slate-800 text-white font-bold uppercase text-[10px] tracking-wider">
-                <tr className="divide-x divide-slate-700">
-                  <th className="px-2.5 py-2 whitespace-nowrap">Técnico</th>
-                  {columnasFechas.map(f => <th key={f} className="px-2.5 py-2 text-center whitespace-nowrap">{f}</th>)}
-                  <th className="px-2.5 py-2 text-center bg-slate-900 whitespace-nowrap">Total</th>
+        <div className="overflow-x-auto bg-white">
+          <div ref={tablaFinalizadasRef}>
+            <table className="w-full border-collapse" style={{ tableLayout: columnasFechas.length <= 3 ? 'fixed' : 'auto' }}>
+              {columnasFechas.length <= 3 && (
+                <colgroup>
+                  <col style={{ width: '200px' }} />
+                  {columnasFechas.map(f => <col key={f} style={{ width: '100px' }} />)}
+                  <col style={{ width: '80px' }} />
+                </colgroup>
+              )}
+              <thead>
+                <tr className="bg-slate-700 text-white text-[10px] font-bold uppercase tracking-wider">
+                  <th className="px-3 py-2.5 text-left border-r border-slate-600">Técnico</th>
+                  {columnasFechas.map(f => <th key={f} className="px-3 py-2.5 text-center border-r border-slate-600 whitespace-nowrap">{f}</th>)}
+                  <th className="px-3 py-2.5 text-center bg-slate-800 whitespace-nowrap">Total</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700 font-semibold text-[11px]">
-                {listaTecnicosFinalizados.map(tec => (
-                  <tr key={tec} className="divide-x divide-slate-100 hover:bg-sky-50/50 transition-colors">
-                    <td className="px-2.5 py-1.5 uppercase font-bold text-slate-800 whitespace-nowrap">{tec}</td>
+              <tbody>
+                {listaTecnicosFinalizados.map((tec, idx) => (
+                  <tr key={tec} className={`border-b border-slate-200 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'} hover:bg-sky-50 transition-colors`}>
+                    <td className="px-3 py-2 text-[11px] uppercase font-bold text-slate-800 border-r border-slate-200 whitespace-nowrap">{tec}</td>
                     {columnasFechas.map(f => {
                       const d = matrizFinalizadas[tec][f]
                       return (
                         <td key={f}
                           onClick={() => { if (d.count > 0) setModalDetalles({ tec, fecha: f, detalles: d.detalles }) }}
-                          className={`px-2.5 py-1.5 text-center font-bold whitespace-nowrap ${d.count > 0 ? 'text-sky-600 hover:bg-sky-100/60 cursor-pointer' : 'text-slate-300'}`}
+                          className={`px-3 py-2 text-center text-xs font-bold border-r border-slate-200 whitespace-nowrap ${d.count > 0 ? 'text-sky-700 hover:bg-sky-100 cursor-pointer' : 'text-slate-300'}`}
                         >{d.count === 0 ? '-' : d.count}</td>
                       )
                     })}
-                    <td className="px-2.5 py-1.5 text-center bg-slate-50 font-bold text-slate-800 whitespace-nowrap">{matrizFinalizadas[tec].totales}</td>
+                    <td className="px-3 py-2 text-center text-xs font-black text-slate-900 bg-slate-100/60 whitespace-nowrap">{matrizFinalizadas[tec].totales}</td>
                   </tr>
                 ))}
               </tbody>
-              <tfoot className="bg-slate-100 font-bold text-slate-800 border-t-2 border-slate-300">
-                <tr className="divide-x divide-slate-200 text-[11px]">
-                  <td className="px-2.5 py-2 uppercase text-right font-bold whitespace-nowrap">Total</td>
-                  {columnasFechas.map(f => <td key={f} className="px-2.5 py-2 text-center font-bold whitespace-nowrap">{totalesFecha[f]}</td>)}
-                  <td className="px-2.5 py-2 text-center bg-slate-200 text-emerald-700 font-bold whitespace-nowrap">{granTotalFinalizadas}</td>
+              <tfoot>
+                <tr className="bg-slate-800 text-white text-[11px] font-bold">
+                  <td className="px-3 py-2.5 uppercase text-right border-r border-slate-700">Total General</td>
+                  {columnasFechas.map(f => <td key={f} className="px-3 py-2.5 text-center border-r border-slate-700 whitespace-nowrap">{totalesFecha[f]}</td>)}
+                  <td className="px-3 py-2.5 text-center text-emerald-400 font-black text-sm whitespace-nowrap">{granTotalFinalizadas}</td>
                 </tr>
               </tfoot>
             </table>
@@ -260,61 +268,62 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
 
       {/* ── TABLA 2: ENVEJECIMIENTO ── */}
       <div className="card-section">
-        <div className="flex justify-between items-center px-4 py-2.5 bg-slate-50 border-b border-slate-100">
-          <div className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-amber-500"></div>
+        <div className="flex justify-between items-center px-4 py-2.5 bg-slate-800">
+          <div className="text-[11px] font-bold text-white uppercase tracking-wider flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-amber-400"></div>
             Envejecimiento Operativo y Rutas
+            <span className="text-slate-400 font-normal ml-1">({totalesEnv.total})</span>
           </div>
-          <button onClick={() => copiarTablaAlPortapapeles(tablaEnvejecimientoRef, 'Envejecimiento')} className="btn-primary flex items-center gap-1.5 text-[10px] px-2.5 py-1">
+          <button onClick={() => copiarTablaAlPortapapeles(tablaEnvejecimientoRef, 'Envejecimiento')} className="flex items-center gap-1.5 text-[10px] px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-md transition">
             <Copy size={11} /> Copiar
           </button>
         </div>
-        <div className="p-3 overflow-x-auto">
-          <div ref={tablaEnvejecimientoRef} className="border border-slate-200 rounded-lg overflow-hidden">
-            <table className="w-full text-left border-collapse min-w-max">
-              <thead className="bg-slate-800 text-white font-bold uppercase text-[10px] tracking-wider">
-                <tr className="divide-x divide-slate-700">
-                  <th className="px-2.5 py-2 whitespace-nowrap w-36">Técnico</th>
-                  <th className="px-2.5 py-2 min-w-[280px]">Ruta de Trabajo</th>
-                  <th className="px-2.5 py-2 text-center bg-emerald-600 whitespace-nowrap w-14">-24h</th>
-                  <th className="px-2.5 py-2 text-center bg-amber-500 whitespace-nowrap w-14">+24h</th>
-                  <th className="px-2.5 py-2 text-center bg-red-600 whitespace-nowrap w-14">+72h</th>
-                  <th className="px-2.5 py-2 text-center bg-red-800 whitespace-nowrap w-14">+100h</th>
-                  <th className="px-2.5 py-2 text-center bg-slate-900 whitespace-nowrap w-14">Total</th>
+        <div className="overflow-x-auto bg-white">
+          <div ref={tablaEnvejecimientoRef}>
+            <table className="w-full border-collapse min-w-[700px]">
+              <thead>
+                <tr className="text-white text-[10px] font-bold uppercase tracking-wider">
+                  <th className="px-3 py-2.5 text-left bg-slate-700 border-r border-slate-600 w-40">Técnico</th>
+                  <th className="px-3 py-2.5 text-left bg-slate-700 border-r border-slate-600">Ruta de Trabajo</th>
+                  <th className="px-3 py-2.5 text-center bg-emerald-600 border-r border-emerald-500 w-[60px]">-24h</th>
+                  <th className="px-3 py-2.5 text-center bg-amber-500 border-r border-amber-400 w-[60px]">+24h</th>
+                  <th className="px-3 py-2.5 text-center bg-red-600 border-r border-red-500 w-[60px]">+72h</th>
+                  <th className="px-3 py-2.5 text-center bg-red-800 border-r border-red-700 w-[60px]">+100h</th>
+                  <th className="px-3 py-2.5 text-center bg-slate-800 w-[60px]">Total</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700 font-semibold text-[11px]">
-                {listaTecnicosActivos.map(tec => {
+              <tbody>
+                {listaTecnicosActivos.map((tec, idx) => {
                   const vr = valorRutaTecnico(tec)
                   return (
-                    <tr key={tec} className="divide-x divide-slate-100 hover:bg-slate-50 transition-colors">
-                      <td className="px-2.5 py-1.5 uppercase font-bold text-slate-800 whitespace-nowrap">{tec}</td>
-                      <td className="p-0 align-top">
+                    <tr key={tec} className={`border-b border-slate-200 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'} hover:bg-slate-100/60 transition-colors`}>
+                      <td className="px-3 py-2 text-[11px] uppercase font-bold text-slate-800 border-r border-slate-200 whitespace-nowrap">{tec}</td>
+                      <td className="p-0 align-top border-r border-slate-200">
                         <textarea
                           rows="2"
                           value={vr}
                           onChange={e => handleRutaChange(tec, e.target.value)}
                           placeholder="Sin ruta detectada"
-                          className="w-full bg-transparent px-2.5 py-1.5 font-semibold text-sky-800 outline-none hover:bg-slate-50 focus:bg-white text-[10px] uppercase leading-tight resize-none"
+                          className="w-full bg-transparent px-3 py-1.5 font-semibold text-sky-800 outline-none hover:bg-slate-50 focus:bg-white text-[10px] uppercase leading-tight resize-none"
                         />
                       </td>
-                      <EnvCell data={matrizEnvejecimiento[tec].menos24} tec={tec} label="-24h" colorText="text-emerald-700" colorBg="bg-emerald-50/40" colorHover="hover:bg-emerald-100" />
-                      <EnvCell data={matrizEnvejecimiento[tec].mas24} tec={tec} label="+24h" colorText="text-amber-700" colorBg="bg-amber-50/40" colorHover="hover:bg-amber-100" />
-                      <EnvCell data={matrizEnvejecimiento[tec].mas72} tec={tec} label="+72h" colorText="text-red-600" colorBg="bg-red-50/40" colorHover="hover:bg-red-100" />
-                      <EnvCell data={matrizEnvejecimiento[tec].mas100} tec={tec} label="+100h" colorText="text-red-800" colorBg="bg-red-100/40" colorHover="hover:bg-red-200" />
-                      <EnvCell data={matrizEnvejecimiento[tec].total} tec={tec} label="Todos" colorText="text-slate-800" colorBg="bg-slate-50" colorHover="hover:bg-slate-100" />
+                      <EnvCell data={matrizEnvejecimiento[tec].menos24} tec={tec} label="-24h" colorText="text-emerald-700" colorBg="" colorHover="hover:bg-emerald-50" />
+                      <EnvCell data={matrizEnvejecimiento[tec].mas24} tec={tec} label="+24h" colorText="text-amber-700" colorBg="" colorHover="hover:bg-amber-50" />
+                      <EnvCell data={matrizEnvejecimiento[tec].mas72} tec={tec} label="+72h" colorText="text-red-600" colorBg="" colorHover="hover:bg-red-50" />
+                      <EnvCell data={matrizEnvejecimiento[tec].mas100} tec={tec} label="+100h" colorText="text-red-800" colorBg="" colorHover="hover:bg-red-50" />
+                      <EnvCell data={matrizEnvejecimiento[tec].total} tec={tec} label="Todos" colorText="text-slate-800" colorBg="bg-slate-100/50" colorHover="hover:bg-slate-200/60" />
                     </tr>
                   )
                 })}
               </tbody>
-              <tfoot className="bg-slate-100 font-bold text-slate-800 border-t-2 border-slate-300">
-                <tr className="divide-x divide-slate-200 text-[11px]">
-                  <td className="px-2.5 py-2 uppercase text-right font-bold whitespace-nowrap" colSpan="2">Total Operativo</td>
-                  <td className="px-2.5 py-2 text-center text-emerald-700 font-bold">{totalesEnv.menos24}</td>
-                  <td className="px-2.5 py-2 text-center text-amber-700 font-bold">{totalesEnv.mas24}</td>
-                  <td className="px-2.5 py-2 text-center text-red-600 font-bold">{totalesEnv.mas72}</td>
-                  <td className="px-2.5 py-2 text-center text-red-800 font-bold">{totalesEnv.mas100}</td>
-                  <td className="px-2.5 py-2 text-center bg-slate-200 text-sky-700 font-bold">{totalesEnv.total}</td>
+              <tfoot>
+                <tr className="bg-slate-800 text-white text-[11px] font-bold">
+                  <td className="px-3 py-2.5 uppercase text-right border-r border-slate-700" colSpan="2">Total Operativo</td>
+                  <td className="px-3 py-2.5 text-center text-emerald-400 font-black border-r border-slate-700">{totalesEnv.menos24}</td>
+                  <td className="px-3 py-2.5 text-center text-amber-400 font-black border-r border-slate-700">{totalesEnv.mas24}</td>
+                  <td className="px-3 py-2.5 text-center text-red-400 font-black border-r border-slate-700">{totalesEnv.mas72}</td>
+                  <td className="px-3 py-2.5 text-center text-red-300 font-black border-r border-slate-700">{totalesEnv.mas100}</td>
+                  <td className="px-3 py-2.5 text-center text-white font-black text-sm">{totalesEnv.total}</td>
                 </tr>
               </tfoot>
             </table>
