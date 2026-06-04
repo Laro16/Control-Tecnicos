@@ -208,20 +208,17 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
         </div>
       </div>
 
-      {/* ── TABLA 1: FINALIZADAS ── */}
-      <div className="card-section">
-        <div className="flex justify-between items-center px-4 py-2.5 bg-slate-800">
-          <div className="text-[11px] font-bold text-white uppercase tracking-wider flex items-center gap-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400"></div>
-            Órdenes Finalizadas
-            <span className="text-slate-400 font-normal ml-1">({granTotalFinalizadas})</span>
+      {/* ── TABLA 1: CONTROL DE PRODUCTIVIDAD ── */}
+      <div>
+        <div ref={tablaFinalizadasRef} className="card-section">
+          <div className="px-4 py-2.5 bg-slate-800">
+            <div className="text-[11px] font-bold text-white uppercase tracking-wider flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400"></div>
+              Control de Productividad de Técnicos
+              <span className="text-slate-400 font-normal ml-1">({granTotalFinalizadas})</span>
+            </div>
           </div>
-          <button onClick={() => copiarTablaAlPortapapeles(tablaFinalizadasRef, 'Finalizadas')} className="flex items-center gap-1.5 text-[10px] px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-md transition">
-            <Copy size={11} /> Copiar
-          </button>
-        </div>
-        <div className="overflow-x-auto bg-white">
-          <div ref={tablaFinalizadasRef}>
+          <div className="overflow-x-auto bg-white">
             <table className="w-full border-collapse" style={{ tableLayout: columnasFechas.length <= 3 ? 'fixed' : 'auto' }}>
               {columnasFechas.length <= 3 && (
                 <colgroup>
@@ -239,7 +236,7 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
               </thead>
               <tbody>
                 {listaTecnicosFinalizados.map((tec, idx) => (
-                  <tr key={tec} className={`border-b border-slate-200 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'} hover:bg-sky-50 transition-colors`}>
+                  <tr key={tec} className={`border-b-2 border-slate-300 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/80'} hover:bg-sky-50 transition-colors`}>
                     <td className="px-3 py-2 text-[11px] uppercase font-bold text-slate-800 border-r border-slate-200 whitespace-nowrap">{tec}</td>
                     {columnasFechas.map(f => {
                       const d = matrizFinalizadas[tec][f]
@@ -264,22 +261,24 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
             </table>
           </div>
         </div>
-      </div>
-
-      {/* ── TABLA 2: ENVEJECIMIENTO ── */}
-      <div className="card-section">
-        <div className="flex justify-between items-center px-4 py-2.5 bg-slate-800">
-          <div className="text-[11px] font-bold text-white uppercase tracking-wider flex items-center gap-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-amber-400"></div>
-            Envejecimiento Operativo y Rutas
-            <span className="text-slate-400 font-normal ml-1">({totalesEnv.total})</span>
-          </div>
-          <button onClick={() => copiarTablaAlPortapapeles(tablaEnvejecimientoRef, 'Envejecimiento')} className="flex items-center gap-1.5 text-[10px] px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-md transition">
-            <Copy size={11} /> Copiar
+        <div className="flex justify-end mt-1.5">
+          <button onClick={() => copiarTablaAlPortapapeles(tablaFinalizadasRef, 'Productividad')} className="flex items-center gap-1.5 text-[10px] px-3 py-1.5 text-slate-400 hover:text-slate-700 hover:bg-white font-semibold rounded-md transition">
+            <Copy size={11} /> Copiar tabla
           </button>
         </div>
-        <div className="overflow-x-auto bg-white">
-          <div ref={tablaEnvejecimientoRef}>
+      </div>
+
+      {/* ── TABLA 2: RUTAS DE TÉCNICOS ── */}
+      <div>
+        <div ref={tablaEnvejecimientoRef} className="card-section">
+          <div className="px-4 py-2.5 bg-slate-800">
+            <div className="text-[11px] font-bold text-white uppercase tracking-wider flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-amber-400"></div>
+              Rutas de Técnicos
+              <span className="text-slate-400 font-normal ml-1">({totalesEnv.total})</span>
+            </div>
+          </div>
+          <div className="overflow-x-auto bg-white">
             <table className="w-full border-collapse min-w-[700px]">
               <thead>
                 <tr className="text-white text-[10px] font-bold uppercase tracking-wider">
@@ -296,7 +295,7 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
                 {listaTecnicosActivos.map((tec, idx) => {
                   const vr = valorRutaTecnico(tec)
                   return (
-                    <tr key={tec} className={`border-b border-slate-200 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'} hover:bg-slate-100/60 transition-colors`}>
+                    <tr key={tec} className={`border-b-2 border-slate-300 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/80'} hover:bg-slate-100/60 transition-colors`}>
                       <td className="px-3 py-2 text-[11px] uppercase font-bold text-slate-800 border-r border-slate-200 whitespace-nowrap">{tec}</td>
                       <td className="p-0 align-top border-r border-slate-200">
                         <textarea
@@ -328,6 +327,11 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
               </tfoot>
             </table>
           </div>
+        </div>
+        <div className="flex justify-end mt-1.5">
+          <button onClick={() => copiarTablaAlPortapapeles(tablaEnvejecimientoRef, 'Rutas')} className="flex items-center gap-1.5 text-[10px] px-3 py-1.5 text-slate-400 hover:text-slate-700 hover:bg-white font-semibold rounded-md transition">
+            <Copy size={11} /> Copiar tabla
+          </button>
         </div>
       </div>
     </div>
