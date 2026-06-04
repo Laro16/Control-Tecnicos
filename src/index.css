@@ -2,44 +2,93 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  body {
+    @apply bg-slate-100 text-slate-800 font-sans;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
 @layer components {
-  /* Badges Tickets */
-  .badge-asignada { @apply bg-yellow-100 text-yellow-800 border border-yellow-200; }
-  .badge-proceso { @apply bg-blue-100 text-blue-800 border border-blue-200; }
-  .badge-agencia { @apply bg-purple-100 text-purple-800 border border-purple-200; }
+  /* Status badges - tickets */
+  .badge-asignada { @apply bg-amber-50 text-amber-800 border border-amber-200/80; }
+  .badge-proceso  { @apply bg-sky-50 text-sky-800 border border-sky-200/80; }
+  .badge-agencia  { @apply bg-violet-50 text-violet-800 border border-violet-200/80; }
 
-  /* Badges Prioridades Pendientes */
-  .prio-baja { @apply bg-gray-100 text-gray-700 border border-gray-200; }
-  .prio-media { @apply bg-orange-100 text-orange-800 border border-orange-200; }
-  .prio-alta { @apply bg-red-100 text-red-800 border border-red-200; }
+  /* Priority badges */
+  .prio-baja  { @apply bg-slate-50 text-slate-600 border border-slate-200; }
+  .prio-media { @apply bg-amber-50 text-amber-700 border border-amber-200; }
+  .prio-alta  { @apply bg-rose-50 text-rose-700 border border-rose-200; }
 
-  /* Badges Estados Pendientes */
-  .est-pendiente { @apply bg-yellow-100 text-yellow-800 border border-yellow-200; }
-  .est-proceso { @apply bg-blue-100 text-blue-800 border border-blue-200; }
-  .est-realizado { @apply bg-green-100 text-green-800 border border-green-200; }
-  .est-cancelado { @apply bg-gray-100 text-gray-500 border border-gray-200; }
+  /* Task state badges */
+  .est-pendiente { @apply bg-amber-50 text-amber-800 border border-amber-200; }
+  .est-proceso   { @apply bg-sky-50 text-sky-800 border border-sky-200; }
+  .est-realizado { @apply bg-emerald-50 text-emerald-800 border border-emerald-200; }
+  .est-cancelado { @apply bg-slate-50 text-slate-400 border border-slate-200; }
 
-  /* Zona de Drag & Drop */
-  .drop-zone { @apply border-2 border-dashed border-gray-300 rounded-2xl bg-white transition-all duration-200; }
-  .drag-over { @apply border-blue-500 bg-blue-50 scale-[1.02]; }
+  /* Cards */
+  .card {
+    @apply bg-white rounded-xl border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04)];
+  }
+  .card-section {
+    @apply bg-white rounded-xl border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden;
+  }
+
+  /* Buttons */
+  .btn-primary {
+    @apply px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white font-semibold text-xs rounded-lg transition-all active:scale-[0.97];
+  }
+  .btn-ghost {
+    @apply px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs rounded-lg border border-slate-200 transition-all active:scale-[0.97];
+  }
+  .btn-danger {
+    @apply px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold text-xs rounded-lg border border-rose-200 transition-all active:scale-[0.97];
+  }
+  .btn-success {
+    @apply px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-xs rounded-lg border border-emerald-200 transition-all active:scale-[0.97];
+  }
+
+  /* Filter pills */
+  .pill {
+    @apply text-xs px-3 py-1.5 rounded-lg font-semibold transition-all border;
+  }
+  .pill-active {
+    @apply bg-slate-800 text-white border-slate-800;
+  }
+  .pill-inactive {
+    @apply bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:text-slate-700;
+  }
 }
 
-/* Animaciones suaves */
-.fade-in { animation: fadeIn 0.3s ease-out forwards; }
+/* Animations */
+.fade-in {
+  animation: fadeIn 0.25s ease-out forwards;
+}
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Scrollbar para que se vea limpio en web */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+.slide-up {
+  animation: slideUp 0.2s ease-out forwards;
 }
-::-webkit-scrollbar-track {
-  background: transparent;
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
-::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* Toast notification */
+.toast-enter {
+  animation: toastSlide 0.3s ease-out forwards;
+}
+@keyframes toastSlide {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
