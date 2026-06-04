@@ -145,6 +145,7 @@ export default function ModuloTablas({ allTickets }) {
     if (matrizFinalizadas[t.tecnico]) {
       matrizFinalizadas[t.tecnico][t.FECHA_TEXTO].count++
       matrizFinalizadas[t.tecnico][t.FECHA_TEXTO].detalles.push({
+        referencia: t['N° REFERENCIA'] || '-',
         negocio: t['NEGOCIO'] || '-',
         direccion: t['DIRECCIÓN'] || '-'
       })
@@ -172,27 +173,44 @@ export default function ModuloTablas({ allTickets }) {
 
   const listaTecnicosActivos = Array.from(new Set(ticketsActivos.map(t => t.tecnico))).sort()
   const matrizEnvejecimiento = {}
-  listaTecnicosActivos.forEach(tec => { matrizEnvejecimiento[tec] = { menos24: 0, mas24: 0, mas72: 0, mas100: 0, total: 0 } })
+  listaTecnicosActivos.forEach(tec => { 
+    matrizEnvejecimiento[tec] = { 
+      menos24: { count: 0, detalles: [] }, 
+      mas24: { count: 0, detalles: [] }, 
+      mas72: { count: 0, detalles: [] }, 
+      mas100: { count: 0, detalles: [] }, 
+      total: { count: 0, detalles: [] } 
+    } 
+  })
 
   ticketsActivos.forEach(t => {
     const horas = parseFloat(t['TIEMPO_TRANSCURRIDO']) || 0
     const tec = t.tecnico
     if (matrizEnvejecimiento[tec]) {
-      matrizEnvejecimiento[tec].total++
-      if (horas >= 0 && horas < 24) matrizEnvejecimiento[tec].menos24++
-      else if (horas >= 24 && horas < 48) matrizEnvejecimiento[tec].mas24++
-      else if (horas >= 48 && horas < 72) matrizEnvejecimiento[tec].mas72++
-      else if (horas >= 72) matrizEnvejecimiento[tec].mas100++
+      const detalle = {
+        referencia: t['N° REFERENCIA'] || '-',
+        negocio: t['NEGOCIO'] || '-',
+        direccion: t['DIRECCIÓN'] || '-',
+        cliente: t['CLIENTE'] || '-',
+        estado: t['ESTADO'] || '-',
+        horas: Math.round(horas)
+      }
+      matrizEnvejecimiento[tec].total.count++
+      matrizEnvejecimiento[tec].total.detalles.push(detalle)
+      if (horas >= 0 && horas < 24) { matrizEnvejecimiento[tec].menos24.count++; matrizEnvejecimiento[tec].menos24.detalles.push(detalle) }
+      else if (horas >= 24 && horas < 48) { matrizEnvejecimiento[tec].mas24.count++; matrizEnvejecimiento[tec].mas24.detalles.push(detalle) }
+      else if (horas >= 48 && horas < 72) { matrizEnvejecimiento[tec].mas72.count++; matrizEnvejecimiento[tec].mas72.detalles.push(detalle) }
+      else if (horas >= 72) { matrizEnvejecimiento[tec].mas100.count++; matrizEnvejecimiento[tec].mas100.detalles.push(detalle) }
     }
   })
 
   const totalesEnv = { menos24: 0, mas24: 0, mas72: 0, mas100: 0, total: 0 }
   listaTecnicosActivos.forEach(tec => {
-    totalesEnv.menos24 += matrizEnvejecimiento[tec].menos24
-    totalesEnv.mas24 += matrizEnvejecimiento[tec].mas24
-    totalesEnv.mas72 += matrizEnvejecimiento[tec].mas72
-    totalesEnv.mas100 += matrizEnvejecimiento[tec].mas100
-    totalesEnv.total += matrizEnvejecimiento[tec].total
+    totalesEnv.menos24 += matrizEnvejecimiento[tec].menos24.count
+    totalesEnv.mas24 += matrizEnvejecimiento[tec].mas24.count
+    totalesEnv.mas72 += matrizEnvejecimiento[tec].mas72.count
+    totalesEnv.mas100 += matrizEnvejecimiento[tec].mas100.count
+    totalesEnv.total += matrizEnvejecimiento[tec].total.count
   })
 
   if (allTickets.length === 0) {
@@ -231,13 +249,24 @@ export default function ModuloTablas({ allTickets }) {
             {/* Espacio interno maximizado */}
             <div className="p-2.5 max-h-[75vh] overflow-y-auto space-y-1.5 bg-gray-100">
               {modalDetalles.detalles.map((det, idx) => {
-                // Ahora corta a 50 letras en lugar de 25
-                const dirCorta = det.direccion.length > 50 ? det.direccion.substring(0, 50) + '...' : det.direccion;
+                // Corta a 75 letras
+                const dirCorta = det.direccion.length > 75 ? det.direccion.substring(0, 75) + '...' : det.direccion;
                 
                 return (
                   <div key={idx} className="bg-white border border-gray-200 px-3 py-1.5 rounded-lg flex flex-col gap-0.5 shadow-sm">
-                    <span className="font-black text-slate-800 text-[11px] uppercase leading-tight">{det.negocio}</span>
+                    <div className="flex items-center gap-2">
+                      {det.referencia && det.referencia !== '-' && (
+                        <span className="font-mono text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">#{det.referencia}</span>
+                      )}
+                      <span className="font-black text-slate-800 text-[11px] uppercase leading-tight">{det.negocio}</span>
+                    </div>
                     <span className="font-bold text-slate-500 text-[10px] leading-tight">📍 {dirCorta}</span>
+                    {det.cliente && det.cliente !== '-' && (
+                      <span className="font-bold text-slate-400 text-[10px] leading-tight">👤 {det.cliente}</span>
+                    )}
+                    {det.horas !== undefined && (
+                      <span className="font-bold text-[10px] leading-tight" style={{ color: det.horas >= 72 ? '#991b1b' : det.horas >= 48 ? '#c2410c' : det.horas >= 24 ? '#b45309' : '#166534' }}>⏱ {det.horas} hrs — {det.estado}</span>
+                    )}
                   </div>
                 )
               })}
@@ -365,11 +394,36 @@ export default function ModuloTablas({ allTickets }) {
                         />
                       </td>
                       
-                      <td className="px-2 py-1 text-center text-emerald-800 bg-emerald-50/50 font-black whitespace-nowrap">{matrizEnvejecimiento[tec].menos24 === 0 ? '-' : matrizEnvejecimiento[tec].menos24}</td>
-                      <td className="px-2 py-1 text-center text-orange-800 bg-orange-50/50 font-black whitespace-nowrap">{matrizEnvejecimiento[tec].mas24 === 0 ? '-' : matrizEnvejecimiento[tec].mas24}</td>
-                      <td className="px-2 py-1 text-center text-red-700 bg-red-50/50 font-black whitespace-nowrap">{matrizEnvejecimiento[tec].mas72 === 0 ? '-' : matrizEnvejecimiento[tec].mas72}</td>
-                      <td className="px-2 py-1 text-center text-red-950 bg-red-100/50 font-black whitespace-nowrap">{matrizEnvejecimiento[tec].mas100 === 0 ? '-' : matrizEnvejecimiento[tec].mas100}</td>
-                      <td className="px-2 py-1 text-center bg-slate-100 font-black text-slate-900 whitespace-nowrap">{matrizEnvejecimiento[tec].total}</td>
+                      <td 
+                        onClick={() => { if (matrizEnvejecimiento[tec].menos24.count > 0) setModalDetalles({ tec, fecha: '-24 Hrs', detalles: matrizEnvejecimiento[tec].menos24.detalles }) }}
+                        className={`px-2 py-1 text-center text-emerald-800 bg-emerald-50/50 font-black whitespace-nowrap ${matrizEnvejecimiento[tec].menos24.count > 0 ? 'hover:bg-emerald-100 cursor-pointer' : ''}`}
+                      >
+                        {matrizEnvejecimiento[tec].menos24.count === 0 ? '-' : matrizEnvejecimiento[tec].menos24.count}
+                      </td>
+                      <td 
+                        onClick={() => { if (matrizEnvejecimiento[tec].mas24.count > 0) setModalDetalles({ tec, fecha: '+24 Hrs', detalles: matrizEnvejecimiento[tec].mas24.detalles }) }}
+                        className={`px-2 py-1 text-center text-orange-800 bg-orange-50/50 font-black whitespace-nowrap ${matrizEnvejecimiento[tec].mas24.count > 0 ? 'hover:bg-orange-100 cursor-pointer' : ''}`}
+                      >
+                        {matrizEnvejecimiento[tec].mas24.count === 0 ? '-' : matrizEnvejecimiento[tec].mas24.count}
+                      </td>
+                      <td 
+                        onClick={() => { if (matrizEnvejecimiento[tec].mas72.count > 0) setModalDetalles({ tec, fecha: '+72 Hrs', detalles: matrizEnvejecimiento[tec].mas72.detalles }) }}
+                        className={`px-2 py-1 text-center text-red-700 bg-red-50/50 font-black whitespace-nowrap ${matrizEnvejecimiento[tec].mas72.count > 0 ? 'hover:bg-red-100 cursor-pointer' : ''}`}
+                      >
+                        {matrizEnvejecimiento[tec].mas72.count === 0 ? '-' : matrizEnvejecimiento[tec].mas72.count}
+                      </td>
+                      <td 
+                        onClick={() => { if (matrizEnvejecimiento[tec].mas100.count > 0) setModalDetalles({ tec, fecha: '+100 Hrs', detalles: matrizEnvejecimiento[tec].mas100.detalles }) }}
+                        className={`px-2 py-1 text-center text-red-950 bg-red-100/50 font-black whitespace-nowrap ${matrizEnvejecimiento[tec].mas100.count > 0 ? 'hover:bg-red-200 cursor-pointer' : ''}`}
+                      >
+                        {matrizEnvejecimiento[tec].mas100.count === 0 ? '-' : matrizEnvejecimiento[tec].mas100.count}
+                      </td>
+                      <td 
+                        onClick={() => { if (matrizEnvejecimiento[tec].total.count > 0) setModalDetalles({ tec, fecha: 'Todos', detalles: matrizEnvejecimiento[tec].total.detalles }) }}
+                        className={`px-2 py-1 text-center bg-slate-100 font-black text-slate-900 whitespace-nowrap ${matrizEnvejecimiento[tec].total.count > 0 ? 'hover:bg-slate-200 cursor-pointer' : ''}`}
+                      >
+                        {matrizEnvejecimiento[tec].total.count}
+                      </td>
                     </tr>
                   )
                 })}
