@@ -1,99 +1,24 @@
-import { useState, useRef, useEffect, useMemo } from 'react'
-import * as XLSX from 'xlsx'
-import { Calendar, BarChart2, Copy, X, CheckCircle2 } from 'lucide-react'
+import { useState, useRef, useMemo } from 'react'
+import { Calendar, BarChart2, Copy, X } from 'lucide-react'
 
 function normalizarTexto(texto) {
   if (!texto) return ''
   return String(texto).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim()
 }
 
-export default function ModuloTablas({ allTickets }) {
+export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnicos, rutasAutomaticas, valorRutaTecnico }) {
   const [fechaInicio, setFechaInicio] = useState('')
   const [fechaFin, setFechaFin] = useState('')
-  
-  const [rutasTecnicos, setRutasTecnicos] = useState({})
-  const [baseMunicipios, setBaseMunicipios] = useState([])
-
   const [toast, setToast] = useState(null)
   const [modalDetalles, setModalDetalles] = useState(null)
 
   const tablaFinalizadasRef = useRef()
   const tablaEnvejecimientoRef = useRef()
 
-  // 1. Cargar Base de Rutas
-  useEffect(() => {
-    async function cargarRutasDelRepo() {
-      try {
-        const response = await fetch('/Rutas.xlsx')
-        if (!response.ok) return
-        const arrayBuffer = await response.arrayBuffer()
-        const wb = XLSX.read(arrayBuffer, { type: 'array' })
-        const nombreHoja = wb.SheetNames.includes('Hoja1') ? 'Hoja1' : wb.SheetNames[0]
-        const ws = wb.Sheets[nombreHoja]
-        const rawMatrix = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
-        
-        let colIndex = -1
-        let munis = new Set()
-
-        for (let i = 0; i < rawMatrix.length; i++) {
-          const rowNormalizada = rawMatrix[i].map(c => normalizarTexto(c))
-          const idx = rowNormalizada.indexOf('DATOS')
-          if (idx !== -1) {
-            colIndex = idx
-            for (let j = i + 1; j < rawMatrix.length; j++) {
-              const cellVal = rawMatrix[j][colIndex]
-              if (typeof cellVal === 'string' && cellVal.trim().length > 2) {
-                munis.add(cellVal.trim())
-              }
-            }
-            break
-          }
-        }
-        setBaseMunicipios(Array.from(munis))
-      } catch (error) {
-        console.error('Error al cargar Rutas.xlsx:', error)
-      }
-    }
-    cargarRutasDelRepo()
-  }, [])
-
   function handleRutaChange(tecnico, valor) {
     setRutasTecnicos(prev => ({ ...prev, [tecnico]: valor }))
   }
 
-  // 2. Extraer Rutas Automáticamente por Defecto
-  const rutasAutomaticas = useMemo(() => {
-    const autoRutas = {}
-    if (baseMunicipios.length === 0 || allTickets.length === 0) return autoRutas
-
-    const ticketsActivos = allTickets.filter(t => 
-      t.ESTADO_LIMPIO.includes('TECNICO') || t.ESTADO_LIMPIO.includes('PROCESO') || t.ESTADO_LIMPIO.includes('AGENCIA')
-    )
-
-    const ticketsPorTecnico = {}
-    ticketsActivos.forEach(t => {
-      let tec = t.tecnico === 'SIN TÉCNICO' || !t.tecnico || t.tecnico === '-' ? 'SIN ASIGNAR' : t.tecnico
-      if(!ticketsPorTecnico[tec]) ticketsPorTecnico[tec] = []
-      ticketsPorTecnico[tec].push(t)
-    })
-
-    Object.keys(ticketsPorTecnico).forEach(tec => {
-      let encontrados = new Set()
-      ticketsPorTecnico[tec].forEach(t => {
-        const textoBuscar = normalizarTexto(`${t['DIRECCIÓN']} ${t['NEGOCIO']}`)
-        baseMunicipios.forEach(muniOriginal => {
-          const muniLimpio = normalizarTexto(muniOriginal)
-          const escaped = muniLimpio.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-          const regex = new RegExp(`\\b${escaped}\\b`, 'i')
-          if (regex.test(textoBuscar)) encontrados.add(muniOriginal.toUpperCase())
-        })
-      })
-      autoRutas[tec] = Array.from(encontrados).slice(0, 8).join(' - ')
-    })
-    return autoRutas
-  }, [baseMunicipios, allTickets])
-
-  // 3. Copiar Tabla con Aviso Corto (Toast)
   function copiarTablaAlPortapapeles(ref, nombreTabla) {
     if (!ref.current) return
     try {
@@ -104,27 +29,21 @@ export default function ModuloTablas({ allTickets }) {
       selection.addRange(range)
       document.execCommand('copy')
       selection.removeAllRanges()
-      
-      setToast(`✅ ${nombreTabla} copiada al portapapeles.`)
-      setTimeout(() => setToast(null), 3000)
+      setToast(`✅ ${nombreTabla} copiada`)
+      setTimeout(() => setToast(null), 2500)
     } catch (err) {
-      setToast('❌ Hubo un error al copiar la tabla.')
-      setTimeout(() => setToast(null), 3000)
+      setToast('❌ Error al copiar')
+      setTimeout(() => setToast(null), 2500)
     }
   }
 
-  // ============================================================================
-  // PREPARACIÓN DE DATOS - TABLA 1: FINALIZADAS
-  // ============================================================================
+  // ── TABLA 1: FINALIZADAS ──
   const ticketsFinalizados = allTickets.filter(t => {
     if (!t.ESTADO_LIMPIO.includes('FINALIZADA')) return false
     if (!t.FECHA_OBJ || !fechaInicio || !fechaFin) return true
-    
     const start = new Date(fechaInicio + 'T00:00:00')
     const end = new Date(fechaFin + 'T23:59:59')
-    const fechaTicket = new Date(t.FECHA_OBJ)
-    
-    return fechaTicket >= start && fechaTicket <= end
+    return new Date(t.FECHA_OBJ) >= start && new Date(t.FECHA_OBJ) <= end
   })
 
   const columnasFechas = Array.from(new Set(ticketsFinalizados.map(t => t.FECHA_TEXTO)))
@@ -160,27 +79,25 @@ export default function ModuloTablas({ allTickets }) {
     granTotalFinalizadas += totalesFecha[f]
   })
 
-  // ============================================================================
-  // PREPARACIÓN DE DATOS - TABLA 2: ENVEJECIMIENTO
-  // ============================================================================
+  // ── TABLA 2: ENVEJECIMIENTO ──
   const ticketsActivos = allTickets.filter(t => 
     t.ESTADO_LIMPIO.includes('TECNICO') || t.ESTADO_LIMPIO.includes('PROCESO') || t.ESTADO_LIMPIO.includes('AGENCIA')
   ).map(t => {
-    let tec = t.tecnico;
+    let tec = t.tecnico
     if (tec === 'SIN TÉCNICO' || !tec || tec === '-') tec = 'SIN ASIGNAR'
     return { ...t, tecnico: tec }
   })
 
   const listaTecnicosActivos = Array.from(new Set(ticketsActivos.map(t => t.tecnico))).sort()
   const matrizEnvejecimiento = {}
-  listaTecnicosActivos.forEach(tec => { 
-    matrizEnvejecimiento[tec] = { 
-      menos24: { count: 0, detalles: [] }, 
-      mas24: { count: 0, detalles: [] }, 
-      mas72: { count: 0, detalles: [] }, 
-      mas100: { count: 0, detalles: [] }, 
-      total: { count: 0, detalles: [] } 
-    } 
+  listaTecnicosActivos.forEach(tec => {
+    matrizEnvejecimiento[tec] = {
+      menos24: { count: 0, detalles: [] },
+      mas24: { count: 0, detalles: [] },
+      mas72: { count: 0, detalles: [] },
+      mas100: { count: 0, detalles: [] },
+      total: { count: 0, detalles: [] }
+    }
   })
 
   ticketsActivos.forEach(t => {
@@ -197,10 +114,10 @@ export default function ModuloTablas({ allTickets }) {
       }
       matrizEnvejecimiento[tec].total.count++
       matrizEnvejecimiento[tec].total.detalles.push(detalle)
-      if (horas >= 0 && horas < 24) { matrizEnvejecimiento[tec].menos24.count++; matrizEnvejecimiento[tec].menos24.detalles.push(detalle) }
-      else if (horas >= 24 && horas < 48) { matrizEnvejecimiento[tec].mas24.count++; matrizEnvejecimiento[tec].mas24.detalles.push(detalle) }
-      else if (horas >= 48 && horas < 72) { matrizEnvejecimiento[tec].mas72.count++; matrizEnvejecimiento[tec].mas72.detalles.push(detalle) }
-      else if (horas >= 72) { matrizEnvejecimiento[tec].mas100.count++; matrizEnvejecimiento[tec].mas100.detalles.push(detalle) }
+      if (horas < 24) { matrizEnvejecimiento[tec].menos24.count++; matrizEnvejecimiento[tec].menos24.detalles.push(detalle) }
+      else if (horas < 48) { matrizEnvejecimiento[tec].mas24.count++; matrizEnvejecimiento[tec].mas24.detalles.push(detalle) }
+      else if (horas < 72) { matrizEnvejecimiento[tec].mas72.count++; matrizEnvejecimiento[tec].mas72.detalles.push(detalle) }
+      else { matrizEnvejecimiento[tec].mas100.count++; matrizEnvejecimiento[tec].mas100.detalles.push(detalle) }
     }
   })
 
@@ -215,57 +132,61 @@ export default function ModuloTablas({ allTickets }) {
 
   if (allTickets.length === 0) {
     return (
-      <div className="text-center py-20 text-gray-400 font-bold bg-white rounded-2xl border border-gray-200 shadow-sm">
-        <BarChart2 size={64} className="mx-auto mb-4 text-gray-300" />
-        <p className="text-lg text-gray-500">Sube un archivo en la pestaña "Técnicos"</p>
-        <p className="text-sm font-medium mt-1">Las tablas analíticas se generarán automáticamente.</p>
+      <div className="text-center py-16 text-slate-400 card">
+        <BarChart2 size={48} className="mx-auto mb-3 text-slate-300" />
+        <p className="text-sm font-semibold text-slate-500">Sube un archivo en la pestaña "Técnicos"</p>
+        <p className="text-xs font-medium mt-1 text-slate-400">Las tablas se generarán automáticamente.</p>
       </div>
     )
   }
 
+  // Helper: celda clickeable del envejecimiento
+  const EnvCell = ({ data, tec, label, colorText, colorBg, colorHover }) => (
+    <td
+      onClick={() => { if (data.count > 0) setModalDetalles({ tec, fecha: label, detalles: data.detalles }) }}
+      className={`px-2 py-1.5 text-center font-bold whitespace-nowrap ${colorText} ${colorBg} ${data.count > 0 ? `${colorHover} cursor-pointer` : ''}`}
+    >
+      {data.count === 0 ? '-' : data.count}
+    </td>
+  )
+
   return (
-    <div className="space-y-6 fade-in relative">
+    <div className="space-y-4 fade-in relative">
       
-      {/* TOAST NOTIFICACIÓN SILENCIOSA */}
+      {/* Toast */}
       {toast && (
-        <div className="fixed bottom-6 right-6 bg-slate-900 text-white px-4 py-2.5 rounded-lg shadow-2xl z-[100] flex items-center gap-2 font-bold text-xs animate-fade-in-up">
-          <CheckCircle2 size={16} className="text-emerald-400" />
+        <div className="fixed top-14 left-1/2 -translate-x-1/2 z-50 bg-slate-800 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-xl toast-enter">
           {toast}
         </div>
       )}
 
-      {/* CUADRO DE DETALLES OPTIMIZADO (ARRIBA Y MÁS ANCHO) */}
+      {/* Modal de detalles */}
       {modalDetalles && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-10 overflow-y-auto" onClick={() => setModalDetalles(null)}>
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden" onClick={e => e.stopPropagation()}>
-            {/* Encabezado ultra compacto */}
-            <div className="bg-slate-800 px-4 py-2 flex justify-between items-center border-b border-slate-900">
-              <h3 className="text-white font-black text-xs uppercase tracking-wider">
-                {modalDetalles.tec} <span className="text-slate-400 font-normal">| {modalDetalles.fecha}</span>
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-12 overflow-y-auto" onClick={() => setModalDetalles(null)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden slide-up" onClick={e => e.stopPropagation()}>
+            <div className="bg-slate-800 px-4 py-2.5 flex justify-between items-center">
+              <h3 className="text-white font-bold text-xs uppercase tracking-wider">
+                {modalDetalles.tec} <span className="text-slate-400 font-normal">· {modalDetalles.fecha}</span>
               </h3>
-              <button onClick={() => setModalDetalles(null)} className="text-slate-400 hover:text-white transition-colors bg-slate-700 p-1 rounded-md"><X size={14}/></button>
+              <button onClick={() => setModalDetalles(null)} className="text-slate-400 hover:text-white transition p-1 rounded-md hover:bg-slate-700"><X size={14}/></button>
             </div>
-            
-            {/* Espacio interno maximizado */}
-            <div className="p-2.5 max-h-[75vh] overflow-y-auto space-y-1.5 bg-gray-100">
+            <div className="p-2.5 max-h-[75vh] overflow-y-auto space-y-1.5 bg-slate-50">
               {modalDetalles.detalles.map((det, idx) => {
-                // Corta a 75 letras
-                const dirCorta = det.direccion.length > 75 ? det.direccion.substring(0, 75) + '...' : det.direccion;
-                
+                const dirCorta = det.direccion.length > 75 ? det.direccion.substring(0, 75) + '...' : det.direccion
                 return (
-                  <div key={idx} className="bg-white border border-gray-200 px-3 py-1.5 rounded-lg flex flex-col gap-0.5 shadow-sm">
+                  <div key={idx} className="bg-white border border-slate-100 px-3 py-2 rounded-lg space-y-0.5 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
                     <div className="flex items-center gap-2">
                       {det.referencia && det.referencia !== '-' && (
-                        <span className="font-mono text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">#{det.referencia}</span>
+                        <span className="font-mono text-[10px] font-bold text-sky-600 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-100">#{det.referencia}</span>
                       )}
-                      <span className="font-black text-slate-800 text-[11px] uppercase leading-tight">{det.negocio}</span>
+                      <span className="font-bold text-slate-700 text-[11px] uppercase leading-tight">{det.negocio}</span>
                     </div>
-                    <span className="font-bold text-slate-500 text-[10px] leading-tight">📍 {dirCorta}</span>
-                    {det.cliente && det.cliente !== '-' && (
-                      <span className="font-bold text-slate-400 text-[10px] leading-tight">👤 {det.cliente}</span>
-                    )}
+                    <p className="font-medium text-slate-400 text-[10px]">📍 {dirCorta}</p>
+                    {det.cliente && det.cliente !== '-' && <p className="font-medium text-slate-400 text-[10px]">👤 {det.cliente}</p>}
                     {det.horas !== undefined && (
-                      <span className="font-bold text-[10px] leading-tight" style={{ color: det.horas >= 72 ? '#991b1b' : det.horas >= 48 ? '#c2410c' : det.horas >= 24 ? '#b45309' : '#166534' }}>⏱ {det.horas} hrs — {det.estado}</span>
+                      <p className="font-semibold text-[10px]" style={{ color: det.horas >= 72 ? '#be123c' : det.horas >= 48 ? '#c2410c' : det.horas >= 24 ? '#b45309' : '#15803d' }}>
+                        ⏱ {det.horas} hrs — {det.estado}
+                      </p>
                     )}
                   </div>
                 )
@@ -275,74 +196,61 @@ export default function ModuloTablas({ allTickets }) {
         </div>
       )}
 
-      {/* CONTROLES DE FECHAS */}
-      <div className="bg-white p-4 rounded-xl border border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
-        <div className="text-sm font-black text-slate-800 uppercase tracking-wide flex items-center gap-2">
-          <Calendar size={18} className="text-blue-600" /> Control de Rangos de Cierre Diario
+      {/* ── Controles de fecha ── */}
+      <div className="card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-2">
+          <Calendar size={15} className="text-sky-500" /> Rango de Cierre
         </div>
-        <div className="flex items-center gap-3">
-          <input type="date" value={fechaInicio} onChange={e => setFechaInicio(e.target.value)} className="border border-gray-300 rounded-lg p-1.5 text-xs font-bold outline-none text-slate-700 bg-slate-50 focus:border-blue-500 transition" />
-          <span className="text-slate-400 font-black text-xs">a</span>
-          <input type="date" value={fechaFin} onChange={e => setFechaFin(e.target.value)} className="border border-gray-300 rounded-lg p-1.5 text-xs font-bold outline-none text-slate-700 bg-slate-50 focus:border-blue-500 transition" />
+        <div className="flex items-center gap-2">
+          <input type="date" value={fechaInicio} onChange={e => setFechaInicio(e.target.value)} className="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-slate-50 outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-100 transition" />
+          <span className="text-slate-300 font-bold text-xs">→</span>
+          <input type="date" value={fechaFin} onChange={e => setFechaFin(e.target.value)} className="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-slate-50 outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-100 transition" />
         </div>
       </div>
 
-      {/* TABLA 1: ÓRDENES FINALIZADAS */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="flex justify-between items-center bg-slate-50 px-5 py-2.5 border-b border-gray-200">
-          <div className="text-xs font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-            1. Monitoreo de Órdenes Finalizadas
+      {/* ── TABLA 1: FINALIZADAS ── */}
+      <div className="card-section">
+        <div className="flex justify-between items-center px-4 py-2.5 bg-slate-50 border-b border-slate-100">
+          <div className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+            Órdenes Finalizadas
           </div>
-          <button onClick={() => copiarTablaAlPortapapeles(tablaFinalizadasRef, 'Tabla de Órdenes')} className="flex items-center gap-1.5 bg-slate-800 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg hover:bg-slate-900 transition shadow-sm">
-            <Copy size={12} /> Copiar Tabla
+          <button onClick={() => copiarTablaAlPortapapeles(tablaFinalizadasRef, 'Finalizadas')} className="btn-primary flex items-center gap-1.5 text-[10px] px-2.5 py-1">
+            <Copy size={11} /> Copiar
           </button>
         </div>
-
-        <div className="p-3 bg-white overflow-x-auto w-full">
-          <div ref={tablaFinalizadasRef} className="bg-white border border-slate-800 rounded overflow-hidden">
+        <div className="p-3 overflow-x-auto">
+          <div ref={tablaFinalizadasRef} className="border border-slate-200 rounded-lg overflow-hidden">
             <table className="w-full text-left text-xs border-collapse min-w-max">
-              <thead className="bg-slate-800 text-white font-black uppercase text-[10px] tracking-wider">
-                <tr className="divide-x divide-slate-700 border-b border-slate-800">
-                  <th className="px-2 py-1.5 whitespace-nowrap">Técnico</th>
-                  {columnasFechas.map(f => (
-                    <th key={f} className="px-2 py-1.5 text-center whitespace-nowrap">{f}</th>
-                  ))}
-                  <th className="px-2 py-1.5 text-center bg-slate-900 whitespace-nowrap">Total</th>
+              <thead className="bg-slate-800 text-white font-bold uppercase text-[10px] tracking-wider">
+                <tr className="divide-x divide-slate-700">
+                  <th className="px-2.5 py-2 whitespace-nowrap">Técnico</th>
+                  {columnasFechas.map(f => <th key={f} className="px-2.5 py-2 text-center whitespace-nowrap">{f}</th>)}
+                  <th className="px-2.5 py-2 text-center bg-slate-900 whitespace-nowrap">Total</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-300 text-slate-900 font-bold text-[11px]">
+              <tbody className="divide-y divide-slate-100 text-slate-700 font-semibold text-[11px]">
                 {listaTecnicosFinalizados.map(tec => (
-                  <tr key={tec} className="divide-x divide-slate-300 hover:bg-blue-50 transition-colors">
-                    <td className="px-2 py-1 uppercase font-black text-slate-900 whitespace-nowrap">{tec}</td>
+                  <tr key={tec} className="divide-x divide-slate-100 hover:bg-sky-50/50 transition-colors">
+                    <td className="px-2.5 py-1.5 uppercase font-bold text-slate-800 whitespace-nowrap">{tec}</td>
                     {columnasFechas.map(f => {
-                      const dataDia = matrizFinalizadas[tec][f]
-                      
+                      const d = matrizFinalizadas[tec][f]
                       return (
-                        <td 
-                          key={f} 
-                          onClick={() => {
-                            if (dataDia.count > 0) {
-                              setModalDetalles({ tec, fecha: f, detalles: dataDia.detalles })
-                            }
-                          }}
-                          className={`px-2 py-1 text-center font-black whitespace-nowrap ${dataDia.count > 0 ? 'text-blue-700 hover:bg-blue-100 cursor-pointer' : 'text-slate-300'}`}
-                        >
-                          {dataDia.count === 0 ? '-' : dataDia.count}
-                        </td>
+                        <td key={f}
+                          onClick={() => { if (d.count > 0) setModalDetalles({ tec, fecha: f, detalles: d.detalles }) }}
+                          className={`px-2.5 py-1.5 text-center font-bold whitespace-nowrap ${d.count > 0 ? 'text-sky-600 hover:bg-sky-100/60 cursor-pointer' : 'text-slate-300'}`}
+                        >{d.count === 0 ? '-' : d.count}</td>
                       )
                     })}
-                    <td className="px-2 py-1 text-center bg-slate-100 font-black text-blue-800 whitespace-nowrap">{matrizFinalizadas[tec].totales}</td>
+                    <td className="px-2.5 py-1.5 text-center bg-slate-50 font-bold text-slate-800 whitespace-nowrap">{matrizFinalizadas[tec].totales}</td>
                   </tr>
                 ))}
               </tbody>
-              <tfoot className="bg-slate-200 font-black text-slate-900 border-t border-slate-800">
-                <tr className="divide-x divide-slate-300 text-[11px]">
-                  <td className="px-2 py-1.5 uppercase text-right font-black whitespace-nowrap">Total General</td>
-                  {columnasFechas.map(f => (
-                    <td key={f} className="px-2 py-1.5 text-center text-blue-900 font-black whitespace-nowrap">{totalesFecha[f]}</td>
-                  ))}
-                  <td className="px-2 py-1.5 text-center bg-slate-300 text-emerald-800 font-black whitespace-nowrap">{granTotalFinalizadas}</td>
+              <tfoot className="bg-slate-100 font-bold text-slate-800 border-t-2 border-slate-300">
+                <tr className="divide-x divide-slate-200 text-[11px]">
+                  <td className="px-2.5 py-2 uppercase text-right font-bold whitespace-nowrap">Total</td>
+                  {columnasFechas.map(f => <td key={f} className="px-2.5 py-2 text-center font-bold whitespace-nowrap">{totalesFecha[f]}</td>)}
+                  <td className="px-2.5 py-2 text-center bg-slate-200 text-emerald-700 font-bold whitespace-nowrap">{granTotalFinalizadas}</td>
                 </tr>
               </tfoot>
             </table>
@@ -350,102 +258,69 @@ export default function ModuloTablas({ allTickets }) {
         </div>
       </div>
 
-      {/* TABLA 2: ENVEJECIMIENTO Y RUTAS EDITABLES */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="flex justify-between items-center bg-slate-50 px-5 py-2.5 border-b border-gray-200">
-          <div className="text-xs font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-orange-500"></div>
-            2. Envejecimiento Operativo y Rutas Diarias
+      {/* ── TABLA 2: ENVEJECIMIENTO ── */}
+      <div className="card-section">
+        <div className="flex justify-between items-center px-4 py-2.5 bg-slate-50 border-b border-slate-100">
+          <div className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-amber-500"></div>
+            Envejecimiento Operativo y Rutas
           </div>
-          <button onClick={() => copiarTablaAlPortapapeles(tablaEnvejecimientoRef, 'Tabla de Rutas y Envejecimiento')} className="flex items-center gap-1.5 bg-slate-800 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg hover:bg-slate-900 transition shadow-sm">
-            <Copy size={12} /> Copiar Tabla
+          <button onClick={() => copiarTablaAlPortapapeles(tablaEnvejecimientoRef, 'Envejecimiento')} className="btn-primary flex items-center gap-1.5 text-[10px] px-2.5 py-1">
+            <Copy size={11} /> Copiar
           </button>
         </div>
-
-        <div className="p-3 bg-white overflow-x-auto w-full">
-          <div ref={tablaEnvejecimientoRef} className="bg-white border border-slate-800 rounded overflow-hidden">
+        <div className="p-3 overflow-x-auto">
+          <div ref={tablaEnvejecimientoRef} className="border border-slate-200 rounded-lg overflow-hidden">
             <table className="w-full text-left border-collapse min-w-max">
-              <thead className="bg-slate-800 text-white font-black uppercase text-[10px] tracking-wider">
-                <tr className="divide-x divide-slate-700 border-b border-slate-800">
-                  <th className="px-2 py-1.5 whitespace-nowrap w-40">Técnico</th>
-                  <th className="px-2 py-1.5 min-w-[300px]">Dirección de la Ruta Real de Trabajo</th>
-                  <th className="px-2 py-1.5 text-center bg-emerald-600 whitespace-nowrap w-16">-24 Hrs</th>
-                  <th className="px-2 py-1.5 text-center bg-orange-500 whitespace-nowrap w-16">+24 Hrs</th>
-                  <th className="px-2 py-1.5 text-center bg-red-600 whitespace-nowrap w-16">+72 Hrs</th>
-                  <th className="px-2 py-1.5 text-center bg-red-800 whitespace-nowrap w-16">+100 Hrs</th>
-                  <th className="px-2 py-1.5 text-center bg-slate-900 whitespace-nowrap w-16">Total</th>
+              <thead className="bg-slate-800 text-white font-bold uppercase text-[10px] tracking-wider">
+                <tr className="divide-x divide-slate-700">
+                  <th className="px-2.5 py-2 whitespace-nowrap w-36">Técnico</th>
+                  <th className="px-2.5 py-2 min-w-[280px]">Ruta de Trabajo</th>
+                  <th className="px-2.5 py-2 text-center bg-emerald-600 whitespace-nowrap w-14">-24h</th>
+                  <th className="px-2.5 py-2 text-center bg-amber-500 whitespace-nowrap w-14">+24h</th>
+                  <th className="px-2.5 py-2 text-center bg-red-600 whitespace-nowrap w-14">+72h</th>
+                  <th className="px-2.5 py-2 text-center bg-red-800 whitespace-nowrap w-14">+100h</th>
+                  <th className="px-2.5 py-2 text-center bg-slate-900 whitespace-nowrap w-14">Total</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-300 text-slate-800 font-bold text-[11px]">
+              <tbody className="divide-y divide-slate-100 text-slate-700 font-semibold text-[11px]">
                 {listaTecnicosActivos.map(tec => {
-                  const valorRuta = rutasTecnicos[tec] !== undefined ? rutasTecnicos[tec] : (rutasAutomaticas[tec] || '')
-                  
+                  const vr = valorRutaTecnico(tec)
                   return (
-                    <tr key={tec} className="divide-x divide-slate-300 hover:bg-slate-50 transition-colors">
-                      <td className="px-2 py-1 uppercase font-black text-slate-900 whitespace-nowrap">{tec}</td>
-                      
+                    <tr key={tec} className="divide-x divide-slate-100 hover:bg-slate-50 transition-colors">
+                      <td className="px-2.5 py-1.5 uppercase font-bold text-slate-800 whitespace-nowrap">{tec}</td>
                       <td className="p-0 align-top">
-                        <textarea 
+                        <textarea
                           rows="2"
-                          value={valorRuta} 
+                          value={vr}
                           onChange={e => handleRutaChange(tec, e.target.value)}
-                          placeholder="Sin ruta detectada" 
-                          className="w-full bg-transparent px-2 py-1.5 font-bold text-blue-900 outline-none hover:bg-slate-100 focus:bg-white text-[10px] uppercase leading-tight resize-none overflow-hidden"
+                          placeholder="Sin ruta detectada"
+                          className="w-full bg-transparent px-2.5 py-1.5 font-semibold text-sky-800 outline-none hover:bg-slate-50 focus:bg-white text-[10px] uppercase leading-tight resize-none"
                         />
                       </td>
-                      
-                      <td 
-                        onClick={() => { if (matrizEnvejecimiento[tec].menos24.count > 0) setModalDetalles({ tec, fecha: '-24 Hrs', detalles: matrizEnvejecimiento[tec].menos24.detalles }) }}
-                        className={`px-2 py-1 text-center text-emerald-800 bg-emerald-50/50 font-black whitespace-nowrap ${matrizEnvejecimiento[tec].menos24.count > 0 ? 'hover:bg-emerald-100 cursor-pointer' : ''}`}
-                      >
-                        {matrizEnvejecimiento[tec].menos24.count === 0 ? '-' : matrizEnvejecimiento[tec].menos24.count}
-                      </td>
-                      <td 
-                        onClick={() => { if (matrizEnvejecimiento[tec].mas24.count > 0) setModalDetalles({ tec, fecha: '+24 Hrs', detalles: matrizEnvejecimiento[tec].mas24.detalles }) }}
-                        className={`px-2 py-1 text-center text-orange-800 bg-orange-50/50 font-black whitespace-nowrap ${matrizEnvejecimiento[tec].mas24.count > 0 ? 'hover:bg-orange-100 cursor-pointer' : ''}`}
-                      >
-                        {matrizEnvejecimiento[tec].mas24.count === 0 ? '-' : matrizEnvejecimiento[tec].mas24.count}
-                      </td>
-                      <td 
-                        onClick={() => { if (matrizEnvejecimiento[tec].mas72.count > 0) setModalDetalles({ tec, fecha: '+72 Hrs', detalles: matrizEnvejecimiento[tec].mas72.detalles }) }}
-                        className={`px-2 py-1 text-center text-red-700 bg-red-50/50 font-black whitespace-nowrap ${matrizEnvejecimiento[tec].mas72.count > 0 ? 'hover:bg-red-100 cursor-pointer' : ''}`}
-                      >
-                        {matrizEnvejecimiento[tec].mas72.count === 0 ? '-' : matrizEnvejecimiento[tec].mas72.count}
-                      </td>
-                      <td 
-                        onClick={() => { if (matrizEnvejecimiento[tec].mas100.count > 0) setModalDetalles({ tec, fecha: '+100 Hrs', detalles: matrizEnvejecimiento[tec].mas100.detalles }) }}
-                        className={`px-2 py-1 text-center text-red-950 bg-red-100/50 font-black whitespace-nowrap ${matrizEnvejecimiento[tec].mas100.count > 0 ? 'hover:bg-red-200 cursor-pointer' : ''}`}
-                      >
-                        {matrizEnvejecimiento[tec].mas100.count === 0 ? '-' : matrizEnvejecimiento[tec].mas100.count}
-                      </td>
-                      <td 
-                        onClick={() => { if (matrizEnvejecimiento[tec].total.count > 0) setModalDetalles({ tec, fecha: 'Todos', detalles: matrizEnvejecimiento[tec].total.detalles }) }}
-                        className={`px-2 py-1 text-center bg-slate-100 font-black text-slate-900 whitespace-nowrap ${matrizEnvejecimiento[tec].total.count > 0 ? 'hover:bg-slate-200 cursor-pointer' : ''}`}
-                      >
-                        {matrizEnvejecimiento[tec].total.count}
-                      </td>
+                      <EnvCell data={matrizEnvejecimiento[tec].menos24} tec={tec} label="-24h" colorText="text-emerald-700" colorBg="bg-emerald-50/40" colorHover="hover:bg-emerald-100" />
+                      <EnvCell data={matrizEnvejecimiento[tec].mas24} tec={tec} label="+24h" colorText="text-amber-700" colorBg="bg-amber-50/40" colorHover="hover:bg-amber-100" />
+                      <EnvCell data={matrizEnvejecimiento[tec].mas72} tec={tec} label="+72h" colorText="text-red-600" colorBg="bg-red-50/40" colorHover="hover:bg-red-100" />
+                      <EnvCell data={matrizEnvejecimiento[tec].mas100} tec={tec} label="+100h" colorText="text-red-800" colorBg="bg-red-100/40" colorHover="hover:bg-red-200" />
+                      <EnvCell data={matrizEnvejecimiento[tec].total} tec={tec} label="Todos" colorText="text-slate-800" colorBg="bg-slate-50" colorHover="hover:bg-slate-100" />
                     </tr>
                   )
                 })}
               </tbody>
-              <tfoot className="bg-slate-200 font-black text-slate-900 border-t border-slate-800">
-                <tr className="divide-x divide-slate-300 text-[11px]">
-                  <td className="px-2 py-1.5 uppercase text-right font-black whitespace-nowrap" colSpan="2">
-                    <span className="mr-3 text-slate-500 font-bold text-[10px]">Resumen Global:</span>
-                    Total Operativo
-                  </td>
-                  <td className="px-2 py-1.5 text-center text-emerald-800 font-black whitespace-nowrap">{totalesEnv.menos24}</td>
-                  <td className="px-2 py-1.5 text-center text-orange-800 font-black whitespace-nowrap">{totalesEnv.mas24}</td>
-                  <td className="px-2 py-1.5 text-center text-red-700 font-black whitespace-nowrap">{totalesEnv.mas72}</td>
-                  <td className="px-2 py-1.5 text-center text-red-950 font-black whitespace-nowrap">{totalesEnv.mas100}</td>
-                  <td className="px-2 py-1.5 text-center bg-slate-300 text-blue-900 text-xs font-black whitespace-nowrap">{totalesEnv.total}</td>
+              <tfoot className="bg-slate-100 font-bold text-slate-800 border-t-2 border-slate-300">
+                <tr className="divide-x divide-slate-200 text-[11px]">
+                  <td className="px-2.5 py-2 uppercase text-right font-bold whitespace-nowrap" colSpan="2">Total Operativo</td>
+                  <td className="px-2.5 py-2 text-center text-emerald-700 font-bold">{totalesEnv.menos24}</td>
+                  <td className="px-2.5 py-2 text-center text-amber-700 font-bold">{totalesEnv.mas24}</td>
+                  <td className="px-2.5 py-2 text-center text-red-600 font-bold">{totalesEnv.mas72}</td>
+                  <td className="px-2.5 py-2 text-center text-red-800 font-bold">{totalesEnv.mas100}</td>
+                  <td className="px-2.5 py-2 text-center bg-slate-200 text-sky-700 font-bold">{totalesEnv.total}</td>
                 </tr>
               </tfoot>
             </table>
           </div>
         </div>
       </div>
-
     </div>
   )
 }
