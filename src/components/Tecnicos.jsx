@@ -60,7 +60,7 @@ const CLIENTES_GARANTIA = [
   { nombre: 'UNISUPER S.A.', anios: 1 },
   { nombre: 'VIVENDO S,A', anios: 1 },
   { nombre: 'ARRENDADORA SARITA, S.A.', anios: 1 },
-  { nombre: 'INDUSTRIAS DEL ATLANTICO, S.A.', anios: 1 },
+  { nombre: 'INDUSTRIAS DEL ATLANTICO, S.A.', anios: 2 },
 ]
 
 function buscarClienteGarantia(clienteTexto) {
