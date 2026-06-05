@@ -45,20 +45,21 @@ function normalizarFechaExcel(fechaTexto) {
 
 // ── GARANTÍA ──
 const CLIENTES_GARANTIA = [
-  { nombre: 'ABCO', anios: 1 },
+  { nombre: 'ABCO, S.A.', anios: 1 },
   { nombre: 'COMERCIALIZADORA  DE ALIMENTOS Y BEBIDAS SAN MIGUEL S.A', anios: 2 },
-  { nombre: 'DISTRIBUIDORA DE LICORES', anios: 1 },
+  { nombre: 'DISTRIBUIDORA DE LICORES, S.A.', anios: 1 },
   { nombre: 'EMBOTELLADORA CENTRAL', anios: 2 },
   { nombre: 'EMBOTELLADORA LA MARIPOSA', anios: 2 },
-  { nombre: 'GARANTIA IMPORTADORA Y DISTRIBUIDORA DE APARATOS ELECTRICOS', anios: 1 },
-  { nombre: 'M.D.T. INTERNACIONAL', anios: 1 },
-  { nombre: 'PRODUCTOS LACTEOS DE CENTROAMERICA', anios: 1 },
-  { nombre: 'RICZA', anios: 1 },
-  { nombre: 'SAVONA DE GUATEMALA', anios: 1 },
-  { nombre: 'SERVICOCINAS', anios: 1 },
-  { nombre: 'SUPER VITAMINAS', anios: 1 },
-  { nombre: 'UNISUPER', anios: 1 },
-  { nombre: 'VIVENDO', anios: 1 },
+  { nombre: 'IMPORTADORA Y DISTRIBUIDORA DE APARATOS ELECTRICOS, S.A.', anios: 1 },
+  { nombre: 'M.D.T. INTERNACIONAL, S.A.', anios: 1 },
+  { nombre: 'PRODUCTOS LACTEOS DE CENTROAMERICA, S.A.', anios: 1 },
+  { nombre: 'RICZA, SOCIEDAD ANONIMA', anios: 1 },
+  { nombre: 'SAVONA DE GUATEMALA, S.A.', anios: 1 },
+  { nombre: 'SERVICOCINAS, SOCIEDAD ANONIMA', anios: 1 },
+  { nombre: 'SUPER VITAMINAS, S.A.', anios: 1 },
+  { nombre: 'UNISUPER S.A.', anios: 1 },
+  { nombre: 'VIVENDO S,A', anios: 1 },
+  { nombre: 'ARRENDADORA SARITA, S.A.', anios: 1 },
 ]
 
 function buscarClienteGarantia(clienteTexto) {
