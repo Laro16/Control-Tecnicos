@@ -15,12 +15,16 @@ const DOCS_PARTICULAR = ['Cotizacion', 'Voucher de Pago', 'Recibo de caja', 'Ord
 const VACIO_TAREA = { tipo: 'Tarea', titulo: '', descripcion: '', fecha: '', prioridad: 'Media', estado: 'Pendiente' }
 const VACIO_PARTICULAR = { tipo: 'Particular', titulo: '', descripcion: '', fecha: '', prioridad: 'Media', estado: 'Pendiente de pago', orden: '', correlativo: '', negocio: '', nit: '', direccion: '' }
 
-function prioBadge(p) { return p === 'Baja' ? 'bg-gray-100 text-gray-700 border-gray-200' : p === 'Alta' ? 'bg-red-100 text-red-800 border-red-200' : 'bg-orange-100 text-orange-800 border-orange-200' }
+function prioBadge(p) {
+  if (p === 'Alta') return 'bg-rose-50 text-rose-700 border-rose-200'
+  if (p === 'Media') return 'bg-amber-50 text-amber-700 border-amber-200'
+  return 'bg-slate-50 text-slate-500 border-slate-200'
+}
 function estBadge(e) { 
-  if (e === 'Pendiente' || e === 'Pendiente de pago') return 'bg-yellow-100 text-yellow-800 border-yellow-200'
-  if (e === 'En proceso' || e === 'En Proceso') return 'bg-blue-100 text-blue-800 border-blue-200'
-  if (e === 'Realizado' || e === 'Pagado' || e === 'Completada') return 'bg-green-100 text-green-800 border-green-200'
-  return 'bg-gray-100 text-gray-500 border-gray-200'
+  if (e === 'Pendiente' || e === 'Pendiente de pago') return 'bg-amber-50 text-amber-700 border-amber-200'
+  if (e === 'En proceso' || e === 'En Proceso') return 'bg-sky-50 text-sky-700 border-sky-200'
+  if (e === 'Realizado' || e === 'Pagado' || e === 'Completada') return 'bg-emerald-50 text-emerald-700 border-emerald-200'
+  return 'bg-slate-50 text-slate-400 border-slate-200'
 }
 
 export default function ModuloPendientes() {
@@ -33,8 +37,8 @@ export default function ModuloPendientes() {
   const [vistaActual, setVistaActual] = useState('Tarea')
   const [error, setError] = useState('')
   
-  const [archivosSubir, setArchivosSubir] = useState([]) // Para Tareas
-  const [archivosParticular, setArchivosParticular] = useState({}) // Para Particulares { 'Cotizacion': File, ... }
+  const [archivosSubir, setArchivosSubir] = useState([])
+  const [archivosParticular, setArchivosParticular] = useState({})
   
   const [subiendoFiles, setSubiendoFiles] = useState(false)
   const [imgPreview, setImgPreview] = useState(null)
@@ -49,9 +53,7 @@ export default function ModuloPendientes() {
     setCargando(false)
   }
 
-  function obtenerFechaHoy() {
-    return new Date().toISOString().split('T')[0]
-  }
+  function obtenerFechaHoy() { return new Date().toISOString().split('T')[0] }
 
   function abrirNuevo() {
     const hoy = obtenerFechaHoy()
@@ -59,115 +61,89 @@ export default function ModuloPendientes() {
     setEditId(null)
     setArchivosSubir([])
     setArchivosParticular({})
+    setError('')
     setModal(true)
   }
 
   function abrirEditar(item) {
-    setForm({ ...item, fecha: item.fecha || obtenerFechaHoy() }) // Asegurar fecha si viene vacía de la BD
+    setForm({ ...item })
     setEditId(item.id)
     setArchivosSubir([])
     setArchivosParticular({})
+    setError('')
     setModal(true)
   }
 
-  function eliminarArchivoExistente(index) {
-    if(!confirm('¿Quitar este archivo del registro?')) return;
-    const nuevosArchivos = [...form.archivos];
-    nuevosArchivos.splice(index, 1);
-    setForm({ ...form, archivos: nuevosArchivos });
-  }
-
-  function quitarArchivoParaSubir(index) {
-    const nuevos = [...archivosSubir];
-    nuevos.splice(index, 1);
-    setArchivosSubir(nuevos);
-  }
-
-  function comprimirImagen(file) {
-    return new Promise((resolve) => {
-      if (!file.type.startsWith('image/')) return resolve(file);
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = (event) => {
-        const img = new Image();
-        img.src = event.target.result;
+  async function comprimirImagen(file, maxW = 1200, quality = 0.7) {
+    return new Promise(resolve => {
+      if (!file.type.startsWith('image/')) { resolve(file); return }
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const img = new window.Image()
         img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const max_width = 1200;
-          const scaleSize = max_width / img.width;
-          canvas.width = max_width;
-          canvas.height = img.height * scaleSize;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          canvas.toBlob((blob) => resolve(new File([blob], file.name, { type: 'image/jpeg' })), 'image/jpeg', 0.8);
-        };
-      };
-    });
+          const canvas = document.createElement('canvas')
+          let w = img.width, h = img.height
+          if (w > maxW) { h = h * maxW / w; w = maxW }
+          canvas.width = w; canvas.height = h
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h)
+          canvas.toBlob(blob => resolve(new File([blob], file.name, { type: file.type })), file.type, quality)
+        }
+        img.src = e.target.result
+      }
+      reader.readAsDataURL(file)
+    })
+  }
+
+  async function subirArchivo(file, tipoDoc = null) {
+    const comprimido = await comprimirImagen(file)
+    const nombreArchivo = `${Date.now()}_${comprimido.name.replace(/\s+/g, '_')}`
+    const { error } = await supabase.storage.from('adjuntos').upload(nombreArchivo, comprimido)
+    if (error) throw error
+    const { data: urlData } = supabase.storage.from('adjuntos').getPublicUrl(nombreArchivo)
+    return { url: urlData.publicUrl, nombre: comprimido.name, tipoDoc }
   }
 
   async function guardar() {
-    if (!form.titulo.trim()) return setError('El título es obligatorio.')
+    if (!form.titulo.trim()) { setError('El título es obligatorio.'); return }
     setError('')
     setSubiendoFiles(true)
-
     try {
-      let urlsNuevas = []
-
-      // 1. Subir archivos si es Tarea
-      if (form.tipo === 'Tarea') {
-        for (const fileRaw of archivosSubir) {
-          const file = await comprimirImagen(fileRaw)
-          const fileExt = file.name.split('.').pop()
-          const fileName = `${Math.random()}.${fileExt}`
-          const filePath = `Tarea/${fileName}`
-
-          const { error: uploadError } = await supabase.storage.from('adjuntos').upload(filePath, file)
-          if (uploadError) throw new Error('Error subiendo archivo: ' + uploadError.message)
-          
-          const { data: { publicUrl } } = supabase.storage.from('adjuntos').getPublicUrl(filePath)
-          urlsNuevas.push({ nombre: fileRaw.name, url: publicUrl })
-        }
-      }
-
-      // 2. Subir archivos clasificados si es Particular
-      if (form.tipo === 'Particular') {
-        for (const [etiqueta, fileRaw] of Object.entries(archivosParticular)) {
-          const file = await comprimirImagen(fileRaw)
-          const fileExt = file.name.split('.').pop()
-          const fileName = `${Math.random()}.${fileExt}`
-          const filePath = `Particular/${fileName}`
-
-          const { error: uploadError } = await supabase.storage.from('adjuntos').upload(filePath, file)
-          if (uploadError) throw new Error('Error subiendo archivo: ' + uploadError.message)
-          
-          const { data: { publicUrl } } = supabase.storage.from('adjuntos').getPublicUrl(filePath)
-          
-          // Renombrar dinámicamente si es Voucher
-          let nombreFinal = etiqueta === 'Voucher de Pago' 
-            ? `Pago - ORDEN: ${form.orden || 'N/A'} - CORR: ${form.correlativo || 'N/A'}.${fileExt}`
-            : `${etiqueta}.${fileExt}`
-
-          urlsNuevas.push({ nombre: nombreFinal, url: publicUrl, tipoDoc: etiqueta })
-        }
-      }
-
-      const archivosFinales = editId ? [...(form.archivos || []), ...urlsNuevas] : urlsNuevas
-      const datosGuardar = { ...form, archivos: archivosFinales }
-
-      if (editId) await supabase.from('pendientes').update(datosGuardar).eq('id', editId)
-      else await supabase.from('pendientes').insert([datosGuardar])
+      let archivosFinales = form.archivos ? [...form.archivos] : []
       
+      if (form.tipo === 'Tarea' && archivosSubir.length > 0) {
+        for (const file of archivosSubir) {
+          const uploaded = await subirArchivo(file)
+          archivosFinales.push(JSON.stringify(uploaded))
+        }
+      }
+      
+      if (form.tipo === 'Particular' && Object.keys(archivosParticular).length > 0) {
+        for (const [tipoDoc, file] of Object.entries(archivosParticular)) {
+          const uploaded = await subirArchivo(file, tipoDoc)
+          archivosFinales.push(JSON.stringify(uploaded))
+        }
+      }
+
+      const payload = { ...form, archivos: archivosFinales }
+      delete payload.id; delete payload.created_at
+
+      if (editId) {
+        const { error } = await supabase.from('pendientes').update(payload).eq('id', editId)
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('pendientes').insert([payload])
+        if (error) throw error
+      }
       setModal(false)
       cargar()
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setSubiendoFiles(false)
+    } catch (e) {
+      setError(`Error al guardar: ${e.message}`)
     }
+    setSubiendoFiles(false)
   }
 
   async function eliminar(id) {
-    if (!confirm('¿Eliminar registro de la base de datos?')) return
+    if (!confirm('¿Eliminar este registro?')) return
     await supabase.from('pendientes').delete().eq('id', id)
     cargar()
   }
@@ -175,185 +151,201 @@ export default function ModuloPendientes() {
   async function cambiarEstado(id, estadoActual, tipo) {
     const listaEstados = tipo === 'Particular' ? ESTADOS_PARTICULAR : ESTADOS_TAREA
     const idx = listaEstados.indexOf(estadoActual)
-    const siguiente = listaEstados[(idx + 1) % listaEstados.length]
-    await supabase.from('pendientes').update({ estado: siguiente }).eq('id', id)
+    const nuevo = listaEstados[(idx + 1) % listaEstados.length]
+    await supabase.from('pendientes').update({ estado: nuevo }).eq('id', id)
     cargar()
   }
 
-  async function descargarZIP(item) {
-    if(!item.archivos || item.archivos.length === 0) return alert("No hay archivos adjuntos.")
-    const zip = new JSZip()
-    const folder = zip.folder(`Archivos_${item.titulo.replace(/\s+/g, '_')}`)
-    
-    for (let i = 0; i < item.archivos.length; i++) {
-      const arch = item.archivos[i];
-      let urlStr = typeof arch === 'string' ? JSON.parse(arch).url : arch.url;
-      let nomStr = typeof arch === 'string' ? JSON.parse(arch).nombre : arch.nombre;
-      try {
-        const response = await fetch(urlStr)
-        const blob = await response.blob()
-        folder.file(nomStr || `archivo_${i}`, blob)
-      } catch (e) { console.error(e) }
-    }
-    zip.generateAsync({ type: 'blob' }).then(content => {
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(content);
-      a.download = `Adjuntos_${item.titulo}.zip`;
-      a.click();
-    })
+  function eliminarArchivoExistente(idx) {
+    if (!confirm('¿Quitar este archivo?')) return
+    const nuevos = [...form.archivos]
+    nuevos.splice(idx, 1)
+    setForm(p => ({ ...p, archivos: nuevos }))
   }
 
-  const itemsVista = items.filter(i => i.tipo === vistaActual || (!i.tipo && vistaActual === 'Tarea'))
-  const filtrados = filtro === 'Todos' ? itemsVista : itemsVista.filter(i => i.estado === filtro)
-  const tabsActuales = vistaActual === 'Tarea' ? ESTADOS_TAREA : ESTADOS_PARTICULAR
+  function quitarArchivoParaSubir(idx) {
+    setArchivosSubir(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  async function descargarZIP(item) {
+    const zip = new JSZip()
+    for (const arch of item.archivos) {
+      const obj = typeof arch === 'string' ? JSON.parse(arch) : arch
+      try {
+        const resp = await fetch(obj.url)
+        const blob = await resp.blob()
+        zip.file(obj.nombre, blob)
+      } catch (e) { console.warn('Error descargando', obj.nombre) }
+    }
+    const zipBlob = await zip.generateAsync({ type: 'blob' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(zipBlob)
+    link.download = `${item.titulo.replace(/\s+/g, '_')}_archivos.zip`
+    link.click()
+  }
+
+  const itemsFiltrados = vistaActual === 'Tarea' ? items.filter(i => i.tipo === 'Tarea') : items.filter(i => i.tipo === 'Particular')
+  const filtrados = filtro === 'Todos' ? itemsFiltrados : itemsFiltrados.filter(i => i.estado === filtro)
+  const estadosFiltro = vistaActual === 'Tarea' ? ['Todos', ...ESTADOS_TAREA] : ['Todos', ...ESTADOS_PARTICULAR]
 
   return (
-    <div className="space-y-6">
-      <div className="flex p-1 bg-white border border-gray-200 rounded-xl max-w-sm mx-auto shadow-sm">
-        <button onClick={() => {setVistaActual('Tarea'); setFiltro('Todos')}} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${vistaActual === 'Tarea' ? 'bg-gray-900 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>Mis Pendientes</button>
-        <button onClick={() => {setVistaActual('Particular'); setFiltro('Todos')}} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${vistaActual === 'Particular' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>Servicios Particulares</button>
+    <div className="space-y-4 fade-in">
+      {/* ── Selector de vista ── */}
+      <div className="flex gap-2">
+        {['Tarea', 'Particular'].map(v => (
+          <button key={v} onClick={() => { setVistaActual(v); setFiltro('Todos') }}
+            className={`flex-1 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+              vistaActual === v 
+                ? 'bg-slate-800 text-white shadow-md' 
+                : 'bg-white text-slate-500 border border-slate-200 hover:border-slate-300'
+            }`}
+          >
+            {v === 'Tarea' ? '📋 Mis Pendientes' : '🔧 Servicios Particulares'}
+          </button>
+        ))}
       </div>
 
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex gap-2 flex-wrap">
-          {['Todos', ...tabsActuales].map(e => (
-            <button key={e} onClick={() => setFiltro(e)} className={`text-xs px-4 py-2 rounded-xl font-bold transition border ${filtro === e ? 'bg-gray-800 text-white border-gray-800 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}>{e}</button>
+      {/* ── Filtros + Nuevo ── */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        <div className="flex flex-wrap gap-1.5">
+          {estadosFiltro.map(e => (
+            <button key={e} onClick={() => setFiltro(e)} className={`pill ${filtro === e ? 'pill-active' : 'pill-inactive'}`}>{e}</button>
           ))}
         </div>
-        <button onClick={abrirNuevo} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm px-5 py-2.5 rounded-xl font-bold transition shadow-md">
-          <Plus size={16} /> Nuevo {vistaActual === 'Tarea' ? 'Pendiente' : 'Servicio'}
+        <button onClick={abrirNuevo} className="btn-primary flex items-center gap-1.5 shrink-0">
+          <Plus size={14} /> Nuevo {vistaActual === 'Tarea' ? 'Pendiente' : 'Servicio'}
         </button>
       </div>
 
-      {error && !modal && <div className="text-sm font-bold text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3 shadow-sm">{error}</div>}
+      {error && !modal && <div className="text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2.5">{error}</div>}
 
+      {/* ── Lista ── */}
       {cargando ? (
-        <div className="text-center py-20 text-gray-400 font-bold"><RotateCcw size={32} className="mx-auto mb-3 animate-spin text-blue-500" /> Cargando…</div>
+        <div className="text-center py-16 text-slate-400"><RotateCcw size={24} className="mx-auto mb-3 animate-spin text-sky-500" /><p className="text-xs font-semibold">Cargando…</p></div>
       ) : filtrados.length === 0 ? (
-        <div className="text-center py-20 text-gray-400"><ClipboardList size={54} className="mx-auto mb-4 text-gray-300" /> <p className="font-bold text-lg">No hay registros aquí</p></div>
+        <div className="text-center py-16 text-slate-400 card"><ClipboardList size={40} className="mx-auto mb-3 text-slate-300" /><p className="text-sm font-semibold text-slate-500">No hay registros</p></div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {filtrados.map(item => (
-            <div key={item.id} className={`bg-white border border-gray-200 rounded-2xl shadow-md px-6 py-6 transition-all relative overflow-hidden ${(item.estado === 'Realizado' || item.estado === 'Completada' || item.estado === 'Pagado') ? 'opacity-75 bg-gray-50' : 'hover:shadow-lg hover:border-blue-200'}`}>
-              {item.tipo === 'Particular' && <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-500 to-blue-700"></div>}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {filtrados.map(item => {
+            const isDone = item.estado === 'Realizado' || item.estado === 'Completada' || item.estado === 'Pagado'
+            return (
+              <div key={item.id} className={`card overflow-hidden transition-all ${isDone ? 'opacity-60' : 'hover:shadow-md hover:border-sky-200'}`}>
+                {item.tipo === 'Particular' && <div className="h-1 bg-gradient-to-r from-sky-400 to-blue-600"></div>}
 
-              <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
-                <div className="flex-1 min-w-0">
-                  <p className={`font-black text-xl text-gray-900 leading-tight ${(item.estado === 'Realizado' || item.estado === 'Completada') ? 'line-through text-gray-500' : ''}`}>{item.titulo}</p>
-                </div>
-                <div className="flex items-center gap-1.5 bg-gray-100 p-1 rounded-lg">
-                  <button onClick={() => abrirEditar(item)} className="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-blue-600 transition"><Pencil size={16} /></button>
-                  {item.tipo === 'Tarea' && (
-                    <button onClick={() => eliminar(item.id)} className="p-1.5 rounded-md hover:bg-white hover:shadow-sm text-red-500 transition"><Trash2 size={16} /></button>
+                <div className="p-4 space-y-3">
+                  {/* Header */}
+                  <div className="flex items-start justify-between gap-3">
+                    <p className={`font-bold text-slate-800 text-sm leading-tight flex-1 ${isDone ? 'line-through text-slate-400' : ''}`}>{item.titulo}</p>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button onClick={() => abrirEditar(item)} className="p-1.5 rounded-md hover:bg-slate-100 text-sky-600 transition"><Pencil size={14} /></button>
+                      {item.tipo === 'Tarea' && (
+                        <button onClick={() => eliminar(item.id)} className="p-1.5 rounded-md hover:bg-slate-100 text-rose-500 transition"><Trash2 size={14} /></button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Datos Particular */}
+                  {item.tipo === 'Particular' && (
+                    <div className="grid grid-cols-2 gap-2 text-[10px] bg-sky-50 p-3 rounded-lg border border-sky-100">
+                      <div><span className="font-bold text-sky-800 block">ORDEN</span><span className="font-mono font-bold text-sky-700">{item.orden || '-'}</span></div>
+                      <div><span className="font-bold text-sky-800 block">CORRELATIVO</span><span className="font-mono font-bold text-sky-700">{item.correlativo || '-'}</span></div>
+                      <div className="col-span-2"><span className="font-bold text-sky-800">NEGOCIO:</span> <span className="font-semibold text-slate-700">{item.negocio || '-'}</span></div>
+                      <div><span className="font-bold text-sky-800">NIT:</span> <span className="font-semibold text-slate-700">{item.nit || '-'}</span></div>
+                      <div className="col-span-2"><span className="font-bold text-sky-800">DIR:</span> <span className="font-semibold text-slate-700">{item.direccion || '-'}</span></div>
+                    </div>
                   )}
+                  
+                  {item.descripcion && <p className="text-[11px] text-slate-600 leading-relaxed font-medium">{item.descripcion}</p>}
+                  
+                  {/* Archivos */}
+                  {item.archivos && item.archivos.length > 0 && (
+                    <div className="pt-3 border-t border-slate-100">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1"><Paperclip size={11} /> {item.archivos.length} adjuntos</span>
+                        <button onClick={() => descargarZIP(item)} className="text-[10px] font-bold flex items-center gap-1 text-sky-600 bg-sky-50 px-2 py-1 rounded-md hover:bg-sky-100 transition"><DownloadCloud size={11}/> ZIP</button>
+                      </div>
+                      <div className="space-y-1">
+                        {item.archivos.map((arch, idx) => {
+                          const archObj = typeof arch === 'string' ? JSON.parse(arch) : arch
+                          const url = archObj.url, nombre = archObj.nombre, tipoDoc = archObj.tipoDoc || 'Adjunto'
+                          const isImage = url.match(/\.(jpeg|jpg|gif|png|webp)$/i) || nombre.match(/\.(jpeg|jpg|gif|png|webp)$/i)
+                          return (
+                            <div key={idx} className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-md px-2.5 py-1.5 text-[10px] hover:border-sky-200 transition">
+                              <div className="flex items-center gap-1.5 overflow-hidden">
+                                {item.tipo === 'Particular' && <span className="bg-sky-100 text-sky-700 font-bold px-1.5 py-0.5 rounded text-[9px] shrink-0">{tipoDoc}</span>}
+                                {isImage ? (
+                                  <button onClick={() => setImgPreview(url)} className="text-sky-600 hover:text-sky-800 flex items-center gap-1 truncate font-semibold"><ImageIcon size={11} className="shrink-0"/><span className="truncate">{nombre}</span></button>
+                                ) : (
+                                  <a href={url} target="_blank" rel="noopener noreferrer" className="text-slate-600 hover:text-slate-800 flex items-center gap-1 truncate font-semibold"><FileText size={11} className="shrink-0"/><span className="truncate">{nombre}</span></a>
+                                )}
+                              </div>
+                              <a href={url} target="_blank" rel="noopener noreferrer" download={nombre} className="text-sky-600 hover:text-sky-800 p-1 rounded shrink-0"><Download size={12} /></a>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Footer: badges */}
+                  <div className="flex items-center justify-between flex-wrap pt-3 border-t border-slate-100">
+                    <div className="flex items-center gap-1.5">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${prioBadge(item.prioridad)}`}>{item.prioridad}</span>
+                      <button onClick={() => cambiarEstado(item.id, item.estado, item.tipo)} className={`text-[10px] font-bold px-2 py-0.5 rounded-md border cursor-pointer hover:opacity-80 transition ${estBadge(item.estado)}`}>{item.estado}</button>
+                    </div>
+                    {item.fecha && <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${new Date(item.fecha) < new Date() && !isDone ? 'text-rose-600 bg-rose-50 border border-rose-200' : 'text-slate-500 bg-slate-50 border border-slate-200'}`}>📅 {item.fecha}</span>}
+                  </div>
                 </div>
               </div>
-
-              <div className="space-y-4 text-sm">
-                {item.tipo === 'Particular' && (
-                  <div className="grid grid-cols-2 gap-3 text-xs bg-blue-50 p-4 rounded-xl border border-blue-100 shadow-inner">
-                    <p><span className="font-bold text-blue-900 block mb-0.5">ORDEN:</span> <span className="font-mono font-bold text-blue-800 bg-white px-2 py-0.5 rounded border border-blue-200">{item.orden || '-'}</span></p>
-                    <p><span className="font-bold text-blue-900 block mb-0.5">CORR:</span> <span className="font-mono font-bold text-blue-800 bg-white px-2 py-0.5 rounded border border-blue-200">{item.correlativo || '-'}</span></p>
-                    <p className="col-span-2"><span className="font-bold text-blue-900">NEGOCIO:</span> {item.negocio || '-'}</p>
-                    <p className="col-span-2"><span className="font-bold text-blue-900">NIT:</span> {item.nit || '-'}</p>
-                    <p className="col-span-2"><span className="font-bold text-blue-900">DIR:</span> {item.direccion || '-'}</p>
-                  </div>
-                )}
-                
-                {item.descripcion && <p className="text-gray-700 leading-relaxed font-medium">{item.descripcion}</p>}
-                
-                {item.archivos && item.archivos.length > 0 && (
-                  <div className="pt-4 border-t border-gray-100">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-xs font-bold text-gray-500 flex items-center gap-1.5"><Paperclip size={14} /> {item.archivos.length} archivos adjuntos</span>
-                      <button onClick={() => descargarZIP(item)} className="text-xs font-bold flex items-center gap-1.5 text-blue-700 bg-blue-100 px-3 py-1.5 rounded-lg hover:bg-blue-200 transition shadow-sm"><DownloadCloud size={14}/> Descargar ZIP</button>
-                    </div>
-                    
-                    <div className="flex flex-col gap-2">
-                      {item.archivos.map((arch, idx) => {
-                        const archObj = typeof arch === 'string' ? JSON.parse(arch) : arch;
-                        const url = archObj.url;
-                        const nombre = archObj.nombre;
-                        const tipoDoc = archObj.tipoDoc || 'Adjunto';
-                        const isImage = url.match(/\.(jpeg|jpg|gif|png|webp)$/i) || nombre.match(/\.(jpeg|jpg|gif|png|webp)$/i);
-                        
-                        return (
-                          <div key={idx} className="flex items-center justify-between bg-white border border-gray-300 shadow-sm rounded-lg px-3 py-2 text-xs hover:border-blue-300 transition">
-                            <div className="flex items-center gap-2 overflow-hidden">
-                              {item.tipo === 'Particular' && <span className="bg-blue-100 text-blue-800 font-black px-2 py-1 rounded truncate shrink-0 max-w-[100px]">{tipoDoc}</span>}
-                              {isImage ? (
-                                <button onClick={() => setImgPreview(url)} className="text-blue-600 hover:text-blue-800 flex items-center gap-1.5 truncate font-bold"><ImageIcon size={14} className="shrink-0"/> <span className="truncate">{nombre}</span></button>
-                              ) : (
-                                <a href={url} target="_blank" rel="noopener noreferrer" className="text-gray-700 hover:text-gray-900 flex items-center gap-1.5 truncate font-bold"><FileText size={14} className="shrink-0"/> <span className="truncate">{nombre}</span></a>
-                              )}
-                            </div>
-                            <a href={url} target="_blank" rel="noopener noreferrer" download={nombre} className="text-blue-600 hover:text-blue-800 bg-blue-50 p-1.5 rounded-md ml-2 shrink-0"><Download size={14} /></a>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex items-center justify-between flex-wrap mt-6 pt-4 border-t border-gray-100">
-                 <div className="flex items-center gap-2">
-                    <span className={`text-xs font-bold px-3 py-1 rounded-full border ${prioBadge(item.prioridad)}`}>{item.prioridad}</span>
-                    <button onClick={() => cambiarEstado(item.id, item.estado, item.tipo)} className={`text-xs font-bold px-3 py-1 rounded-full border cursor-pointer hover:opacity-80 hover:shadow-sm transition ${estBadge(item.estado)}`}>{item.estado}</button>
-                  </div>
-                  {item.fecha && <span className={`text-xs font-bold bg-gray-100 px-3 py-1 rounded-full ${new Date(item.fecha) < new Date() && item.estado !== 'Realizado' ? 'text-red-600' : 'text-gray-500'}`}>📅 {item.fecha}</span>}
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
 
+      {/* ── Modal ── */}
       {modal && (
-        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg fade-in max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 sticky top-0 bg-white z-10 shadow-sm">
-              <h3 className="font-black text-gray-900 text-xl">{editId ? 'Editar' : 'Nuevo'} {form.tipo === 'Particular' ? 'Servicio' : 'Pendiente'}</h3>
-              <button onClick={() => setModal(false)} className="p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 transition"><X size={20} /></button>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg slide-up max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 sticky top-0 bg-white z-10">
+              <h3 className="font-bold text-slate-800 text-sm">{editId ? 'Editar' : 'Nuevo'} {form.tipo === 'Particular' ? 'Servicio' : 'Pendiente'}</h3>
+              <button onClick={() => setModal(false)} className="p-1 rounded-md hover:bg-slate-100 text-slate-400 transition"><X size={16} /></button>
             </div>
             
-            <div className="px-6 py-6 space-y-5">
-              {error && <p className="text-sm font-bold text-red-600 bg-red-50 border border-red-200 px-4 py-3 rounded-xl">{error}</p>}
+            <div className="px-5 py-4 space-y-4">
+              {error && <p className="text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200 px-3 py-2 rounded-lg">{error}</p>}
 
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1.5">Título / Nombre *</label>
-                <input type="text" value={form.titulo} onChange={e => setForm(p => ({ ...p, titulo: e.target.value }))} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none font-bold text-gray-800 bg-gray-50 focus:bg-white transition" placeholder="Ej: Mantenimiento Preventivo" />
+                <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Título *</label>
+                <input type="text" value={form.titulo} onChange={e => setForm(p => ({ ...p, titulo: e.target.value }))} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:border-sky-400 focus:ring-1 focus:ring-sky-100 outline-none font-semibold text-slate-800 bg-slate-50 focus:bg-white transition" placeholder="Ej: Mantenimiento Preventivo" />
               </div>
 
               {form.tipo === 'Particular' && (
-                <div className="grid grid-cols-2 gap-4 bg-blue-50 p-5 rounded-xl border border-blue-100 shadow-inner">
-                  <div><label className="block text-xs font-bold text-blue-900 mb-1">Orden N°</label><input type="text" value={form.orden || ''} onChange={e => setForm(p => ({ ...p, orden: e.target.value }))} className="w-full border border-blue-200 rounded-lg px-3 py-2 text-sm outline-none font-medium bg-white" /></div>
-                  <div><label className="block text-xs font-bold text-blue-900 mb-1">Correlativo</label><input type="text" value={form.correlativo || ''} onChange={e => setForm(p => ({ ...p, correlativo: e.target.value }))} className="w-full border border-blue-200 rounded-lg px-3 py-2 text-sm outline-none font-medium bg-white" /></div>
-                  <div className="col-span-2"><label className="block text-xs font-bold text-blue-900 mb-1">Negocio / Empresa</label><input type="text" value={form.negocio || ''} onChange={e => setForm(p => ({ ...p, negocio: e.target.value }))} className="w-full border border-blue-200 rounded-lg px-3 py-2 text-sm outline-none font-medium bg-white" /></div>
-                  <div><label className="block text-xs font-bold text-blue-900 mb-1">NIT</label><input type="text" value={form.nit || ''} onChange={e => setForm(p => ({ ...p, nit: e.target.value }))} className="w-full border border-blue-200 rounded-lg px-3 py-2 text-sm outline-none font-medium bg-white" /></div>
-                  <div className="col-span-2"><label className="block text-xs font-bold text-blue-900 mb-1">Dirección Exacta</label><input type="text" value={form.direccion || ''} onChange={e => setForm(p => ({ ...p, direccion: e.target.value }))} className="w-full border border-blue-200 rounded-lg px-3 py-2 text-sm outline-none font-medium bg-white" /></div>
+                <div className="grid grid-cols-2 gap-3 bg-sky-50 p-4 rounded-lg border border-sky-100">
+                  <div><label className="block text-[10px] font-semibold text-sky-800 mb-0.5">Orden N°</label><input type="text" value={form.orden || ''} onChange={e => setForm(p => ({ ...p, orden: e.target.value }))} className="w-full border border-sky-200 rounded-md px-2.5 py-1.5 text-xs outline-none font-semibold bg-white" /></div>
+                  <div><label className="block text-[10px] font-semibold text-sky-800 mb-0.5">Correlativo</label><input type="text" value={form.correlativo || ''} onChange={e => setForm(p => ({ ...p, correlativo: e.target.value }))} className="w-full border border-sky-200 rounded-md px-2.5 py-1.5 text-xs outline-none font-semibold bg-white" /></div>
+                  <div className="col-span-2"><label className="block text-[10px] font-semibold text-sky-800 mb-0.5">Negocio / Empresa</label><input type="text" value={form.negocio || ''} onChange={e => setForm(p => ({ ...p, negocio: e.target.value }))} className="w-full border border-sky-200 rounded-md px-2.5 py-1.5 text-xs outline-none font-semibold bg-white" /></div>
+                  <div><label className="block text-[10px] font-semibold text-sky-800 mb-0.5">NIT</label><input type="text" value={form.nit || ''} onChange={e => setForm(p => ({ ...p, nit: e.target.value }))} className="w-full border border-sky-200 rounded-md px-2.5 py-1.5 text-xs outline-none font-semibold bg-white" /></div>
+                  <div className="col-span-2"><label className="block text-[10px] font-semibold text-sky-800 mb-0.5">Dirección</label><input type="text" value={form.direccion || ''} onChange={e => setForm(p => ({ ...p, direccion: e.target.value }))} className="w-full border border-sky-200 rounded-md px-2.5 py-1.5 text-xs outline-none font-semibold bg-white" /></div>
                 </div>
               )}
 
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1.5">Descripción / Notas</label>
-                <textarea value={form.descripcion} onChange={e => setForm(p => ({ ...p, descripcion: e.target.value }))} rows={4} className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none resize-none font-medium text-gray-800 bg-gray-50 focus:bg-white transition" placeholder="Detalles adicionales..." />
+                <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Descripción / Notas</label>
+                <textarea value={form.descripcion} onChange={e => setForm(p => ({ ...p, descripcion: e.target.value }))} rows={3} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:border-sky-400 focus:ring-1 focus:ring-sky-100 outline-none resize-none font-medium text-slate-700 bg-slate-50 focus:bg-white transition" placeholder="Detalles adicionales..." />
               </div>
 
-              {/* SECCIÓN DE ARCHIVOS DEPENDIENDO DEL TIPO */}
-              <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                
+              {/* Archivos */}
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
                 {form.tipo === 'Tarea' ? (
                   <>
-                    <label className="block text-xs font-bold text-gray-700 mb-2">Adjuntar Nuevos Archivos</label>
-                    <input type="file" multiple onChange={(e) => setArchivosSubir(Array.from(e.target.files))} className="w-full text-sm text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200 cursor-pointer transition" />
-                    
+                    <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Adjuntar Archivos</label>
+                    <input type="file" multiple onChange={(e) => setArchivosSubir(Array.from(e.target.files))} className="w-full text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-[10px] file:font-bold file:bg-sky-100 file:text-sky-700 hover:file:bg-sky-200 cursor-pointer transition" />
                     {archivosSubir.length > 0 && (
-                      <div className="mt-3 space-y-2">
-                        <p className="text-xs font-bold text-blue-600">Listos para subir:</p>
+                      <div className="mt-2 space-y-1">
                         {archivosSubir.map((arch, idx) => (
-                          <div key={idx} className="flex items-center justify-between bg-blue-50 border border-blue-100 rounded-lg p-2">
-                            <span className="text-xs text-blue-800 font-bold truncate max-w-[85%]">{arch.name}</span>
-                            <button type="button" onClick={() => quitarArchivoParaSubir(idx)} className="text-blue-500 hover:text-red-500 p-1"><Trash2 size={14} /></button>
+                          <div key={idx} className="flex items-center justify-between bg-sky-50 border border-sky-100 rounded-md px-2.5 py-1.5">
+                            <span className="text-[10px] text-sky-700 font-semibold truncate">{arch.name}</span>
+                            <button type="button" onClick={() => quitarArchivoParaSubir(idx)} className="text-sky-500 hover:text-rose-500 p-0.5"><Trash2 size={12} /></button>
                           </div>
                         ))}
                       </div>
@@ -361,30 +353,28 @@ export default function ModuloPendientes() {
                   </>
                 ) : (
                   <>
-                    <label className="block text-xs font-bold text-gray-700 mb-2">Documentos del Servicio (Opcionales)</label>
-                    <div className="space-y-3">
+                    <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Documentos del Servicio</label>
+                    <div className="space-y-2">
                       {DOCS_PARTICULAR.map(doc => {
                         const existente = form.archivos?.findIndex(a => {
-                          const obj = typeof a === 'string' ? JSON.parse(a) : a;
-                          return obj.tipoDoc === doc || obj.nombre.includes(doc);
-                        });
-
+                          const obj = typeof a === 'string' ? JSON.parse(a) : a
+                          return obj.tipoDoc === doc || obj.nombre.includes(doc)
+                        })
                         return (
-                          <div key={doc} className="flex flex-col gap-1.5">
-                            <span className="text-xs font-bold text-blue-900">{doc}</span>
-                            
+                          <div key={doc} className="space-y-1">
+                            <span className="text-[10px] font-bold text-sky-800">{doc}</span>
                             {existente !== undefined && existente !== -1 ? (
-                              <div className="flex items-center justify-between bg-white border border-green-300 rounded-lg p-2 shadow-sm">
-                                <span className="text-xs text-green-700 font-bold truncate">✅ Documento guardado en BD</span>
-                                <button type="button" onClick={() => eliminarArchivoExistente(existente)} className="text-red-500 hover:text-red-700 bg-red-50 p-1.5 rounded transition" title="Eliminar de la BD"><Trash2 size={14}/></button>
+                              <div className="flex items-center justify-between bg-white border border-emerald-200 rounded-md px-2.5 py-1.5">
+                                <span className="text-[10px] text-emerald-600 font-semibold">✅ Guardado</span>
+                                <button type="button" onClick={() => eliminarArchivoExistente(existente)} className="text-rose-500 hover:text-rose-700 p-0.5"><Trash2 size={12}/></button>
                               </div>
                             ) : archivosParticular[doc] ? (
-                              <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-2 shadow-sm">
-                                <span className="text-xs text-blue-700 font-bold truncate">{archivosParticular[doc].name}</span>
-                                <button type="button" onClick={() => setArchivosParticular(p => { const n = {...p}; delete n[doc]; return n; })} className="text-red-500 hover:text-red-700 p-1 bg-white rounded"><Trash2 size={14}/></button>
+                              <div className="flex items-center justify-between bg-sky-50 border border-sky-200 rounded-md px-2.5 py-1.5">
+                                <span className="text-[10px] text-sky-700 font-semibold truncate">{archivosParticular[doc].name}</span>
+                                <button type="button" onClick={() => setArchivosParticular(p => { const n = {...p}; delete n[doc]; return n })} className="text-rose-500 p-0.5"><Trash2 size={12}/></button>
                               </div>
                             ) : (
-                              <input type="file" onChange={e => setArchivosParticular(p => ({...p, [doc]: e.target.files[0]}))} className="text-xs text-gray-600 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-bold file:bg-white file:border-gray-200 file:text-gray-700 hover:file:bg-gray-100 cursor-pointer border border-gray-200 rounded-lg w-full" />
+                              <input type="file" onChange={e => setArchivosParticular(p => ({...p, [doc]: e.target.files[0]}))} className="text-[10px] text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-white file:text-slate-600 hover:file:bg-slate-100 cursor-pointer border border-slate-200 rounded-md w-full" />
                             )}
                           </div>
                         )
@@ -393,18 +383,15 @@ export default function ModuloPendientes() {
                   </>
                 )}
 
-                {/* Mostrar archivos ya guardados para Tareas (en Particular se muestran arriba) */}
                 {editId && form.tipo === 'Tarea' && form.archivos?.length > 0 && (
-                  <div className="mt-4 pt-3 border-t border-gray-200 space-y-2">
-                    <p className="text-xs font-bold text-gray-500">Archivos ya guardados en este registro:</p>
+                  <div className="mt-3 pt-2 border-t border-slate-200 space-y-1">
+                    <p className="text-[10px] font-semibold text-slate-400">Archivos guardados:</p>
                     {form.archivos.map((arch, idx) => {
-                      const nombre = typeof arch === 'string' ? JSON.parse(arch).nombre : arch.nombre;
+                      const nombre = typeof arch === 'string' ? JSON.parse(arch).nombre : arch.nombre
                       return (
-                        <div key={idx} className="flex items-center justify-between bg-white border border-gray-300 rounded-lg p-2 shadow-sm">
-                          <span className="text-xs text-gray-700 font-bold truncate max-w-[85%]">{nombre}</span>
-                          <button type="button" onClick={() => eliminarArchivoExistente(idx)} className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-1.5 rounded transition" title="Quitar archivo">
-                            <Trash2 size={14} />
-                          </button>
+                        <div key={idx} className="flex items-center justify-between bg-white border border-slate-200 rounded-md px-2.5 py-1.5">
+                          <span className="text-[10px] text-slate-600 font-semibold truncate">{nombre}</span>
+                          <button type="button" onClick={() => eliminarArchivoExistente(idx)} className="text-rose-500 hover:text-rose-700 p-0.5"><Trash2 size={12} /></button>
                         </div>
                       )
                     })}
@@ -412,32 +399,36 @@ export default function ModuloPendientes() {
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-xs font-bold text-gray-700 mb-1.5">Fecha</label><input type="date" value={form.fecha} onChange={e => setForm(p => ({ ...p, fecha: e.target.value }))} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm outline-none font-bold text-gray-800 bg-gray-50 focus:bg-white transition focus:border-blue-500" /></div>
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1.5">Estado Inicial</label>
-                  <select value={form.estado} onChange={e => setForm(p => ({ ...p, estado: e.target.value }))} className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm outline-none font-bold text-gray-800 bg-gray-50 focus:bg-white transition focus:border-blue-500">
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Fecha</label>
+                  <input type="date" value={form.fecha} onChange={e => setForm(p => ({ ...p, fecha: e.target.value }))} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none font-semibold text-slate-700 bg-slate-50 focus:bg-white focus:border-sky-400 transition" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Estado</label>
+                  <select value={form.estado} onChange={e => setForm(p => ({ ...p, estado: e.target.value }))} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none font-semibold text-slate-700 bg-slate-50 focus:bg-white focus:border-sky-400 transition">
                     {(form.tipo === 'Particular' ? ESTADOS_PARTICULAR : ESTADOS_TAREA).map(e => <option key={e}>{e}</option>)}
                   </select>
                 </div>
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 px-6 py-5 border-t border-gray-200 bg-gray-50 rounded-b-2xl">
-              <button onClick={() => setModal(false)} disabled={subiendoFiles} className="px-5 py-2.5 rounded-xl text-sm text-gray-700 bg-white border border-gray-300 hover:bg-gray-100 font-bold transition shadow-sm">Cancelar</button>
-              <button onClick={guardar} disabled={subiendoFiles} className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm bg-blue-600 hover:bg-blue-700 text-white font-bold transition shadow-md disabled:opacity-60">
-                {subiendoFiles ? <RotateCcw size={18} className="animate-spin" /> : <CheckCircle size={18} />} 
-                {subiendoFiles ? 'Guardando...' : 'Guardar Registro'}
+            <div className="flex justify-end gap-2 px-5 py-3.5 border-t border-slate-100 bg-slate-50 rounded-b-xl">
+              <button onClick={() => setModal(false)} disabled={subiendoFiles} className="btn-ghost">Cancelar</button>
+              <button onClick={guardar} disabled={subiendoFiles} className="btn-primary flex items-center gap-1.5">
+                {subiendoFiles ? <RotateCcw size={13} className="animate-spin" /> : <CheckCircle size={13} />} 
+                {subiendoFiles ? 'Guardando...' : 'Guardar'}
               </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* Preview imagen */}
       {imgPreview && (
-        <div className="fixed inset-0 bg-black/95 z-[60] flex items-center justify-center p-4 backdrop-blur-md" onClick={() => setImgPreview(null)}>
-          <button onClick={() => setImgPreview(null)} className="absolute top-6 right-6 text-white bg-white/10 p-3 rounded-full hover:bg-white/30 hover:scale-110 transition"><X size={24} /></button>
-          <img src={imgPreview} alt="Vista previa" className="max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl ring-1 ring-white/20" onClick={e => e.stopPropagation()} />
+        <div className="fixed inset-0 bg-black/90 z-[60] flex items-center justify-center p-4 backdrop-blur-md" onClick={() => setImgPreview(null)}>
+          <button onClick={() => setImgPreview(null)} className="absolute top-4 right-4 text-white bg-white/10 p-2 rounded-lg hover:bg-white/20 transition"><X size={20} /></button>
+          <img src={imgPreview} alt="Vista previa" className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" onClick={e => e.stopPropagation()} />
         </div>
       )}
     </div>
