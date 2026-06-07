@@ -100,6 +100,12 @@ function verificarGarantia(ticket) {
   }
 }
 
+function obtenerComentarioProceso(ticket) {
+  if (ticket['DESCRIPCIÓN'] && ticket['DESCRIPCIÓN'] !== '-') return ticket['DESCRIPCIÓN']
+  if (ticket['GEOLOCALIZACIÓN'] && ticket['GEOLOCALIZACIÓN'] !== '-') return 'Técnico únicamente cargó geolocalización'
+  return 'Sin datos'
+}
+
 function buildMessage(tecnico, tickets, rutaDefinida) {
   const fecha = TODAY()
   let msg = `🔧 *TÉCNICO: ${tecnico}*\n📅 *FECHA:* ${fecha}\n`
@@ -115,7 +121,7 @@ function buildMessage(tecnico, tickets, rutaDefinida) {
     msg += `👤 *CLIENTE:* ${t['CLIENTE'] || '-'}\n`
     msg += `🧊 *SERIE:* ${t['SERIE'] || '-'}  📦 *MODELO:* ${t['MODELO'] || '-'}\n`
     if (t['ESTADO_LIMPIO'].includes('PROCESO')) {
-      const c = (t['DESCRIPCIÓN'] && t['DESCRIPCIÓN'] !== '-') ? t['DESCRIPCIÓN'] : 'Sin datos'
+      const c = obtenerComentarioProceso(t)
       msg += `\n⚠️ *COMENTARIO EN PROCESO:*\n${c}\n`
     }
   })
@@ -193,7 +199,8 @@ export default function ModuloTecnicos({
             'FECHA_TEXTO': fechaEstructura ? fechaEstructura.display : (fechaRaw || '-'),
             'FECHA_OBJ': fechaEstructura ? fechaEstructura.dateObj : null,
             'DESCRIPCIÓN INICIAL': fila['DESCRIPCIÓN INICIAL'] || fila['DESCRIPCION INICIAL'] || '-',
-            'DESCRIPCIÓN': fila['DESCRIPCIÓN'] || fila['DESCRIPCION'] || fila['COMENTARIO'] || '-'
+            'DESCRIPCIÓN': fila['DESCRIPCIÓN'] || fila['DESCRIPCION'] || fila['COMENTARIO'] || '-',
+            'GEOLOCALIZACIÓN': fila['GEOLOCALIZACION'] || fila['GEOLOCALIZACIÓN'] || fila['GEOLOCALIZACIÓ'] || fila['GEO'] || '-'
           })
         }
       }
@@ -322,7 +329,7 @@ export default function ModuloTecnicos({
 
       // Fila COMENTARIO EN PROCESO (solo si aplica, en rojo)
       if (esProceso) {
-        const com = (t['DESCRIPCIÓN'] && t['DESCRIPCIÓN'] !== '-') ? t['DESCRIPCIÓN'] : 'Sin datos'
+        const com = obtenerComentarioProceso(t)
         body.push([{
           content: `COMENTARIO EN PROCESO:  ${com}`,
           colSpan: 4,
@@ -378,7 +385,7 @@ export default function ModuloTecnicos({
     doc.text(`${enProceso.length} tickets — ${TODAY()}`, 14, 22)
 
     const body = enProceso.map((t, i) => {
-      const com = (t['DESCRIPCIÓN'] && t['DESCRIPCIÓN'] !== '-') ? t['DESCRIPCIÓN'] : 'Sin datos'
+      const com = obtenerComentarioProceso(t)
       return [
         `${i+1}`,
         t.tecnico,
@@ -678,7 +685,7 @@ export default function ModuloTecnicos({
                             {t['ESTADO_LIMPIO'].includes('PROCESO') && (
                               <div className="mt-2 text-[10px] text-amber-700 bg-amber-50 rounded-md px-3 py-1.5 border-l-2 border-amber-300">
                                 <span className="font-bold block mb-0.5 uppercase text-[9px]">Comentario en Proceso</span>
-                                {t['DESCRIPCIÓN'] && t['DESCRIPCIÓN'] !== '-' ? t['DESCRIPCIÓN'] : 'Sin datos'}
+                                {obtenerComentarioProceso(t)}
                               </div>
                             )}
                           </div>
