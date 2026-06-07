@@ -46,7 +46,7 @@ function normalizarFechaExcel(fechaTexto) {
 // ── GARANTÍA ──
 const CLIENTES_GARANTIA = [
   { nombre: 'ABCO, S.A.', anios: 1 },
-  { nombre: 'COMERCIALIZADORA DE ALIMENTOS Y BEBIDAS SAN MIGUEL', anios: 2 },
+  { nombre: 'COMERCIALIZADORA  DE ALIMENTOS Y BEBIDAS SAN MIGUEL S.A', anios: 2 },
   { nombre: 'DISTRIBUIDORA DE LICORES', anios: 1 },
   { nombre: 'EMBOTELLADORA CENTRAL', anios: 2 },
   { nombre: 'EMBOTELLADORA LA MARIPOSA', anios: 2 },
