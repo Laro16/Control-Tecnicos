@@ -45,22 +45,20 @@ function normalizarFechaExcel(fechaTexto) {
 
 // ── GARANTÍA ──
 const CLIENTES_GARANTIA = [
-  { nombre: 'ABCO, S.A.', anios: 1 },
-  { nombre: 'COMERCIALIZADORA  DE ALIMENTOS Y BEBIDAS SAN MIGUEL S.A', anios: 2 },
-  { nombre: 'DISTRIBUIDORA DE LICORES, S.A.', anios: 1 },
+  { nombre: 'ABCO', anios: 1 },
+  { nombre: 'COMERCIALIZADORA DE ALIMENTOS Y BEBIDAS SAN MIGUEL', anios: 2 },
+  { nombre: 'DISTRIBUIDORA DE LICORES', anios: 1 },
   { nombre: 'EMBOTELLADORA CENTRAL', anios: 2 },
   { nombre: 'EMBOTELLADORA LA MARIPOSA', anios: 2 },
-  { nombre: 'IMPORTADORA Y DISTRIBUIDORA DE APARATOS ELECTRICOS, S.A.', anios: 1 },
-  { nombre: 'M.D.T. INTERNACIONAL, S.A.', anios: 1 },
-  { nombre: 'PRODUCTOS LACTEOS DE CENTROAMERICA, S.A.', anios: 1 },
-  { nombre: 'RICZA, SOCIEDAD ANONIMA', anios: 1 },
-  { nombre: 'SAVONA DE GUATEMALA, S.A.', anios: 1 },
-  { nombre: 'SERVICOCINAS, SOCIEDAD ANONIMA', anios: 1 },
-  { nombre: 'SUPER VITAMINAS, S.A.', anios: 1 },
-  { nombre: 'UNISUPER S.A.', anios: 1 },
-  { nombre: 'VIVENDO S,A', anios: 1 },
-  { nombre: 'ARRENDADORA SARITA, S.A.', anios: 1 },
-  { nombre: 'INDUSTRIAS DEL ATLANTICO, S.A.', anios: 2 },
+  { nombre: 'GARANTIA IMPORTADORA Y DISTRIBUIDORA DE APARATOS ELECTRICOS', anios: 1 },
+  { nombre: 'M.D.T. INTERNACIONAL', anios: 1 },
+  { nombre: 'PRODUCTOS LACTEOS DE CENTROAMERICA', anios: 1 },
+  { nombre: 'RICZA', anios: 1 },
+  { nombre: 'SAVONA DE GUATEMALA', anios: 1 },
+  { nombre: 'SERVICOCINAS', anios: 1 },
+  { nombre: 'SUPER VITAMINAS', anios: 1 },
+  { nombre: 'UNISUPER', anios: 1 },
+  { nombre: 'VIVENDO', anios: 1 },
 ]
 
 function buscarClienteGarantia(clienteTexto) {
@@ -514,14 +512,16 @@ export default function ModuloTecnicos({
                         Garantía vencida — No atender bajo garantía
                       </p>
                       {alertasVencidas.map((a, i) => (
-                        <div key={i} className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3 bg-rose-50 border border-rose-100 rounded-lg px-3 py-2">
-                          <div className="flex items-center gap-2 shrink-0">
+                        <div key={i} className="bg-rose-50 border border-rose-100 rounded-lg px-3 py-2 space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-mono text-[10px] font-bold text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded">#{a.ticket['N° REFERENCIA']}</span>
                             <span className="text-[10px] font-semibold text-slate-500">{a.ticket.tecnico}</span>
+                            <span className="text-[9px] font-semibold text-rose-600 ml-auto shrink-0">Fab: {a.garantia.fabDisplay} · Venció: {a.garantia.vencDisplay} · {a.garantia.aniosGarantia}a</span>
                           </div>
-                          <p className="flex-1 text-[10px] font-semibold text-slate-700 truncate">{a.ticket['NEGOCIO']}</p>
-                          <div className="text-right text-[9px] font-semibold text-rose-600 shrink-0">
-                            Fab: {a.garantia.fabDisplay} · Venció: {a.garantia.vencDisplay} · {a.garantia.aniosGarantia}a
+                          <p className="text-[10px] font-semibold text-slate-700">{a.ticket['NEGOCIO']}</p>
+                          <div className="flex flex-col sm:flex-row sm:gap-4 text-[9px] font-medium text-slate-500">
+                            <p>📍 {a.ticket['DIRECCIÓN'] || '-'}</p>
+                            <p className="shrink-0">🧊 Serie: <span className="font-bold text-slate-700">{a.ticket['SERIE'] || '-'}</span></p>
                           </div>
                         </div>
                       ))}
@@ -534,13 +534,17 @@ export default function ModuloTecnicos({
                         Garantía vigente
                       </p>
                       {alertasVigentes.map((a, i) => (
-                        <div key={i} className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
-                          <div className="flex items-center gap-2 shrink-0">
+                        <div key={i} className="bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-mono text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">#{a.ticket['N° REFERENCIA']}</span>
                             <span className="text-[10px] font-semibold text-slate-500">{a.ticket.tecnico}</span>
+                            <span className="text-[9px] font-semibold text-emerald-600 ml-auto shrink-0">{a.garantia.diasRestantes}d restantes · {a.garantia.aniosGarantia}a</span>
                           </div>
-                          <p className="flex-1 text-[10px] font-semibold text-slate-700 truncate">{a.ticket['NEGOCIO']}</p>
-                          <span className="text-[9px] font-semibold text-emerald-600 shrink-0">{a.garantia.diasRestantes}d restantes · {a.garantia.aniosGarantia}a</span>
+                          <p className="text-[10px] font-semibold text-slate-700">{a.ticket['NEGOCIO']}</p>
+                          <div className="flex flex-col sm:flex-row sm:gap-4 text-[9px] font-medium text-slate-500">
+                            <p>📍 {a.ticket['DIRECCIÓN'] || '-'}</p>
+                            <p className="shrink-0">🧊 Serie: <span className="font-bold text-slate-700">{a.ticket['SERIE'] || '-'}</span></p>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -552,10 +556,14 @@ export default function ModuloTecnicos({
                         Verificar serie manualmente
                       </p>
                       {alertasSinSerie.map((a, i) => (
-                        <div key={i} className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-                          <span className="font-mono text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded shrink-0">#{a.ticket['N° REFERENCIA']}</span>
-                          <p className="flex-1 text-[10px] font-semibold text-slate-700 truncate">{a.ticket['NEGOCIO']} — {a.ticket['CLIENTE']}</p>
-                          <span className="text-[9px] font-semibold text-amber-600 shrink-0">Serie: "{a.ticket['SERIE']}" · {a.garantia.aniosGarantia}a</span>
+                        <div key={i} className="bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-mono text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">#{a.ticket['N° REFERENCIA']}</span>
+                            <span className="text-[10px] font-semibold text-slate-500">{a.ticket.tecnico}</span>
+                            <span className="text-[9px] font-semibold text-amber-600 ml-auto shrink-0">Serie: "{a.ticket['SERIE']}" · {a.garantia.aniosGarantia}a</span>
+                          </div>
+                          <p className="text-[10px] font-semibold text-slate-700">{a.ticket['NEGOCIO']} — {a.ticket['CLIENTE']}</p>
+                          <p className="text-[9px] font-medium text-slate-500">📍 {a.ticket['DIRECCIÓN'] || '-'}</p>
                         </div>
                       ))}
                     </div>
