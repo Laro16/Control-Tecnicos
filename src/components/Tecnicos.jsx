@@ -45,7 +45,7 @@ function normalizarFechaExcel(fechaTexto) {
 
 // ── GARANTÍA ──
 const CLIENTES_GARANTIA = [
-  { nombre: 'ABCO, S.A.', anios: 1 },
+  { nombre: 'ABCO', anios: 1 },
   { nombre: 'COMERCIALIZADORA DE ALIMENTOS Y BEBIDAS SAN MIGUEL', anios: 2 },
   { nombre: 'DISTRIBUIDORA DE LICORES', anios: 1 },
   { nombre: 'EMBOTELLADORA CENTRAL', anios: 2 },
@@ -59,7 +59,6 @@ const CLIENTES_GARANTIA = [
   { nombre: 'SUPER VITAMINAS', anios: 1 },
   { nombre: 'UNISUPER', anios: 1 },
   { nombre: 'VIVENDO', anios: 1 },
-  { nombre: 'ARRENDADORA SARITA, S.A.', anios: 1 },
 ]
 
 function buscarClienteGarantia(clienteTexto) {
@@ -638,9 +637,9 @@ export default function ModuloTecnicos({
                           : (g && !g.vencida && !g.sinDatosSerie) ? 'ring-1 ring-emerald-200 bg-emerald-50/20' 
                           : 'bg-white'
                         return (
-                          <div key={i} className={`rounded-lg p-3 border border-slate-100 ${ringClass}`}>
+                          <div key={i} className={`rounded-lg border border-slate-200 overflow-hidden ${ringClass}`}>
                             {/* Badge row */}
-                            <div className="flex items-center gap-1.5 flex-wrap mb-2">
+                            <div className="flex items-center gap-1.5 flex-wrap px-3 pt-3 pb-2">
                               <span className="font-mono text-[10px] font-bold text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-100">#{t['N° REFERENCIA']}</span>
                               <TicketBadge estado={t['ESTADO']} />
                               {g?.vencida && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-rose-600 text-white flex items-center gap-0.5"><ShieldAlert size={9} /> VENCIDA</span>}
@@ -648,45 +647,65 @@ export default function ModuloTecnicos({
                               {g?.sinDatosSerie && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500 text-white flex items-center gap-0.5"><ShieldAlert size={9} /> VERIFICAR</span>}
                             </div>
                             
-                            <p className="text-sm font-semibold text-slate-800 mb-1">{t['NEGOCIO']}</p>
+                            {/* Negocio */}
+                            <div className="px-3 pb-2">
+                              <p className="text-[13px] font-bold text-slate-800 leading-tight">{t['NEGOCIO']}</p>
+                            </div>
                             
+                            {/* Descripción Inicial */}
                             {t['DESCRIPCIÓN INICIAL'] && t['DESCRIPCIÓN INICIAL'] !== '-' && (
-                              <div className="mb-2 text-[11px] text-slate-500 bg-slate-50 rounded-md px-3 py-2 border-l-2 border-sky-300">
-                                <span className="font-semibold text-slate-600 block mb-0.5 text-[10px] uppercase">Descripción Inicial</span>{t['DESCRIPCIÓN INICIAL']}
+                              <div className="mx-3 mb-2 text-[11px] text-slate-600 bg-sky-50 rounded-md px-3 py-2 border-l-[3px] border-sky-400">
+                                <span className="font-bold text-sky-700 block mb-0.5 text-[10px] uppercase">Descripción Inicial</span>
+                                <span className="font-medium leading-relaxed">{t['DESCRIPCIÓN INICIAL']}</span>
                               </div>
                             )}
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-0.5 text-[11px] text-slate-500">
-                              <p><span className="font-semibold text-slate-700">📍</span> {t['DIRECCIÓN'] || '-'}</p>
-                              <p><span className="font-semibold text-slate-700">📞</span> {t['TELÉFONO']}</p>
-                              <p><span className="font-semibold text-slate-700">👤</span> {t['CLIENTE']}</p>
-                              <p><span className="font-semibold text-slate-700">🧊</span> {t['SERIE'] || '-'} · <span className="font-semibold text-slate-700">📦</span> {t['MODELO'] || '-'}</p>
+                            {/* Datos del ticket - grid estructurado */}
+                            <div className="mx-3 mb-3 bg-slate-50 rounded-md p-2.5 space-y-1">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
+                                <div className="flex gap-1.5">
+                                  <span className="text-slate-400 shrink-0 w-12 font-semibold">DIR</span>
+                                  <span className="text-slate-700 font-medium">{t['DIRECCIÓN'] || '-'}</span>
+                                </div>
+                                <div className="flex gap-1.5">
+                                  <span className="text-slate-400 shrink-0 w-12 font-semibold">TEL</span>
+                                  <span className="text-slate-700 font-medium">{t['TELÉFONO']}</span>
+                                </div>
+                                <div className="flex gap-1.5">
+                                  <span className="text-slate-400 shrink-0 w-12 font-semibold">CLIENTE</span>
+                                  <span className="text-slate-700 font-medium">{t['CLIENTE']}</span>
+                                </div>
+                                <div className="flex gap-1.5">
+                                  <span className="text-slate-400 shrink-0 w-12 font-semibold">SERIE</span>
+                                  <span className="text-slate-700 font-mono font-semibold text-[10px]">{t['SERIE'] || '-'}</span>
+                                </div>
+                              </div>
                             </div>
 
                             {/* Garantía inline */}
                             {g?.vencida && (
-                              <div className="mt-2 text-[10px] text-rose-700 bg-rose-100 rounded-md px-3 py-1.5 border-l-2 border-rose-500">
+                              <div className="mx-3 mb-2 text-[10px] text-rose-700 bg-rose-100 rounded-md px-3 py-1.5 border-l-[3px] border-rose-500">
                                 <span className="font-bold">⚠️ NO ATENDER — </span>
                                 Fab: {g.fabDisplay} · Venció: {g.vencDisplay} · {g.aniosGarantia}a ({g.clienteNombre})
                               </div>
                             )}
                             {g && !g.vencida && !g.sinDatosSerie && (
-                              <div className="mt-2 text-[10px] text-emerald-700 bg-emerald-50 rounded-md px-3 py-1.5 border-l-2 border-emerald-400">
+                              <div className="mx-3 mb-2 text-[10px] text-emerald-700 bg-emerald-50 rounded-md px-3 py-1.5 border-l-[3px] border-emerald-400">
                                 <span className="font-bold">✅ VIGENTE — </span>
                                 Fab: {g.fabDisplay} · Vence: {g.vencDisplay} · {g.diasRestantes}d ({g.clienteNombre})
                               </div>
                             )}
                             {g?.sinDatosSerie && (
-                              <div className="mt-2 text-[10px] text-amber-700 bg-amber-50 rounded-md px-3 py-1.5 border-l-2 border-amber-400">
+                              <div className="mx-3 mb-2 text-[10px] text-amber-700 bg-amber-50 rounded-md px-3 py-1.5 border-l-[3px] border-amber-400">
                                 <span className="font-bold">⚠️ VERIFICAR — </span>
                                 {g.clienteNombre} ({g.aniosGarantia}a) — Serie: "{t['SERIE']}"
                               </div>
                             )}
                             
                             {t['ESTADO_LIMPIO'].includes('PROCESO') && (
-                              <div className="mt-2 text-[10px] text-amber-700 bg-amber-50 rounded-md px-3 py-1.5 border-l-2 border-amber-300">
+                              <div className="mx-3 mb-3 text-[10px] text-rose-700 bg-rose-50 rounded-md px-3 py-1.5 border-l-[3px] border-rose-400">
                                 <span className="font-bold block mb-0.5 uppercase text-[9px]">Comentario en Proceso</span>
-                                {obtenerComentarioProceso(t)}
+                                <span className="font-semibold">{obtenerComentarioProceso(t)}</span>
                               </div>
                             )}
                           </div>
