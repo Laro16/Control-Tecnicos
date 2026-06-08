@@ -52,10 +52,10 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
       return new Date(pA[2], pA[1]-1, pA[0]) - new Date(pB[2], pB[1]-1, pB[0])
     })
 
-  const listaTecnicosFinalizados = Array.from(new Set(ticketsFinalizados.map(t => t.tecnico))).sort()
+  const tecnicosUnicos = Array.from(new Set(ticketsFinalizados.map(t => t.tecnico)))
 
   const matrizFinalizadas = {}
-  listaTecnicosFinalizados.forEach(tec => {
+  tecnicosUnicos.forEach(tec => {
     matrizFinalizadas[tec] = { totales: 0 }
     columnasFechas.forEach(f => { matrizFinalizadas[tec][f] = { count: 0, detalles: [] } })
   })
@@ -71,6 +71,9 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
       matrizFinalizadas[t.tecnico].totales++
     }
   })
+
+  // Ordenar técnicos por total de cierres (mayor a menor)
+  const listaTecnicosFinalizados = tecnicosUnicos.sort((a, b) => matrizFinalizadas[b].totales - matrizFinalizadas[a].totales)
 
   const totalesFecha = {}
   let granTotalFinalizadas = 0
@@ -260,14 +263,15 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
                     <td className="px-3 py-2 text-[11px] uppercase font-black text-slate-800 border-r-2 border-r-black whitespace-nowrap">{tec}</td>
                     {columnasFechas.map(f => {
                       const d = matrizFinalizadas[tec][f]
+                      const colorNum = d.count === 0 ? 'text-slate-300' : d.count < 5 ? 'text-rose-600' : 'text-sky-700'
                       return (
                         <td key={f}
                           onClick={() => { if (d.count > 0) setModalDetalles({ tec, fecha: f, detalles: d.detalles }) }}
-                          className={`px-3 py-2 text-center text-xs font-black border-r-2 border-r-black whitespace-nowrap ${d.count > 0 ? 'text-sky-700 hover:bg-sky-100 cursor-pointer' : 'text-slate-300'}`}
+                          className={`px-3 py-2 text-center text-xs font-black border-r-2 border-r-black whitespace-nowrap ${colorNum} ${d.count > 0 ? 'hover:bg-sky-100 cursor-pointer' : ''}`}
                         >{d.count === 0 ? '-' : d.count}</td>
                       )
                     })}
-                    <td className="px-3 py-2 text-center text-xs font-black text-slate-900 bg-slate-100/60 whitespace-nowrap">{matrizFinalizadas[tec].totales}</td>
+                    <td className={`px-3 py-2 text-center text-xs font-black bg-slate-100/60 whitespace-nowrap ${matrizFinalizadas[tec].totales < 5 ? 'text-rose-600' : 'text-slate-900'}`}>{matrizFinalizadas[tec].totales}</td>
                   </tr>
                 ))}
               </tbody>
