@@ -220,6 +220,7 @@ export default function App() {
             allTickets={allTickets}
             nombreArchivo={nombreArchivo}
             fechaSubidaExcel={fechaSubidaExcel}
+            onNavigate={setTab}
           />
         </div>
         <div className={tab === 'tecnicos' ? 'block fade-in' : 'hidden'}>
