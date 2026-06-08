@@ -252,76 +252,103 @@ export default function ModuloPendientes() {
       ) : filtrados.length === 0 ? (
         <div className="text-center py-16 text-slate-400 card"><ClipboardList size={40} className="mx-auto mb-3 text-slate-300" /><p className="text-sm font-semibold text-slate-500">No hay registros</p></div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-3">
           {filtrados.map(item => {
             const isDone = item.estado === 'Realizado' || item.estado === 'Completada' || item.estado === 'Pagado'
+            const isCancelled = item.estado === 'Cancelado'
+            const isOverdue = item.fecha && new Date(item.fecha) < new Date() && !isDone && !isCancelled
             return (
-              <div key={item.id} className={`card overflow-hidden transition-all ${isDone ? 'opacity-60' : 'hover:shadow-md hover:border-sky-200'}`}>
-                {item.tipo === 'Particular' && <div className="h-1 bg-gradient-to-r from-sky-400 to-blue-600"></div>}
+              <div key={item.id} className={`card-section transition-all ${isDone || isCancelled ? 'opacity-50' : ''}`}>
+                {/* Header oscuro */}
+                <div className={`px-4 py-2 flex items-center justify-between gap-2 ${item.tipo === 'Particular' ? 'bg-gradient-to-r from-slate-800 to-slate-700' : 'bg-slate-800'}`}>
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <p className={`font-bold text-white text-xs uppercase tracking-wide truncate ${isDone ? 'line-through opacity-60' : ''}`}>{item.titulo}</p>
+                    {isOverdue && <span className="text-[8px] font-bold bg-rose-500 text-white px-1.5 py-0.5 rounded shrink-0 animate-pulse">VENCIDO</span>}
+                  </div>
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    <button onClick={() => abrirEditar(item)} className="p-1.5 rounded-md hover:bg-slate-600 text-slate-400 hover:text-white transition"><Pencil size={12} /></button>
+                    {item.tipo === 'Tarea' && (
+                      <button onClick={() => eliminar(item.id)} className="p-1.5 rounded-md hover:bg-slate-600 text-slate-400 hover:text-rose-300 transition"><Trash2 size={12} /></button>
+                    )}
+                  </div>
+                </div>
 
-                <div className="p-4 space-y-3">
-                  {/* Header */}
-                  <div className="flex items-start justify-between gap-3">
-                    <p className={`font-bold text-slate-800 text-sm leading-tight flex-1 ${isDone ? 'line-through text-slate-400' : ''}`}>{item.titulo}</p>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button onClick={() => abrirEditar(item)} className="p-1.5 rounded-md hover:bg-slate-100 text-sky-600 transition"><Pencil size={14} /></button>
-                      {item.tipo === 'Tarea' && (
-                        <button onClick={() => eliminar(item.id)} className="p-1.5 rounded-md hover:bg-slate-100 text-rose-500 transition"><Trash2 size={14} /></button>
-                      )}
+                {/* Contenido */}
+                <div className="p-3 space-y-2.5">
+                  {/* Badges de estado */}
+                  <div className="flex items-center justify-between flex-wrap gap-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <button onClick={() => cambiarEstado(item.id, item.estado, item.tipo)} className={`text-[10px] font-bold px-2.5 py-1 rounded-md border cursor-pointer hover:shadow-sm transition ${estBadge(item.estado)}`}>{item.estado}</button>
+                      <span className={`text-[10px] font-bold px-2 py-1 rounded-md border ${prioBadge(item.prioridad)}`}>{item.prioridad}</span>
                     </div>
+                    {item.fecha && (
+                      <span className={`text-[10px] font-semibold px-2 py-1 rounded-md ${isOverdue ? 'text-rose-600 bg-rose-50 border border-rose-200' : 'text-slate-500 bg-slate-50 border border-slate-200'}`}>
+                        📅 {item.fecha}
+                      </span>
+                    )}
                   </div>
 
                   {/* Datos Particular */}
                   {item.tipo === 'Particular' && (
-                    <div className="grid grid-cols-2 gap-2 text-[10px] bg-sky-50 p-3 rounded-lg border border-sky-100">
-                      <div><span className="font-bold text-sky-800 block">ORDEN</span><span className="font-mono font-bold text-sky-700">{item.orden || '-'}</span></div>
-                      <div><span className="font-bold text-sky-800 block">CORRELATIVO</span><span className="font-mono font-bold text-sky-700">{item.correlativo || '-'}</span></div>
-                      <div className="col-span-2"><span className="font-bold text-sky-800">NEGOCIO:</span> <span className="font-semibold text-slate-700">{item.negocio || '-'}</span></div>
-                      <div><span className="font-bold text-sky-800">NIT:</span> <span className="font-semibold text-slate-700">{item.nit || '-'}</span></div>
-                      <div className="col-span-2"><span className="font-bold text-sky-800">DIR:</span> <span className="font-semibold text-slate-700">{item.direccion || '-'}</span></div>
+                    <div className="bg-slate-50 rounded-lg p-2.5 space-y-1">
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
+                        <div className="flex gap-1.5">
+                          <span className="text-slate-400 shrink-0 w-16 font-semibold">ORDEN</span>
+                          <span className="font-mono font-bold text-slate-700">{item.orden || '-'}</span>
+                        </div>
+                        <div className="flex gap-1.5">
+                          <span className="text-slate-400 shrink-0 w-16 font-semibold">CORR</span>
+                          <span className="font-mono font-bold text-slate-700">{item.correlativo || '-'}</span>
+                        </div>
+                        <div className="flex gap-1.5 col-span-2">
+                          <span className="text-slate-400 shrink-0 w-16 font-semibold">NEGOCIO</span>
+                          <span className="font-semibold text-slate-700">{item.negocio || '-'}</span>
+                        </div>
+                        <div className="flex gap-1.5">
+                          <span className="text-slate-400 shrink-0 w-16 font-semibold">NIT</span>
+                          <span className="font-semibold text-slate-700">{item.nit || '-'}</span>
+                        </div>
+                        <div className="flex gap-1.5 col-span-2">
+                          <span className="text-slate-400 shrink-0 w-16 font-semibold">DIR</span>
+                          <span className="font-medium text-slate-600">{item.direccion || '-'}</span>
+                        </div>
+                      </div>
                     </div>
                   )}
                   
-                  {item.descripcion && <p className="text-[11px] text-slate-600 leading-relaxed font-medium">{item.descripcion}</p>}
+                  {item.descripcion && (
+                    <div className="text-[11px] text-slate-500 bg-slate-50 rounded-md px-3 py-2 border-l-[3px] border-sky-300">
+                      <span className="font-medium leading-relaxed">{item.descripcion}</span>
+                    </div>
+                  )}
                   
                   {/* Archivos */}
                   {item.archivos && item.archivos.length > 0 && (
-                    <div className="pt-3 border-t border-slate-100">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1"><Paperclip size={11} /> {item.archivos.length} adjuntos</span>
-                        <button onClick={() => descargarZIP(item)} className="text-[10px] font-bold flex items-center gap-1 text-sky-600 bg-sky-50 px-2 py-1 rounded-md hover:bg-sky-100 transition"><DownloadCloud size={11}/> ZIP</button>
+                    <div className="pt-2 border-t border-slate-100">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[9px] font-semibold text-slate-400 flex items-center gap-1 uppercase"><Paperclip size={10} /> {item.archivos.length} adjuntos</span>
+                        <button onClick={() => descargarZIP(item)} className="text-[9px] font-bold flex items-center gap-1 text-sky-600 hover:text-sky-800 transition"><DownloadCloud size={10}/> ZIP</button>
                       </div>
-                      <div className="space-y-1">
+                      <div className="flex flex-wrap gap-1">
                         {item.archivos.map((arch, idx) => {
                           const archObj = typeof arch === 'string' ? JSON.parse(arch) : arch
                           const url = archObj.url, nombre = archObj.nombre, tipoDoc = archObj.tipoDoc || 'Adjunto'
                           const isImage = url.match(/\.(jpeg|jpg|gif|png|webp)$/i) || nombre.match(/\.(jpeg|jpg|gif|png|webp)$/i)
                           return (
-                            <div key={idx} className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-md px-2.5 py-1.5 text-[10px] hover:border-sky-200 transition">
-                              <div className="flex items-center gap-1.5 overflow-hidden">
-                                {item.tipo === 'Particular' && <span className="bg-sky-100 text-sky-700 font-bold px-1.5 py-0.5 rounded text-[9px] shrink-0">{tipoDoc}</span>}
-                                {isImage ? (
-                                  <button onClick={() => setImgPreview(url)} className="text-sky-600 hover:text-sky-800 flex items-center gap-1 truncate font-semibold"><ImageIcon size={11} className="shrink-0"/><span className="truncate">{nombre}</span></button>
-                                ) : (
-                                  <a href={url} target="_blank" rel="noopener noreferrer" className="text-slate-600 hover:text-slate-800 flex items-center gap-1 truncate font-semibold"><FileText size={11} className="shrink-0"/><span className="truncate">{nombre}</span></a>
-                                )}
-                              </div>
-                              <a href={url} target="_blank" rel="noopener noreferrer" download={nombre} className="text-sky-600 hover:text-sky-800 p-1 rounded shrink-0"><Download size={12} /></a>
+                            <div key={idx} className="flex items-center gap-1 bg-slate-50 border border-slate-100 rounded px-2 py-1 text-[9px] hover:border-sky-200 transition">
+                              {item.tipo === 'Particular' && <span className="bg-sky-100 text-sky-700 font-bold px-1 py-0.5 rounded text-[8px]">{tipoDoc}</span>}
+                              {isImage ? (
+                                <button onClick={() => setImgPreview(url)} className="text-sky-600 hover:text-sky-800 font-semibold truncate max-w-[120px]">{nombre}</button>
+                              ) : (
+                                <a href={url} target="_blank" rel="noopener noreferrer" className="text-slate-600 hover:text-slate-800 font-semibold truncate max-w-[120px]">{nombre}</a>
+                              )}
+                              <a href={url} target="_blank" rel="noopener noreferrer" download={nombre} className="text-sky-500 hover:text-sky-700"><Download size={10} /></a>
                             </div>
                           )
                         })}
                       </div>
                     </div>
                   )}
-
-                  {/* Footer: badges */}
-                  <div className="flex items-center justify-between flex-wrap pt-3 border-t border-slate-100">
-                    <div className="flex items-center gap-1.5">
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${prioBadge(item.prioridad)}`}>{item.prioridad}</span>
-                      <button onClick={() => cambiarEstado(item.id, item.estado, item.tipo)} className={`text-[10px] font-bold px-2 py-0.5 rounded-md border cursor-pointer hover:opacity-80 transition ${estBadge(item.estado)}`}>{item.estado}</button>
-                    </div>
-                    {item.fecha && <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${new Date(item.fecha) < new Date() && !isDone ? 'text-rose-600 bg-rose-50 border border-rose-200' : 'text-slate-500 bg-slate-50 border border-slate-200'}`}>📅 {item.fecha}</span>}
-                  </div>
                 </div>
               </div>
             )
@@ -333,9 +360,9 @@ export default function ModuloPendientes() {
       {modal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg slide-up max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 sticky top-0 bg-white z-10">
-              <h3 className="font-bold text-slate-800 text-sm">{editId ? 'Editar' : 'Nuevo'} {form.tipo === 'Particular' ? 'Servicio' : 'Pendiente'}</h3>
-              <button onClick={() => setModal(false)} className="p-1 rounded-md hover:bg-slate-100 text-slate-400 transition"><X size={16} /></button>
+            <div className="flex items-center justify-between px-5 py-3 sticky top-0 bg-slate-800 z-10 rounded-t-xl">
+              <h3 className="font-bold text-white text-xs uppercase tracking-wider">{editId ? 'Editar' : 'Nuevo'} {form.tipo === 'Particular' ? 'Servicio Particular' : 'Pendiente'}</h3>
+              <button onClick={() => setModal(false)} className="p-1 rounded-md hover:bg-slate-700 text-slate-400 hover:text-white transition"><X size={14} /></button>
             </div>
             
             <div className="px-5 py-4 space-y-4">
