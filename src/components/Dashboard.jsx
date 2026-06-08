@@ -48,7 +48,7 @@ function contarGarantias(tickets) {
   return { vencidas, vigentes, sinSerie }
 }
 
-export default function Dashboard({ allTickets, nombreArchivo, fechaSubidaExcel }) {
+export default function Dashboard({ allTickets, nombreArchivo, fechaSubidaExcel, onNavigate }) {
   const stats = useMemo(() => {
     if (allTickets.length === 0) return null
 
@@ -135,6 +135,7 @@ export default function Dashboard({ allTickets, nombreArchivo, fechaSubidaExcel 
           sub={`de ${stats.total} totales`}
           icon={Clock}
           color="sky"
+          onClick={() => onNavigate('tecnicos')}
         />
         <KpiCard 
           label="En Proceso" 
@@ -142,6 +143,7 @@ export default function Dashboard({ allTickets, nombreArchivo, fechaSubidaExcel 
           sub={`${stats.asignados} asignados · ${stats.agencia} agencia`}
           icon={Wrench}
           color="amber"
+          onClick={() => onNavigate('tecnicos')}
         />
         <KpiCard 
           label="Finalizados" 
@@ -149,6 +151,7 @@ export default function Dashboard({ allTickets, nombreArchivo, fechaSubidaExcel 
           sub={`${stats.tecnicos} técnicos activos`}
           icon={CheckCircle}
           color="emerald"
+          onClick={() => onNavigate('tablas')}
         />
         <KpiCard 
           label="Críticos (+72h)" 
@@ -157,11 +160,12 @@ export default function Dashboard({ allTickets, nombreArchivo, fechaSubidaExcel 
           icon={AlertTriangle}
           color={stats.criticos > 0 ? 'rose' : 'slate'}
           alert={stats.criticos > 0}
+          onClick={() => onNavigate('tablas')}
         />
       </div>
 
       {/* ── Envejecimiento visual ── */}
-      <div className="card-section">
+      <div className="card-section cursor-pointer hover:ring-1 hover:ring-sky-200 transition-all" onClick={() => onNavigate('tablas')}>
         <div className="px-4 py-2.5 bg-slate-800">
           <p className="text-[11px] font-bold text-white uppercase tracking-wider flex items-center gap-2">
             <Clock size={12} /> Distribución de Envejecimiento
@@ -180,7 +184,7 @@ export default function Dashboard({ allTickets, nombreArchivo, fechaSubidaExcel 
       {/* ── Dos columnas: Productividad + Carga ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Productividad */}
-        <div className="card-section">
+        <div className="card-section cursor-pointer hover:ring-1 hover:ring-sky-200 transition-all" onClick={() => onNavigate('tablas')}>
           <div className="px-4 py-2.5 bg-slate-800">
             <p className="text-[11px] font-bold text-white uppercase tracking-wider flex items-center gap-2">
               <TrendingUp size={12} /> Productividad — Cierres por Técnico
@@ -207,7 +211,7 @@ export default function Dashboard({ allTickets, nombreArchivo, fechaSubidaExcel 
         </div>
 
         {/* Carga pendiente */}
-        <div className="card-section">
+        <div className="card-section cursor-pointer hover:ring-1 hover:ring-sky-200 transition-all" onClick={() => onNavigate('tecnicos')}>
           <div className="px-4 py-2.5 bg-slate-800">
             <p className="text-[11px] font-bold text-white uppercase tracking-wider flex items-center gap-2">
               <Users size={12} /> Carga Pendiente por Técnico
@@ -236,7 +240,7 @@ export default function Dashboard({ allTickets, nombreArchivo, fechaSubidaExcel 
 
       {/* ── Garantías resumen ── */}
       {(stats.garantias.vencidas > 0 || stats.garantias.vigentes > 0 || stats.garantias.sinSerie > 0) && (
-        <div className="card-section">
+        <div className="card-section cursor-pointer hover:ring-1 hover:ring-sky-200 transition-all" onClick={() => onNavigate('tecnicos')}>
           <div className="px-4 py-2.5 bg-slate-800">
             <p className="text-[11px] font-bold text-white uppercase tracking-wider flex items-center gap-2">
               <ShieldAlert size={12} /> Resumen de Garantías
@@ -279,7 +283,7 @@ export default function Dashboard({ allTickets, nombreArchivo, fechaSubidaExcel 
 
 // ── Componentes internos ──
 
-function KpiCard({ label, value, sub, icon: Icon, color, alert }) {
+function KpiCard({ label, value, sub, icon: Icon, color, alert, onClick }) {
   const colors = {
     sky: 'from-sky-500 to-sky-600',
     amber: 'from-amber-500 to-amber-600',
@@ -288,7 +292,7 @@ function KpiCard({ label, value, sub, icon: Icon, color, alert }) {
     slate: 'from-slate-400 to-slate-500',
   }
   return (
-    <div className={`card overflow-hidden ${alert ? 'ring-2 ring-rose-300' : ''}`}>
+    <div onClick={onClick} className={`card overflow-hidden cursor-pointer hover:ring-1 hover:ring-sky-200 transition-all active:scale-[0.98] ${alert ? 'ring-2 ring-rose-300' : ''}`}>
       <div className={`h-1 bg-gradient-to-r ${colors[color]}`} />
       <div className="p-3.5">
         <div className="flex items-start justify-between">
