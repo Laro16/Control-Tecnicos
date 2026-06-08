@@ -263,7 +263,7 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
                     <td className="px-3 py-2 text-[11px] uppercase font-black text-slate-800 border-r-2 border-r-black whitespace-nowrap">{tec}</td>
                     {columnasFechas.map(f => {
                       const d = matrizFinalizadas[tec][f]
-                      const colorNum = d.count === 0 ? 'text-slate-300' : d.count < 5 ? 'text-rose-600' : 'text-sky-700'
+                      const colorNum = d.count === 0 ? 'text-slate-300' : d.count <= 3 ? 'text-rose-600' : d.count === 4 ? 'text-amber-500' : 'text-emerald-600'
                       return (
                         <td key={f}
                           onClick={() => { if (d.count > 0) setModalDetalles({ tec, fecha: f, detalles: d.detalles }) }}
@@ -271,7 +271,7 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
                         >{d.count === 0 ? '-' : d.count}</td>
                       )
                     })}
-                    <td className={`px-3 py-2 text-center text-xs font-black bg-slate-100/60 whitespace-nowrap ${matrizFinalizadas[tec].totales < 5 ? 'text-rose-600' : 'text-slate-900'}`}>{matrizFinalizadas[tec].totales}</td>
+                    <td className={`px-3 py-2 text-center text-xs font-black bg-slate-100/60 whitespace-nowrap ${matrizFinalizadas[tec].totales <= 3 ? 'text-rose-600' : matrizFinalizadas[tec].totales === 4 ? 'text-amber-500' : 'text-emerald-600'}`}>{matrizFinalizadas[tec].totales}</td>
                   </tr>
                 ))}
               </tbody>
