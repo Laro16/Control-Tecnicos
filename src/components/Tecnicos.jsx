@@ -457,7 +457,7 @@ export default function ModuloTecnicos({
             <DownloadCloud size={12} /> Excel
           </button>
         )}
-        <input ref={fileRef} type="file" className="hidden" onChange={onFileChange} accept=".xlsx,.xls,.csv" />
+        <input ref={fileRef} type="file" className="hidden" onChange={onFileChange} accept=".xlsx,.xls,.xlsm,.xlsb,.csv,.tsv,.ods" />
       </div>
 
       {allTickets.length > 0 && (
