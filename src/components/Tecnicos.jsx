@@ -45,8 +45,8 @@ function normalizarFechaExcel(fechaTexto) {
 
 // ── GARANTÍA ──
 const CLIENTES_GARANTIA = [
-  { nombre: 'ABCO, S.A.', anios: 1 },
-  { nombre: 'COMERCIALIZADORA  DE ALIMENTOS Y BEBIDAS SAN MIGUEL S.A', anios: 2 },
+  { nombre: 'ABCO', anios: 1 },
+  { nombre: 'COMERCIALIZADORA DE ALIMENTOS Y BEBIDAS SAN MIGUEL', anios: 2 },
   { nombre: 'DISTRIBUIDORA DE LICORES', anios: 1 },
   { nombre: 'EMBOTELLADORA CENTRAL', anios: 2 },
   { nombre: 'EMBOTELLADORA LA MARIPOSA', anios: 2 },
@@ -59,7 +59,6 @@ const CLIENTES_GARANTIA = [
   { nombre: 'SUPER VITAMINAS', anios: 1 },
   { nombre: 'UNISUPER', anios: 1 },
   { nombre: 'VIVENDO', anios: 1 },
-  { nombre: 'ARRENDADORA SARITA, S.A.', anios: 1 },
 ]
 
 function buscarClienteGarantia(clienteTexto) {
@@ -433,81 +432,100 @@ export default function ModuloTecnicos({
   return (
     <div className="space-y-4">
       {/* ── Upload zone ── */}
-      <div className="flex flex-col sm:flex-row gap-3 items-stretch">
-        <div
-          className={`card flex-1 flex items-center gap-4 p-4 cursor-pointer transition-all border-2 border-dashed ${dragging ? 'border-sky-400 bg-sky-50' : 'border-slate-200 hover:border-slate-300'}`}
-          onClick={() => fileRef.current.click()}
-          onDragOver={e => { e.preventDefault(); setDragging(true) }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={onDrop}
-        >
-          <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
-            <Upload size={18} className="text-slate-400" />
-          </div>
-          <div className="text-xs min-w-0">
-            <p className="font-semibold text-slate-600">Arrastra o selecciona el archivo de tickets</p>
-            {nombreArchivo && (
-              <div className="mt-1">
-                <p className="font-bold text-sky-600 truncate max-w-[200px] sm:max-w-xs">{nombreArchivo}</p>
-                {fechaSubidaExcel && <p className="text-slate-400 font-medium text-[10px] mt-0.5">Última carga: {fechaSubidaExcel}</p>}
-              </div>
-            )}
-          </div>
-          <input ref={fileRef} type="file" className="hidden" onChange={onFileChange} accept=".xlsx,.xls,.csv" />
+      <div
+        className={`card flex items-center gap-3 px-4 py-3 cursor-pointer transition-all border-2 border-dashed ${dragging ? 'border-sky-400 bg-sky-50' : 'border-slate-200 hover:border-slate-300'}`}
+        onClick={() => fileRef.current.click()}
+        onDragOver={e => { e.preventDefault(); setDragging(true) }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={onDrop}
+      >
+        <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+          <Upload size={15} className="text-slate-400" />
         </div>
-        
+        <div className="flex-1 min-w-0 text-xs">
+          {nombreArchivo ? (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-bold text-sky-600 truncate max-w-[250px]">{nombreArchivo}</span>
+              {fechaSubidaExcel && <span className="text-slate-400 font-medium text-[10px]">· {fechaSubidaExcel}</span>}
+            </div>
+          ) : (
+            <p className="font-semibold text-slate-500">Arrastra o selecciona el archivo de tickets</p>
+          )}
+        </div>
         {allTickets.length > 0 && (
-          <button onClick={descargarExcelCompleto} className="btn-success h-auto px-5 flex items-center gap-2 shrink-0">
-            <DownloadCloud size={15} /> Excel Completo
+          <button onClick={(e) => { e.stopPropagation(); descargarExcelCompleto() }} className="btn-success flex items-center gap-1.5 shrink-0 text-[10px]">
+            <DownloadCloud size={12} /> Excel
           </button>
         )}
+        <input ref={fileRef} type="file" className="hidden" onChange={onFileChange} accept=".xlsx,.xls,.csv" />
       </div>
 
       {allTickets.length > 0 && (
         <>
-          {/* ── Filtros ── */}
-          <div className="card p-4 space-y-3">
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1"><Filter size={10}/> Técnico</label>
-              <div className="flex flex-wrap gap-1.5">
-                <button onClick={() => setFiltroTecnico('Todos')} className={`pill ${filtroTecnico === 'Todos' ? 'pill-active' : 'pill-inactive'}`}>Todos</button>
-                {tecnicosConPendientes.map(t => (
-                  <button key={t} onClick={() => setFiltroTecnico(t)} className={`pill ${filtroTecnico === t ? 'pill-active' : 'pill-inactive'}`}>{t}</button>
-                ))}
+          {/* ── Stats strip + Filtros ── */}
+          <div className="card overflow-hidden">
+            {/* Stats strip */}
+            <div className="flex border-b border-slate-100">
+              <div className="flex-1 px-3 py-2 text-center border-r border-slate-100">
+                <p className="text-lg font-black text-slate-800 leading-none">{ticketsPendientesTotales.length}</p>
+                <p className="text-[9px] font-semibold text-slate-400 uppercase mt-0.5">Pendientes</p>
+              </div>
+              <div className="flex-1 px-3 py-2 text-center border-r border-slate-100">
+                <p className="text-lg font-black text-amber-600 leading-none">{ticketsPendientesTotales.filter(t => t.ESTADO_LIMPIO.includes('PROCESO')).length}</p>
+                <p className="text-[9px] font-semibold text-slate-400 uppercase mt-0.5">En Proceso</p>
+              </div>
+              <div className="flex-1 px-3 py-2 text-center border-r border-slate-100">
+                <p className="text-lg font-black text-sky-600 leading-none">{tecnicosConPendientes.length}</p>
+                <p className="text-[9px] font-semibold text-slate-400 uppercase mt-0.5">Técnicos</p>
+              </div>
+              <div className="flex-1 px-3 py-2 text-center">
+                <p className="text-lg font-black text-emerald-600 leading-none">{allTickets.filter(t => t.ESTADO_LIMPIO.includes('FINALIZADA')).length}</p>
+                <p className="text-[9px] font-semibold text-slate-400 uppercase mt-0.5">Finalizados</p>
               </div>
             </div>
-            
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-slate-100 pt-3">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Estado</label>
-                <div className="flex flex-wrap gap-1.5">
+
+            {/* Filtros */}
+            <div className="p-3 space-y-2.5">
+              <div>
+                <label className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block">Técnico</label>
+                <div className="flex flex-wrap gap-1">
+                  <button onClick={() => setFiltroTecnico('Todos')} className={`pill ${filtroTecnico === 'Todos' ? 'pill-active' : 'pill-inactive'}`}>Todos</button>
+                  {tecnicosConPendientes.map(t => (
+                    <button key={t} onClick={() => setFiltroTecnico(t)} className={`pill ${filtroTecnico === t ? 'pill-active' : 'pill-inactive'}`}>{t}</button>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-slate-100 pt-2.5">
+                <div className="flex flex-wrap gap-1 items-center">
+                  <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mr-1">Estado:</span>
                   {['Todos', 'Asignada a Técnico', 'Asignada a Agencia'].map(est => (
                     <button key={est} onClick={() => setFiltroEstadoGlobal(est)} className={`pill ${filtroEstadoGlobal === est ? 'pill-active' : 'pill-inactive'}`}>{est}</button>
                   ))}
                 </div>
+                <button onClick={generarPDFGlobalEnProceso} className="btn-danger flex items-center gap-1 text-[10px] shrink-0">
+                  <FileText size={11} /> PDF En Proceso
+                </button>
               </div>
-              <button onClick={generarPDFGlobalEnProceso} className="btn-danger flex items-center gap-1.5">
-                <FileText size={13} /> PDF Global "En Proceso"
-              </button>
             </div>
           </div>
 
           {/* ── Alertas Garantía (colapsable) ── */}
           {alertasGarantia.length > 0 && (
-            <div className="card-section fade-in">
+            <div className="card-section">
               <button
                 onClick={() => setGarantiaAbierta(!garantiaAbierta)}
-                className="w-full flex items-center justify-between px-4 py-2.5 bg-slate-50 hover:bg-slate-100 transition-colors"
+                className="w-full flex items-center justify-between px-4 py-2 bg-slate-50 hover:bg-slate-100 transition-colors"
               >
                 <div className="flex items-center gap-2">
-                  <ShieldAlert size={14} className="text-rose-500" />
-                  <span className="font-bold text-slate-700 text-xs uppercase tracking-wide">Alertas de Garantía</span>
+                  <ShieldAlert size={13} className="text-rose-500" />
+                  <span className="font-bold text-slate-600 text-[10px] uppercase tracking-wider">Alertas de Garantía</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  {alertasVencidas.length > 0 && <span className="text-[10px] font-bold bg-rose-100 text-rose-700 px-2 py-0.5 rounded-md">{alertasVencidas.length} vencida{alertasVencidas.length !== 1 ? 's' : ''}</span>}
-                  {alertasVigentes.length > 0 && <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-md">{alertasVigentes.length} vigente{alertasVigentes.length !== 1 ? 's' : ''}</span>}
-                  {alertasSinSerie.length > 0 && <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-md">{alertasSinSerie.length} sin serie</span>}
-                  <ChevronDown size={14} className={`text-slate-400 transition-transform ${garantiaAbierta ? 'rotate-180' : ''}`} />
+                <div className="flex items-center gap-1.5">
+                  {alertasVencidas.length > 0 && <span className="text-[9px] font-bold bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded">{alertasVencidas.length} vencida{alertasVencidas.length !== 1 ? 's' : ''}</span>}
+                  {alertasVigentes.length > 0 && <span className="text-[9px] font-bold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">{alertasVigentes.length} vigente{alertasVigentes.length !== 1 ? 's' : ''}</span>}
+                  {alertasSinSerie.length > 0 && <span className="text-[9px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">{alertasSinSerie.length} sin serie</span>}
+                  <ChevronDown size={13} className={`text-slate-400 transition-transform ${garantiaAbierta ? 'rotate-180' : ''}`} />
                 </div>
               </button>
 
@@ -599,33 +617,27 @@ export default function ModuloTecnicos({
               return (
                 <div key={tecnico} className="card-section fade-in">
                   {/* Header del técnico */}
-                  <div className="flex flex-col md:flex-row md:items-center justify-between px-4 py-3 bg-slate-50/80 border-b border-slate-100 gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-white shrink-0">
-                        <Wrench size={13} />
+                  <div className="bg-slate-800 px-4 py-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <p className="font-bold text-white text-xs uppercase tracking-wider">{tecnico}</p>
+                        <span className="text-[10px] font-semibold text-slate-400">{tickets.length} orden{tickets.length !== 1 ? 'es' : ''}</span>
                       </div>
-                      <div>
-                        <p className="font-bold text-slate-800 text-sm uppercase leading-tight">{tecnico}</p>
-                        <p className="text-[10px] font-medium text-slate-400">{tickets.length} orden{tickets.length !== 1 ? 'es' : ''}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2 w-full md:w-auto">
-                      {rutaActual && (
-                        <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-md px-2.5 py-1 max-w-xs">
-                          <MapPin size={11} className="text-sky-500 shrink-0" />
-                          <span className="text-[10px] font-semibold text-slate-600 uppercase truncate">{rutaActual}</span>
-                        </div>
-                      )}
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button onClick={() => {navigator.clipboard.writeText(buildMessage(tecnico, tickets, rutaActual)); alert('Copiado')}} className="btn-ghost flex items-center gap-1"><Copy size={11} /> Copiar</button>
-                        <button onClick={() => generarPDFIndividual(tecnico, tickets, rutaActual)} className="btn-danger">PDF</button>
-                        <button onClick={() => generarExcelTecnico(tecnico, tickets)} className="btn-success">Excel</button>
-                        <button onClick={() => setExpandido(p => ({ ...p, [tecnico]: !p[tecnico] }))} className="p-1.5 hover:bg-slate-200 rounded-md transition">
-                          <ChevronDown size={15} className={`transition-transform text-slate-500 ${expandido[tecnico] ? 'rotate-180' : ''}`} />
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button onClick={() => {navigator.clipboard.writeText(buildMessage(tecnico, tickets, rutaActual)); alert('Copiado')}} className="p-1.5 rounded-md hover:bg-slate-700 text-slate-400 hover:text-white transition" title="Copiar WhatsApp"><Copy size={12} /></button>
+                        <button onClick={() => generarPDFIndividual(tecnico, tickets, rutaActual)} className="p-1.5 rounded-md hover:bg-slate-700 text-slate-400 hover:text-white transition" title="Descargar PDF"><FileText size={12} /></button>
+                        <button onClick={() => generarExcelTecnico(tecnico, tickets)} className="p-1.5 rounded-md hover:bg-slate-700 text-slate-400 hover:text-white transition" title="Descargar Excel"><FileSpreadsheet size={12} /></button>
+                        <button onClick={() => setExpandido(p => ({ ...p, [tecnico]: !p[tecnico] }))} className="p-1.5 rounded-md hover:bg-slate-700 text-slate-400 hover:text-white transition ml-1">
+                          <ChevronDown size={14} className={`transition-transform ${expandido[tecnico] ? 'rotate-180' : ''}`} />
                         </button>
                       </div>
                     </div>
+                    {rutaActual && (
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <MapPin size={10} className="text-sky-400 shrink-0" />
+                        <span className="text-[10px] font-medium text-sky-300 uppercase">{rutaActual}</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Tickets expandidos */}
