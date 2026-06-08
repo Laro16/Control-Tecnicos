@@ -188,33 +188,60 @@ export default function ModuloPendientes() {
   const filtrados = filtro === 'Todos' ? itemsFiltrados : itemsFiltrados.filter(i => i.estado === filtro)
   const estadosFiltro = vistaActual === 'Tarea' ? ['Todos', ...ESTADOS_TAREA] : ['Todos', ...ESTADOS_PARTICULAR]
 
+  const pendientesCount = itemsFiltrados.filter(i => i.estado === 'Pendiente' || i.estado === 'Pendiente de pago').length
+  const procesoCount = itemsFiltrados.filter(i => i.estado === 'En proceso' || i.estado === 'En Proceso').length
+  const completadosCount = itemsFiltrados.filter(i => ['Realizado', 'Completada', 'Pagado'].includes(i.estado)).length
+
   return (
     <div className="space-y-4 fade-in">
-      {/* ── Selector de vista ── */}
-      <div className="flex gap-2">
-        {['Tarea', 'Particular'].map(v => (
-          <button key={v} onClick={() => { setVistaActual(v); setFiltro('Todos') }}
-            className={`flex-1 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
-              vistaActual === v 
-                ? 'bg-slate-800 text-white shadow-md' 
-                : 'bg-white text-slate-500 border border-slate-200 hover:border-slate-300'
-            }`}
-          >
-            {v === 'Tarea' ? '📋 Mis Pendientes' : '🔧 Servicios Particulares'}
-          </button>
-        ))}
-      </div>
-
-      {/* ── Filtros + Nuevo ── */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-        <div className="flex flex-wrap gap-1.5">
-          {estadosFiltro.map(e => (
-            <button key={e} onClick={() => setFiltro(e)} className={`pill ${filtro === e ? 'pill-active' : 'pill-inactive'}`}>{e}</button>
+      {/* ── Header con selector, stats y filtros ── */}
+      <div className="card overflow-hidden">
+        {/* Selector de vista */}
+        <div className="flex">
+          {['Tarea', 'Particular'].map(v => (
+            <button key={v} onClick={() => { setVistaActual(v); setFiltro('Todos') }}
+              className={`flex-1 py-2.5 text-xs font-bold uppercase tracking-wider transition-all ${
+                vistaActual === v 
+                  ? 'bg-slate-800 text-white' 
+                  : 'bg-slate-100 text-slate-400 hover:text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              {v === 'Tarea' ? '📋 Mis Pendientes' : '🔧 Servicios Particulares'}
+            </button>
           ))}
         </div>
-        <button onClick={abrirNuevo} className="btn-primary flex items-center gap-1.5 shrink-0">
-          <Plus size={14} /> Nuevo {vistaActual === 'Tarea' ? 'Pendiente' : 'Servicio'}
-        </button>
+
+        {/* Stats strip */}
+        <div className="flex border-b border-slate-100">
+          <div className="flex-1 px-3 py-2 text-center border-r border-slate-100">
+            <p className="text-lg font-black text-amber-600 leading-none">{pendientesCount}</p>
+            <p className="text-[9px] font-semibold text-slate-400 uppercase mt-0.5">Pendientes</p>
+          </div>
+          <div className="flex-1 px-3 py-2 text-center border-r border-slate-100">
+            <p className="text-lg font-black text-sky-600 leading-none">{procesoCount}</p>
+            <p className="text-[9px] font-semibold text-slate-400 uppercase mt-0.5">En Proceso</p>
+          </div>
+          <div className="flex-1 px-3 py-2 text-center border-r border-slate-100">
+            <p className="text-lg font-black text-emerald-600 leading-none">{completadosCount}</p>
+            <p className="text-[9px] font-semibold text-slate-400 uppercase mt-0.5">Completados</p>
+          </div>
+          <div className="flex-1 px-3 py-2 text-center">
+            <p className="text-lg font-black text-slate-800 leading-none">{itemsFiltrados.length}</p>
+            <p className="text-[9px] font-semibold text-slate-400 uppercase mt-0.5">Total</p>
+          </div>
+        </div>
+
+        {/* Filtros + botón nuevo */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 p-3">
+          <div className="flex flex-wrap gap-1">
+            {estadosFiltro.map(e => (
+              <button key={e} onClick={() => setFiltro(e)} className={`pill ${filtro === e ? 'pill-active' : 'pill-inactive'}`}>{e}</button>
+            ))}
+          </div>
+          <button onClick={abrirNuevo} className="btn-primary flex items-center gap-1.5 shrink-0">
+            <Plus size={13} /> Nuevo {vistaActual === 'Tarea' ? 'Pendiente' : 'Servicio'}
+          </button>
+        </div>
       </div>
 
       {error && !modal && <div className="text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2.5">{error}</div>}
