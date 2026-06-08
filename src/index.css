@@ -8,24 +8,23 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+  
+  /* Better focus states everywhere */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-sky-400 ring-offset-1;
+  }
+  
+  /* Selection color */
+  ::selection {
+    @apply bg-sky-200 text-sky-900;
+  }
 }
 
 @layer components {
-  /* Status badges - tickets */
-  .badge-asignada { @apply bg-amber-50 text-amber-800 border border-amber-200/80; }
-  .badge-proceso  { @apply bg-sky-50 text-sky-800 border border-sky-200/80; }
-  .badge-agencia  { @apply bg-violet-50 text-violet-800 border border-violet-200/80; }
-
-  /* Priority badges */
-  .prio-baja  { @apply bg-slate-50 text-slate-600 border border-slate-200; }
-  .prio-media { @apply bg-amber-50 text-amber-700 border border-amber-200; }
-  .prio-alta  { @apply bg-rose-50 text-rose-700 border border-rose-200; }
-
-  /* Task state badges */
-  .est-pendiente { @apply bg-amber-50 text-amber-800 border border-amber-200; }
-  .est-proceso   { @apply bg-sky-50 text-sky-800 border border-sky-200; }
-  .est-realizado { @apply bg-emerald-50 text-emerald-800 border border-emerald-200; }
-  .est-cancelado { @apply bg-slate-50 text-slate-400 border border-slate-200; }
+  /* Status badges */
+  .badge-asignada { @apply bg-amber-50 text-amber-700 border border-amber-200/80; }
+  .badge-proceso  { @apply bg-sky-50 text-sky-700 border border-sky-200/80; }
+  .badge-agencia  { @apply bg-violet-50 text-violet-700 border border-violet-200/80; }
 
   /* Cards */
   .card {
@@ -37,10 +36,10 @@
 
   /* Buttons */
   .btn-primary {
-    @apply px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white font-semibold text-xs rounded-lg transition-all active:scale-[0.97];
+    @apply px-3.5 py-1.5 bg-slate-800 hover:bg-slate-900 text-white font-semibold text-xs rounded-lg transition-all active:scale-[0.97] shadow-sm;
   }
   .btn-ghost {
-    @apply px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs rounded-lg border border-slate-200 transition-all active:scale-[0.97];
+    @apply px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-600 font-semibold text-xs rounded-lg border border-slate-200 transition-all active:scale-[0.97];
   }
   .btn-danger {
     @apply px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold text-xs rounded-lg border border-rose-200 transition-all active:scale-[0.97];
@@ -51,22 +50,22 @@
 
   /* Filter pills */
   .pill {
-    @apply text-xs px-3 py-1.5 rounded-lg font-semibold transition-all border;
+    @apply text-[10px] px-2.5 py-1 rounded-md font-semibold transition-all border cursor-pointer;
   }
   .pill-active {
-    @apply bg-slate-800 text-white border-slate-800;
+    @apply bg-slate-800 text-white border-slate-800 shadow-sm;
   }
   .pill-inactive {
     @apply bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:text-slate-700;
   }
 }
 
-/* Animations */
+/* ── Animations ── */
 .fade-in {
-  animation: fadeIn 0.25s ease-out forwards;
+  animation: fadeIn 0.2s ease-out forwards;
 }
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(6px); }
+  from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
@@ -74,21 +73,46 @@
   animation: slideUp 0.2s ease-out forwards;
 }
 @keyframes slideUp {
-  from { opacity: 0; transform: translateY(12px); }
+  from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Scrollbar */
+.toast-enter {
+  animation: toastSlide 0.25s ease-out forwards;
+}
+@keyframes toastSlide {
+  from { opacity: 0; transform: translate(-50%, -6px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-/* Toast notification */
-.toast-enter {
-  animation: toastSlide 0.3s ease-out forwards;
+/* ── Tables: crisp borders for screenshots ── */
+table {
+  border-collapse: collapse;
+  -webkit-font-smoothing: antialiased;
 }
-@keyframes toastSlide {
-  from { opacity: 0; transform: translateY(-8px); }
-  to   { opacity: 1; transform: translateY(0); }
+table td, table th {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* ── Textarea in tables ── */
+textarea {
+  scrollbar-width: none;
+}
+textarea::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── Print / Screenshot optimization ── */
+@media print {
+  header { display: none !important; }
+  main { padding: 0 !important; max-width: 100% !important; }
+  .card, .card-section { box-shadow: none !important; border: 1px solid #e2e8f0 !important; }
+  .btn-primary, .btn-ghost, .btn-danger, .btn-success, .pill { display: none !important; }
 }
