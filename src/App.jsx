@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import * as XLSX from 'xlsx'
 import { supabase } from './supabase.jsx'
 import ModuloTecnicos from './components/Tecnicos'
@@ -103,29 +103,41 @@ export default function App() {
   }, [baseMunicipios, allTickets])
 
   // ── Supabase sync ──
-  useEffect(() => {
-    async function cargarDesdeNube() {
-      try {
-        const { data, error } = await supabase.from('excel_sync').select('*').eq('id', 1).single()
-        if (data && !error) {
-          const ticketsNube = JSON.parse(data.tickets_json || '[]')
-          if (ticketsNube.length > 0) {
-            setAllTickets(ticketsNube)
-            setNombreArchivo(data.filename || '')
-            setFechaSubidaExcel(data.upload_date || '')
-          }
-          setSyncStatus('sincronizado')
-        } else {
-          setSyncStatus('sincronizado')
+  const cargarDesdeNube = useCallback(async (esRecarga = false) => {
+    try {
+      setSyncStatus('cargando')
+      const { data, error } = await supabase.from('excel_sync').select('*').eq('id', 1).single()
+      if (data && !error) {
+        const ticketsNube = JSON.parse(data.tickets_json || '[]')
+        if (ticketsNube.length > 0) {
+          setAllTickets(ticketsNube)
+          setNombreArchivo(data.filename || '')
+          setFechaSubidaExcel(data.upload_date || '')
         }
-      } catch (e) {
-        console.warn('Sin conexión a Supabase:', e)
-        setSyncStatus('error')
+        setSyncStatus('sincronizado')
+      } else {
+        setSyncStatus(error ? 'error' : 'sincronizado')
       }
-      setTimeout(() => { nubeCargada.current = true }, 500)
+    } catch (e) {
+      console.warn('Sin conexión a Supabase:', e)
+      setSyncStatus('error')
     }
-    cargarDesdeNube()
+    if (!esRecarga) setTimeout(() => { nubeCargada.current = true }, 500)
   }, [])
+
+  // Cargar al montar
+  useEffect(() => { cargarDesdeNube(false) }, [cargarDesdeNube])
+
+  // Re-sync cuando la app vuelve a primer plano (cambio de tab, desbloqueo, etc.)
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState === 'visible' && nubeCargada.current) {
+        cargarDesdeNube(true)
+      }
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [cargarDesdeNube])
 
   useEffect(() => {
     localStorage.setItem('tickets_data', JSON.stringify(allTickets))
@@ -157,14 +169,6 @@ export default function App() {
     { id: 'tablas', label: 'Reportes', icon: BarChart3 },
     { id: 'pendientes', label: 'Gestión', icon: ClipboardList },
   ]
-
-  const SyncIcon = syncStatus === 'sincronizado' ? Cloud 
-    : syncStatus === 'error' ? CloudOff 
-    : Loader2
-
-  const syncColor = syncStatus === 'sincronizado' ? 'text-emerald-400' 
-    : syncStatus === 'error' ? 'text-rose-400' 
-    : 'text-slate-400 animate-spin'
 
   const hoy = new Date()
   const fechaHoy = hoy.toLocaleDateString('es-GT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
@@ -204,12 +208,21 @@ export default function App() {
           </nav>
 
           {/* Sync */}
-          <div className="flex items-center gap-1.5 shrink-0" title={syncStatus === 'sincronizado' ? 'Sincronizado' : syncStatus === 'error' ? 'Sin conexión' : 'Sincronizando...'}>
-            <SyncIcon size={11} className={syncColor} />
+          <button
+            onClick={() => { if (nubeCargada.current) cargarDesdeNube(true) }}
+            className="flex items-center gap-1.5 shrink-0 p-1 rounded-md hover:bg-slate-800 transition-colors"
+            title={syncStatus === 'sincronizado' ? 'Sincronizado · Tap para refrescar' : syncStatus === 'error' ? 'Sin conexión · Tap para reintentar' : 'Sincronizando...'}
+          >
+            {syncStatus === 'cargando' 
+              ? <Loader2 size={11} className="text-slate-400 animate-spin" />
+              : syncStatus === 'error'
+                ? <CloudOff size={11} className="text-rose-400" />
+                : <Cloud size={11} className="text-emerald-400" />
+            }
             <span className={`text-[9px] font-medium hidden sm:inline ${syncStatus === 'sincronizado' ? 'text-emerald-500' : syncStatus === 'error' ? 'text-rose-400' : 'text-slate-500'}`}>
               {syncStatus === 'sincronizado' ? 'Sync OK' : syncStatus === 'error' ? 'Offline' : 'Sync...'}
             </span>
-          </div>
+          </button>
         </div>
       </header>
 
