@@ -1,6 +1,10 @@
 import { useState, useRef, useMemo } from 'react'
 import { Calendar, BarChart2, Copy, X } from 'lucide-react'
 
+function fechaLocalISO(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 function normalizarTexto(texto) {
   if (!texto) return ''
   return String(texto).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim()
@@ -207,14 +211,14 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
             <Calendar size={12} /> Rango de Cierre — Finalizadas
           </div>
           <div className="flex items-center gap-1">
-            <button onClick={() => { const h = new Date().toISOString().split('T')[0]; setFechaInicio(h); setFechaFin(h) }} className="text-[9px] font-semibold text-slate-300 hover:text-white px-2 py-0.5 rounded hover:bg-slate-700 transition">Hoy</button>
+            <button onClick={() => { const h = fechaLocalISO(new Date()); setFechaInicio(h); setFechaFin(h) }} className="text-[9px] font-semibold text-slate-300 hover:text-white px-2 py-0.5 rounded hover:bg-slate-700 transition">Hoy</button>
             <button onClick={() => {
               const h = new Date(); const l = new Date(h); l.setDate(h.getDate() - h.getDay())
-              setFechaInicio(l.toISOString().split('T')[0]); setFechaFin(h.toISOString().split('T')[0])
+              setFechaInicio(fechaLocalISO(l)); setFechaFin(fechaLocalISO(h))
             }} className="text-[9px] font-semibold text-slate-300 hover:text-white px-2 py-0.5 rounded hover:bg-slate-700 transition">Semana</button>
             <button onClick={() => {
               const h = new Date(); const p = new Date(h.getFullYear(), h.getMonth(), 1)
-              setFechaInicio(p.toISOString().split('T')[0]); setFechaFin(h.toISOString().split('T')[0])
+              setFechaInicio(fechaLocalISO(p)); setFechaFin(fechaLocalISO(h))
             }} className="text-[9px] font-semibold text-slate-300 hover:text-white px-2 py-0.5 rounded hover:bg-slate-700 transition">Mes</button>
             <button onClick={() => { setFechaInicio(''); setFechaFin('') }} className="text-[9px] font-semibold text-slate-400 hover:text-white px-2 py-0.5 rounded hover:bg-slate-700 transition">Todo</button>
           </div>
