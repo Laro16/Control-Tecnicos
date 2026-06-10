@@ -458,7 +458,7 @@ export default function ModuloTecnicos({
             <DownloadCloud size={12} /> Excel
           </button>
         )}
-        <input ref={fileRef} type="file" className="hidden" onChange={onFileChange} accept=".xlsx,.xls,.xlsm,.xlsb,.csv,.tsv,.ods" />
+        <input ref={fileRef} type="file" className="hidden" onChange={onFileChange} accept=".xlsx,.xls,.xlsm,.xlsb,.csv,.tsv,.ods,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,application/vnd.ms-excel.sheet.macroEnabled.12,application/vnd.ms-excel.sheet.binary.macroEnabled.12,text/csv,text/tab-separated-values,application/vnd.oasis.opendocument.spreadsheet" />
       </div>
 
       {allTickets.length > 0 && (
@@ -471,7 +471,7 @@ export default function ModuloTecnicos({
                 <p className="text-lg font-black text-slate-800 leading-none">{ticketsPendientesTotales.length}</p>
                 <p className="text-[9px] font-semibold text-slate-400 uppercase mt-0.5">Pendientes</p>
               </div>
-              <div className="flex-1 px-3 py-2 text-center border-r border-slate-100">
+              <div className="flex-1 px-3 py-2 text-center border-r border-slate-100 cursor-pointer hover:bg-amber-50 transition-colors" onClick={() => setFiltroEstadoGlobal('En Proceso')}>
                 <p className="text-lg font-black text-amber-600 leading-none">{ticketsPendientesTotales.filter(t => t.ESTADO_LIMPIO.includes('PROCESO')).length}</p>
                 <p className="text-[9px] font-semibold text-slate-400 uppercase mt-0.5">En Proceso</p>
               </div>
@@ -500,7 +500,7 @@ export default function ModuloTecnicos({
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-slate-100 pt-2.5">
                 <div className="flex flex-wrap gap-1 items-center">
                   <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mr-1">Estado:</span>
-                  {['Todos', 'Asignada a Técnico', 'Asignada a Agencia'].map(est => (
+                  {['Todos', 'Asignada a Técnico', 'En Proceso', 'Asignada a Agencia'].map(est => (
                     <button key={est} onClick={() => setFiltroEstadoGlobal(est)} className={`pill ${filtroEstadoGlobal === est ? 'pill-active' : 'pill-inactive'}`}>{est}</button>
                   ))}
                 </div>
@@ -533,13 +533,13 @@ export default function ModuloTecnicos({
               {garantiaAbierta && (
                 <div className="slide-up">
                   {alertasVencidas.length > 0 && (
-                    <div className="p-3 space-y-1.5 border-t border-slate-100">
+                    <div className="p-3 space-y-2.5 border-t border-slate-100">
                       <p className="text-[10px] font-bold text-rose-600 uppercase flex items-center gap-1.5 mb-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
                         Garantía vencida — No atender bajo garantía
                       </p>
                       {alertasVencidas.map((a, i) => (
-                        <div key={i} className="bg-rose-50 border border-rose-100 rounded-lg px-3 py-2 space-y-1">
+                        <div key={i} className="bg-rose-50 border border-rose-200 border-l-[4px] border-l-rose-500 rounded-lg px-3 py-2.5 space-y-1.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-mono text-[10px] font-bold text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded">#{a.ticket['N° REFERENCIA']}</span>
                             <span className="text-[10px] font-semibold text-slate-500">{a.ticket.tecnico}</span>
@@ -555,13 +555,13 @@ export default function ModuloTecnicos({
                     </div>
                   )}
                   {alertasVigentes.length > 0 && (
-                    <div className={`p-3 space-y-1.5 ${alertasVencidas.length ? 'border-t border-slate-100' : ''}`}>
+                    <div className={`p-3 space-y-2.5 ${alertasVencidas.length ? 'border-t border-slate-100' : ''}`}>
                       <p className="text-[10px] font-bold text-emerald-600 uppercase flex items-center gap-1.5 mb-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                         Garantía vigente
                       </p>
                       {alertasVigentes.map((a, i) => (
-                        <div key={i} className="bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 space-y-1">
+                        <div key={i} className="bg-emerald-50 border border-emerald-200 border-l-[4px] border-l-emerald-500 rounded-lg px-3 py-2.5 space-y-1.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-mono text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">#{a.ticket['N° REFERENCIA']}</span>
                             <span className="text-[10px] font-semibold text-slate-500">{a.ticket.tecnico}</span>
@@ -577,13 +577,13 @@ export default function ModuloTecnicos({
                     </div>
                   )}
                   {alertasSinSerie.length > 0 && (
-                    <div className={`p-3 space-y-1.5 ${(alertasVencidas.length || alertasVigentes.length) ? 'border-t border-slate-100' : ''}`}>
+                    <div className={`p-3 space-y-2.5 ${(alertasVencidas.length || alertasVigentes.length) ? 'border-t border-slate-100' : ''}`}>
                       <p className="text-[10px] font-bold text-amber-600 uppercase flex items-center gap-1.5 mb-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
                         Verificar serie manualmente
                       </p>
                       {alertasSinSerie.map((a, i) => (
-                        <div key={i} className="bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 space-y-1">
+                        <div key={i} className="bg-amber-50 border border-amber-200 border-l-[4px] border-l-amber-500 rounded-lg px-3 py-2.5 space-y-1.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-mono text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">#{a.ticket['N° REFERENCIA']}</span>
                             <span className="text-[10px] font-semibold text-slate-500">{a.ticket.tecnico}</span>
@@ -607,10 +607,15 @@ export default function ModuloTecnicos({
               const tickets = gruposPendientesAgrupados[tecnico].filter(t => {
                 if (filtroEstadoGlobal === 'Todos') return true
                 if (filtroEstadoGlobal === 'Asignada a Técnico') {
-                  return t.ESTADO_LIMPIO.includes('TECNICO') || t.ESTADO_LIMPIO.includes('PROCESO')
+                  return t.ESTADO_LIMPIO.includes('TECNICO') && !t.ESTADO_LIMPIO.includes('PROCESO')
                 }
-                const termino = normalizarTexto(filtroEstadoGlobal).split(' ')[0]
-                return t.ESTADO_LIMPIO.includes(termino)
+                if (filtroEstadoGlobal === 'En Proceso') {
+                  return t.ESTADO_LIMPIO.includes('PROCESO')
+                }
+                if (filtroEstadoGlobal === 'Asignada a Agencia') {
+                  return t.ESTADO_LIMPIO.includes('AGENCIA')
+                }
+                return true
               })
               if (tickets.length === 0) return null
               const rutaActual = valorRutaTecnico(tecnico)
@@ -643,17 +648,23 @@ export default function ModuloTecnicos({
 
                   {/* Tickets expandidos */}
                   {expandido[tecnico] && (
-                    <div className="p-4 space-y-3 slide-up">
+                    <div className="p-3 sm:p-4 space-y-4 slide-up bg-slate-50/60">
                       {tickets.map((t, i) => {
                         const g = verificarGarantia(t)
-                        const ringClass = g?.vencida ? 'ring-1 ring-rose-300 bg-rose-50/30' 
-                          : g?.sinDatosSerie ? 'ring-1 ring-amber-200 bg-amber-50/30' 
-                          : (g && !g.vencida && !g.sinDatosSerie) ? 'ring-1 ring-emerald-200 bg-emerald-50/20' 
-                          : 'bg-white'
+                        const esProceso = t['ESTADO_LIMPIO'].includes('PROCESO')
+                        const esAgencia = t['ESTADO_LIMPIO'].includes('AGENCIA')
+                        const borderColor = g?.vencida ? 'border-l-rose-500' 
+                          : esProceso ? 'border-l-amber-400' 
+                          : esAgencia ? 'border-l-violet-400' 
+                          : 'border-l-sky-400'
+                        const headerBg = g?.vencida ? 'bg-rose-50' 
+                          : esProceso ? 'bg-amber-50/60' 
+                          : esAgencia ? 'bg-violet-50/60' 
+                          : 'bg-slate-50'
                         return (
-                          <div key={i} className={`rounded-lg border border-slate-200 overflow-hidden ${ringClass}`}>
+                          <div key={i} className={`rounded-lg border border-slate-200 border-l-[4px] ${borderColor} overflow-hidden bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)]`}>
                             {/* Badge row */}
-                            <div className="flex items-center gap-1.5 flex-wrap px-3 pt-3 pb-2">
+                            <div className={`flex items-center gap-1.5 flex-wrap px-3 py-2.5 ${headerBg} border-b border-slate-100`}>
                               <span className="font-mono text-[10px] font-bold text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-100">#{t['N° REFERENCIA']}</span>
                               <TicketBadge estado={t['ESTADO']} />
                               {g?.vencida && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-rose-600 text-white flex items-center gap-0.5"><ShieldAlert size={9} /> VENCIDA</span>}
@@ -662,7 +673,7 @@ export default function ModuloTecnicos({
                             </div>
                             
                             {/* Negocio */}
-                            <div className="px-3 pb-2">
+                            <div className="px-3 pt-2.5 pb-2">
                               <p className="text-[13px] font-bold text-slate-800 leading-tight">{t['NEGOCIO']}</p>
                             </div>
                             
