@@ -444,7 +444,7 @@ export default function ModuloTecnicos({
 
   const ticketsDuplicados = useMemo(() => {
     const conteo = {}
-    ticketsPendientesTotales.forEach(t => {
+    allTickets.forEach(t => {
       const ref = String(t['N° REFERENCIA'] || '').trim()
       if (!ref) return
       if (!conteo[ref]) conteo[ref] = []
@@ -454,7 +454,7 @@ export default function ModuloTecnicos({
       .filter(([, arr]) => arr.length > 1)
       .map(([ref, arr]) => ({ ref, tickets: arr, cantidad: arr.length }))
       .sort((a, b) => b.cantidad - a.cantidad)
-  }, [ticketsPendientesTotales])
+  }, [allTickets])
 
   return (
     <div className="space-y-4">
@@ -657,6 +657,8 @@ export default function ModuloTecnicos({
                         {dup.tickets.map((t, j) => (
                           <div key={j} className="flex items-center gap-2 flex-wrap text-[10px]">
                             <span className="font-semibold text-slate-700">{t['NEGOCIO'] || '-'}</span>
+                            <span className="text-slate-400">·</span>
+                            <span className="text-slate-500">{t['CLIENTE'] || '-'}</span>
                             <span className="text-slate-400">·</span>
                             <span className="text-slate-500">{t.tecnico || '-'}</span>
                             <span className="text-slate-400">·</span>
