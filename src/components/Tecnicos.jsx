@@ -60,7 +60,6 @@ const CLIENTES_GARANTIA = [
   { nombre: 'UNISUPER', anios: 1 },
   { nombre: 'VIVENDO', anios: 1 },
   { nombre: 'ARRENDADORA SARITA, S.A.', anios: 1 },
-  { nombre: 'IMPORTADORA Y DISTRIBUIDORA DE APARATOS ELECTRICOS, S.A.', anios: 1 },
 ]
 
 function buscarClienteGarantia(clienteTexto) {
@@ -149,6 +148,7 @@ export default function ModuloTecnicos({
   const [filtroTecnico, setFiltroTecnico] = useState('Todos')
   const [filtroEstadoGlobal, setFiltroEstadoGlobal] = useState('Todos')
   const [garantiaAbierta, setGarantiaAbierta] = useState(false)
+  const [duplicadosAbierta, setDuplicadosAbierta] = useState(false)
   const fileRef = useRef()
 
   function procesarExcel(file) {
@@ -243,7 +243,18 @@ export default function ModuloTecnicos({
     reader.readAsArrayBuffer(file)
   }
 
-  function onFileChange(e) { if (e.target.files[0]) procesarExcel(e.target.files[0]) }
+  const extensionesValidas = ['.xlsx', '.xls', '.xlsm', '.xlsb', '.csv', '.tsv', '.ods']
+  function onFileChange(e) {
+    const archivo = e.target.files[0]
+    if (!archivo) return
+    const ext = archivo.name.slice(archivo.name.lastIndexOf('.')).toLowerCase()
+    if (!extensionesValidas.includes(ext)) {
+      alert('Archivo no soportado. Usa: ' + extensionesValidas.join(', '))
+      e.target.value = ''
+      return
+    }
+    procesarExcel(archivo)
+  }
   function onDrop(e) { e.preventDefault(); setDragging(false); if (e.dataTransfer.files[0]) procesarExcel(e.dataTransfer.files[0]) }
 
   function descargarExcelCompleto() {
@@ -431,6 +442,20 @@ export default function ModuloTecnicos({
   const alertasVigentes = alertasGarantia.filter(a => a.garantia.vencida === false && !a.garantia.sinDatosSerie)
   const alertasSinSerie = alertasGarantia.filter(a => a.garantia.sinDatosSerie === true)
 
+  const ticketsDuplicados = useMemo(() => {
+    const conteo = {}
+    ticketsPendientesTotales.forEach(t => {
+      const ref = String(t['N° REFERENCIA'] || '').trim()
+      if (!ref) return
+      if (!conteo[ref]) conteo[ref] = []
+      conteo[ref].push(t)
+    })
+    return Object.entries(conteo)
+      .filter(([, arr]) => arr.length > 1)
+      .map(([ref, arr]) => ({ ref, tickets: arr, cantidad: arr.length }))
+      .sort((a, b) => b.cantidad - a.cantidad)
+  }, [ticketsPendientesTotales])
+
   return (
     <div className="space-y-4">
       {/* ── Upload zone ── */}
@@ -459,7 +484,7 @@ export default function ModuloTecnicos({
             <DownloadCloud size={12} /> Excel
           </button>
         )}
-        <input ref={fileRef} type="file" className="hidden" onChange={onFileChange} accept=".xlsx,.xls,.xlsm,.xlsb,.csv,.tsv,.ods,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,application/vnd.ms-excel.sheet.macroEnabled.12,application/vnd.ms-excel.sheet.binary.macroEnabled.12,text/csv,text/tab-separated-values,application/vnd.oasis.opendocument.spreadsheet" />
+        <input ref={fileRef} type="file" className="hidden" onChange={onFileChange} />
       </div>
 
       {allTickets.length > 0 && (
@@ -596,6 +621,51 @@ export default function ModuloTecnicos({
                       ))}
                     </div>
                   )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Tickets Duplicados (colapsable) ── */}
+          {ticketsDuplicados.length > 0 && (
+            <div className="card-section">
+              <button
+                onClick={() => setDuplicadosAbierta(!duplicadosAbierta)}
+                className="w-full flex items-center justify-between px-4 py-2 bg-slate-50 hover:bg-slate-100 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <Copy size={13} className="text-orange-500" />
+                  <span className="font-bold text-slate-600 text-[10px] uppercase tracking-wider">Tickets Duplicados</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[9px] font-bold bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">
+                    {ticketsDuplicados.length} referencia{ticketsDuplicados.length !== 1 ? 's' : ''} · {ticketsDuplicados.reduce((s, d) => s + d.cantidad, 0)} tickets
+                  </span>
+                  <ChevronDown size={13} className={`text-slate-400 transition-transform ${duplicadosAbierta ? 'rotate-180' : ''}`} />
+                </div>
+              </button>
+
+              {duplicadosAbierta && (
+                <div className="slide-up p-3 space-y-2.5 border-t border-slate-100">
+                  {ticketsDuplicados.map((dup, i) => (
+                    <div key={i} className="bg-orange-50 border border-orange-200 border-l-[4px] border-l-orange-500 rounded-lg overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+                      <div className="flex items-center gap-2 flex-wrap px-3 py-2 bg-orange-100/50 border-b border-orange-200">
+                        <span className="font-mono text-[10px] font-bold text-orange-700 bg-orange-100 px-1.5 py-0.5 rounded border border-orange-200">#{dup.ref}</span>
+                        <span className="text-[9px] font-bold text-orange-600">{dup.cantidad}x duplicado</span>
+                      </div>
+                      <div className="px-3 py-2 space-y-1.5">
+                        {dup.tickets.map((t, j) => (
+                          <div key={j} className="flex items-center gap-2 flex-wrap text-[10px]">
+                            <span className="font-semibold text-slate-700">{t['NEGOCIO'] || '-'}</span>
+                            <span className="text-slate-400">·</span>
+                            <span className="text-slate-500">{t.tecnico || '-'}</span>
+                            <span className="text-slate-400">·</span>
+                            <span className="text-slate-500">{t['ESTADO'] || '-'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
