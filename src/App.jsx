@@ -16,14 +16,33 @@ export default function App() {
   const [tab, setTab] = useState('dashboard')
   const [syncStatus, setSyncStatus] = useState('cargando')
   const nubeCargada = useRef(false)
-  
+  // Cuando aplicamos datos que vienen de la nube, marcamos esto para NO volver
+  // a re-subir lo mismo (evita un upsert eco innecesario).
+  const omitirPush = useRef(false)
+
   // ── Datos compartidos ──
-  const [allTickets, setAllTickets] = useState(() => {
+  const [allTickets, setAllTicketsRaw] = useState(() => {
     const guardado = localStorage.getItem('tickets_data')
     return guardado ? JSON.parse(guardado) : []
   })
   const [nombreArchivo, setNombreArchivo] = useState(() => localStorage.getItem('tickets_filename') || '')
   const [fechaSubidaExcel, setFechaSubidaExcel] = useState(() => localStorage.getItem('tickets_date') || '')
+
+  // Marca de tiempo (epoch ms) de la última vez que CAMBIARON los datos.
+  // Es el árbitro del "last-write-wins": un re-sync solo pisa lo local si la
+  // nube es más nueva que esta marca.
+  const [dataTs, setDataTs] = useState(() => Number(localStorage.getItem('tickets_ts')) || 0)
+  const dataTsRef = useRef(dataTs)
+  useEffect(() => { dataTsRef.current = dataTs }, [dataTs])
+
+  // setAllTickets "envuelto": cualquier cambio LOCAL (ej. subir un Excel desde
+  // el módulo Técnicos) estampa una marca de tiempo nueva. Así, si un re-sync
+  // se dispara al volver del selector de archivos, no puede pisar este Excel
+  // recién cargado con una versión vieja de la nube.
+  const setAllTickets = useCallback((value) => {
+    setAllTicketsRaw(value)
+    setDataTs(Date.now())
+  }, [])
 
   // ── Rutas compartidas entre Técnicos y Tablas ──
   const [rutasTecnicos, setRutasTecnicos] = useState({})
@@ -109,10 +128,16 @@ export default function App() {
       const { data, error } = await supabase.from('excel_sync').select('*').eq('id', 1).single()
       if (data && !error) {
         const ticketsNube = JSON.parse(data.tickets_json || '[]')
-        if (ticketsNube.length > 0) {
-          setAllTickets(ticketsNube)
+        const tsNube = data.updated_at ? new Date(data.updated_at).getTime() : 0
+        // LAST-WRITE-WINS: solo aplicamos la nube si es MÁS NUEVA que lo local.
+        // Esto evita que un re-sync (ej. al volver del selector de archivos, o
+        // al desbloquear el cel) pise un Excel recién subido con una versión vieja.
+        if (ticketsNube.length > 0 && tsNube > dataTsRef.current) {
+          omitirPush.current = true   // no re-subir lo que acabamos de bajar
+          setAllTicketsRaw(ticketsNube)
           setNombreArchivo(data.filename || '')
           setFechaSubidaExcel(data.upload_date || '')
+          setDataTs(tsNube)
         }
         setSyncStatus('sincronizado')
       } else {
@@ -143,20 +168,25 @@ export default function App() {
     localStorage.setItem('tickets_data', JSON.stringify(allTickets))
     localStorage.setItem('tickets_filename', nombreArchivo)
     localStorage.setItem('tickets_date', fechaSubidaExcel)
-  }, [allTickets, nombreArchivo, fechaSubidaExcel])
+    localStorage.setItem('tickets_ts', String(dataTs))
+  }, [allTickets, nombreArchivo, fechaSubidaExcel, dataTs])
 
   useEffect(() => {
     if (!nubeCargada.current || allTickets.length === 0) return
+    // Si este cambio vino de la nube, no lo volvemos a subir (evita el eco).
+    if (omitirPush.current) { omitirPush.current = false; return }
     supabase.from('excel_sync').upsert({
       id: 1,
       tickets_json: JSON.stringify(allTickets),
       filename: nombreArchivo,
       upload_date: fechaSubidaExcel,
-      updated_at: new Date().toISOString()
+      // Subimos la MISMA marca de tiempo del dato local, así la nube y lo local
+      // quedan alineados y el last-write-wins funciona entre dispositivos.
+      updated_at: new Date(dataTs || Date.now()).toISOString()
     }).then(({ error }) => {
       setSyncStatus(error ? 'error' : 'sincronizado')
     }).catch(() => setSyncStatus('error'))
-  }, [allTickets, nombreArchivo, fechaSubidaExcel])
+  }, [allTickets, nombreArchivo, fechaSubidaExcel, dataTs])
 
   // ── Función para obtener ruta de un técnico (usada por ambos módulos) ──
   const valorRutaTecnico = (tecnico) => {
