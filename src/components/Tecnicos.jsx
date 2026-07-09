@@ -55,11 +55,11 @@ const CLIENTES_GARANTIA = [
   { nombre: 'PRODUCTOS LACTEOS DE CENTROAMERICA', anios: 1 },
   { nombre: 'RICZA', anios: 1 },
   { nombre: 'SAVONA DE GUATEMALA', anios: 1 },
-  { nombre: 'SERVICOCINAS', anios: 1 },
+  { nombre: 'SERVICOCINAS, SOCIEDAD ANONIMA', anios: 1 },
   { nombre: 'SUPER VITAMINAS', anios: 1 },
-  { nombre: 'UNISUPER', anios: 1 },
+  { nombre: 'UNISUPER S.A.', anios: 1 },
   { nombre: 'VIVENDO', anios: 1 },
-  { nombre: 'ARRENDADORA SARITA, S.A.', anios: 1 },
+  { nombre: 'ARRENDADORA SARITA, S.A., S.A.', anios: 1 },
    
 ]
 
