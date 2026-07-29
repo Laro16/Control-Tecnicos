@@ -1,0 +1,607 @@
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { supabase } from '../supabase';
+import {
+  CalendarDays, Plus, Trash2, Users, Download, X, Pencil,
+  AlertCircle, Loader2, Search, ChevronDown
+} from 'lucide-react';
+
+/* ------------------------------------------------------------------ */
+/*  Fechas: siempre como texto YYYY-MM-DD, nunca new Date(string).     */
+/*  new Date('2026-07-06') se interpreta en UTC y en Guatemala (-6)    */
+/*  se corre un día para atrás. Esto lo evita.                         */
+/* ------------------------------------------------------------------ */
+const aFecha = (s) => {
+  if (!s) return null;
+  const [y, m, d] = s.split('-').map(Number);
+  return new Date(y, m - 1, d);
+};
+
+const aTexto = (dt) =>
+  `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+
+const mostrar = (s) => {
+  const d = aFecha(s);
+  return d ? `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}` : '—';
+};
+
+const hoyTexto = () => aTexto(new Date());
+
+/* Mismo cálculo que hace el trigger en Postgres, solo para la vista previa. */
+const calcularHabiles = (inicio, fin, descansos, setAsuetos) => {
+  if (!inicio || !fin) return 0;
+  const a = aFecha(inicio);
+  const b = aFecha(fin);
+  if (!a || !b || b < a) return 0;
+  const desc = descansos && descansos.length ? descansos : [0];
+  let n = 0;
+  for (const cur = new Date(a); cur <= b; cur.setDate(cur.getDate() + 1)) {
+    if (desc.includes(cur.getDay())) continue;
+    if (setAsuetos.has(aTexto(cur))) continue;
+    n++;
+  }
+  return n;
+};
+
+const JORNADAS = [
+  { valor: '0',   etiqueta: 'Lunes a sábado (descansa domingo)' },
+  { valor: '0,6', etiqueta: 'Lunes a viernes (descansa sábado y domingo)' },
+];
+
+const jornadaTexto = (arr) => (arr || []).join(',') === '0,6' ? 'Lun–Vie' : 'Lun–Sáb';
+
+/* ================================================================== */
+
+export default function Vacaciones() {
+  const [pestana, setPestana] = useState('registro');
+  const [cargando, setCargando] = useState(true);
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState('');
+
+  const [empleados, setEmpleados] = useState([]);
+  const [resumen, setResumen] = useState([]);
+  const [goces, setGoces] = useState([]);
+  const [asuetos, setAsuetos] = useState([]);
+
+  const [modalGoce, setModalGoce] = useState(false);
+  const [modalEmpleado, setModalEmpleado] = useState(false);
+  const [editandoEmpleado, setEditandoEmpleado] = useState(null);
+
+  const [filtroEmpleado, setFiltroEmpleado] = useState('');
+  const [filtroAnio, setFiltroAnio] = useState('');
+  const [busqueda, setBusqueda] = useState('');
+
+  const setAsuetos_ = useMemo(() => new Set(asuetos.map((a) => a.fecha)), [asuetos]);
+
+  /* ---------------------------- carga ---------------------------- */
+  const cargar = useCallback(async () => {
+    setCargando(true);
+    setError('');
+    try {
+      const [emp, res, goc, asu] = await Promise.all([
+        supabase.from('vac_empleados').select('*').order('nombre'),
+        supabase.from('vac_resumen').select('*').order('nombre'),
+        supabase
+          .from('vac_goces')
+          .select('*, vac_empleados(nombre, puesto)')
+          .order('fecha_inicio', { ascending: false }),
+        supabase.from('vac_asuetos').select('*').order('fecha'),
+      ]);
+      const fallo = [emp, res, goc, asu].find((r) => r.error);
+      if (fallo) throw fallo.error;
+      setEmpleados(emp.data || []);
+      setResumen(res.data || []);
+      setGoces(goc.data || []);
+      setAsuetos(asu.data || []);
+    } catch (e) {
+      setError(e.message || 'No se pudieron cargar los datos.');
+    } finally {
+      setCargando(false);
+    }
+  }, []);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  /* --------------------------- filtros --------------------------- */
+  const anios = useMemo(() => {
+    const s = new Set(goces.map((g) => g.fecha_inicio.slice(0, 4)));
+    return [...s].sort().reverse();
+  }, [goces]);
+
+  const gocesFiltrados = useMemo(() => goces.filter((g) => {
+    if (filtroEmpleado && g.empleado_id !== filtroEmpleado) return false;
+    if (filtroAnio && !g.fecha_inicio.startsWith(filtroAnio)) return false;
+    if (busqueda) {
+      const t = `${g.vac_empleados?.nombre || ''} ${g.observaciones || ''}`.toLowerCase();
+      if (!t.includes(busqueda.toLowerCase())) return false;
+    }
+    return true;
+  }), [goces, filtroEmpleado, filtroAnio, busqueda]);
+
+  const totalFiltrado = gocesFiltrados.reduce((s, g) => s + (g.dias_habiles || 0), 0);
+
+  /* --------------------------- acciones -------------------------- */
+  const borrarGoce = async (id) => {
+    if (!window.confirm('¿Eliminar este registro de vacaciones?')) return;
+    const { error: e } = await supabase.from('vac_goces').delete().eq('id', id);
+    if (e) return setError(e.message);
+    cargar();
+  };
+
+  const borrarEmpleado = async (id, nombre) => {
+    if (!window.confirm(`Eliminar a ${nombre} borra también todos sus registros de vacaciones. ¿Continuar?`)) return;
+    const { error: e } = await supabase.from('vac_empleados').delete().eq('id', id);
+    if (e) return setError(e.message);
+    cargar();
+  };
+
+  const exportarCSV = () => {
+    const filas = [
+      ['Empleado', 'Puesto', 'Desde', 'Hasta', 'Días hábiles', 'Observaciones'],
+      ...gocesFiltrados.map((g) => [
+        g.vac_empleados?.nombre || '',
+        g.vac_empleados?.puesto || '',
+        mostrar(g.fecha_inicio),
+        mostrar(g.fecha_fin),
+        g.dias_habiles,
+        (g.observaciones || '').replace(/"/g, '""'),
+      ]),
+    ];
+    const csv = filas.map((f) => f.map((c) => `"${c}"`).join(',')).join('\r\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `vacaciones_${hoyTexto()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  /* ---------------------------- render --------------------------- */
+  if (cargando) {
+    return (
+      <div className="flex items-center justify-center py-20 text-slate-400">
+        <Loader2 size={18} className="animate-spin mr-2" />
+        <span className="text-xs">Cargando vacaciones…</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Encabezado */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <CalendarDays size={18} className="text-slate-600" />
+          <h2 className="text-sm font-bold text-slate-800">Control de vacaciones</h2>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={exportarCSV}
+            disabled={!gocesFiltrados.length}
+            className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+          >
+            <Download size={13} /> CSV
+          </button>
+          <button
+            onClick={() => { setEditandoEmpleado(null); setModalEmpleado(true); }}
+            className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
+          >
+            <Users size={13} /> Personal
+          </button>
+          <button
+            onClick={() => setModalGoce(true)}
+            disabled={!empleados.length}
+            className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-40"
+          >
+            <Plus size={13} /> Registrar vacaciones
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          <AlertCircle size={14} className="text-red-500 mt-0.5 shrink-0" />
+          <p className="text-[11px] text-red-700 flex-1">{error}</p>
+          <button onClick={() => setError('')} className="text-red-400 hover:text-red-600"><X size={13} /></button>
+        </div>
+      )}
+
+      {!empleados.length && (
+        <div className="border border-dashed border-slate-300 rounded-lg p-6 text-center">
+          <p className="text-xs text-slate-500 mb-3">Todavía no hay personal registrado.</p>
+          <button
+            onClick={() => { setEditandoEmpleado(null); setModalEmpleado(true); }}
+            className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-slate-800 text-white hover:bg-slate-700"
+          >
+            Agregar al primer compañero
+          </button>
+        </div>
+      )}
+
+      {/* Pestañas */}
+      {!!empleados.length && (
+        <>
+          <div className="flex gap-1 border-b border-slate-200">
+            {[['registro', 'Registro'], ['personal', 'Por persona']].map(([id, txt]) => (
+              <button
+                key={id}
+                onClick={() => setPestana(id)}
+                className={`text-[11px] font-semibold px-3 py-2 border-b-2 -mb-px transition-colors ${
+                  pestana === id
+                    ? 'border-slate-800 text-slate-800'
+                    : 'border-transparent text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                {txt}
+              </button>
+            ))}
+          </div>
+
+          {pestana === 'registro' ? (
+            <>
+              {/* Filtros */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <div className="relative flex-1 min-w-[140px]">
+                  <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    value={busqueda}
+                    onChange={(e) => setBusqueda(e.target.value)}
+                    placeholder="Buscar…"
+                    className="w-full pl-7 pr-2 py-1.5 text-[11px] border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-400"
+                  />
+                </div>
+                <select
+                  value={filtroEmpleado}
+                  onChange={(e) => setFiltroEmpleado(e.target.value)}
+                  className="text-[11px] border border-slate-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-slate-400"
+                >
+                  <option value="">Todo el personal</option>
+                  {empleados.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
+                </select>
+                <select
+                  value={filtroAnio}
+                  onChange={(e) => setFiltroAnio(e.target.value)}
+                  className="text-[11px] border border-slate-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-slate-400"
+                >
+                  <option value="">Todos los años</option>
+                  {anios.map((a) => <option key={a} value={a}>{a}</option>)}
+                </select>
+                <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1.5 rounded-lg whitespace-nowrap">
+                  {gocesFiltrados.length} reg · {totalFiltrado} días
+                </span>
+              </div>
+
+              {/* Tabla de goces */}
+              <div className="border border-slate-200 rounded-lg overflow-hidden">
+                {gocesFiltrados.length === 0 ? (
+                  <p className="text-[11px] text-slate-400 text-center py-8">
+                    No hay registros con estos filtros.
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-[11px]">
+                      <thead className="bg-slate-50 border-b border-slate-200">
+                        <tr className="text-left text-[10px] uppercase tracking-wide text-slate-500">
+                          <th className="px-3 py-2 font-bold">Compañero</th>
+                          <th className="px-3 py-2 font-bold">Desde</th>
+                          <th className="px-3 py-2 font-bold">Hasta</th>
+                          <th className="px-3 py-2 font-bold text-center">Días hábiles</th>
+                          <th className="px-3 py-2 font-bold">Observaciones</th>
+                          <th className="px-3 py-2" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {gocesFiltrados.map((g, i) => (
+                          <tr key={g.id} className={i % 2 ? 'bg-slate-50/50' : ''}>
+                            <td className="px-3 py-2">
+                              <span className="font-semibold text-slate-700">{g.vac_empleados?.nombre || '—'}</span>
+                              {g.vac_empleados?.puesto && (
+                                <span className="block text-[10px] text-slate-400">{g.vac_empleados.puesto}</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-slate-600 whitespace-nowrap">{mostrar(g.fecha_inicio)}</td>
+                            <td className="px-3 py-2 text-slate-600 whitespace-nowrap">{mostrar(g.fecha_fin)}</td>
+                            <td className="px-3 py-2 text-center">
+                              <span className="inline-block font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">
+                                {g.dias_habiles}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 text-slate-500">{g.observaciones || '—'}</td>
+                            <td className="px-3 py-2 text-right">
+                              <button
+                                onClick={() => borrarGoce(g.id)}
+                                className="text-slate-300 hover:text-red-500 transition-colors"
+                                title="Eliminar registro"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            /* Resumen por persona */
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {resumen.map((r) => (
+                <div key={r.id} className="border border-slate-200 rounded-lg p-3 bg-white">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-slate-800 truncate">{r.nombre}</p>
+                      <p className="text-[10px] text-slate-400">{r.puesto || 'Sin puesto'} · {jornadaTexto(r.dias_descanso)}</p>
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      <button
+                        onClick={() => {
+                          setEditandoEmpleado(empleados.find((e) => e.id === r.id));
+                          setModalEmpleado(true);
+                        }}
+                        className="text-slate-300 hover:text-slate-600"
+                        title="Editar"
+                      >
+                        <Pencil size={12} />
+                      </button>
+                      <button
+                        onClick={() => borrarEmpleado(r.id, r.nombre)}
+                        className="text-slate-300 hover:text-red-500"
+                        title="Eliminar"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1 mt-3 text-center">
+                    <div className="bg-slate-50 rounded p-1.5">
+                      <p className="text-sm font-bold text-slate-800">{r.dias_anio_actual}</p>
+                      <p className="text-[9px] text-slate-400 uppercase">Este año</p>
+                    </div>
+                    <div className="bg-slate-50 rounded p-1.5">
+                      <p className="text-sm font-bold text-slate-800">{r.dias_total}</p>
+                      <p className="text-[9px] text-slate-400 uppercase">Histórico</p>
+                    </div>
+                    <div className="bg-slate-50 rounded p-1.5">
+                      <p className="text-sm font-bold text-slate-800">{r.periodos}</p>
+                      <p className="text-[9px] text-slate-400 uppercase">Períodos</p>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-2">
+                    Último goce: {r.ultimo_goce ? mostrar(r.ultimo_goce) : 'nunca'}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {modalGoce && (
+        <ModalGoce
+          empleados={empleados}
+          setAsuetos={setAsuetos_}
+          guardando={guardando}
+          setGuardando={setGuardando}
+          onCerrar={() => setModalGoce(false)}
+          onGuardado={() => { setModalGoce(false); cargar(); }}
+          onError={setError}
+        />
+      )}
+
+      {modalEmpleado && (
+        <ModalEmpleado
+          empleado={editandoEmpleado}
+          guardando={guardando}
+          setGuardando={setGuardando}
+          onCerrar={() => { setModalEmpleado(false); setEditandoEmpleado(null); }}
+          onGuardado={() => { setModalEmpleado(false); setEditandoEmpleado(null); cargar(); }}
+          onError={setError}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ================================================================== */
+/*  Modal: registrar vacaciones                                        */
+/* ================================================================== */
+function ModalGoce({ empleados, setAsuetos, guardando, setGuardando, onCerrar, onGuardado, onError }) {
+  const [empleadoId, setEmpleadoId] = useState(empleados[0]?.id || '');
+  const [inicio, setInicio] = useState(hoyTexto());
+  const [fin, setFin] = useState(hoyTexto());
+  const [obs, setObs] = useState('');
+
+  const empleado = empleados.find((e) => e.id === empleadoId);
+  const habiles = calcularHabiles(inicio, fin, empleado?.dias_descanso, setAsuetos);
+  const calendario = inicio && fin && aFecha(fin) >= aFecha(inicio)
+    ? Math.round((aFecha(fin) - aFecha(inicio)) / 86400000) + 1
+    : 0;
+  const rangoMalo = !!inicio && !!fin && aFecha(fin) < aFecha(inicio);
+
+  const guardar = async () => {
+    if (!empleadoId || rangoMalo) return;
+    setGuardando(true);
+    const { error } = await supabase.from('vac_goces').insert({
+      empleado_id: empleadoId,
+      fecha_inicio: inicio,
+      fecha_fin: fin,
+      observaciones: obs.trim() || null,
+    });
+    setGuardando(false);
+    if (error) {
+      onError(
+        error.code === '23P01'
+          ? 'Ese compañero ya tiene vacaciones registradas que se enciman con estas fechas.'
+          : error.message
+      );
+      return;
+    }
+    onGuardado();
+  };
+
+  return (
+    <Marco titulo="Registrar vacaciones" onCerrar={onCerrar}>
+      <Campo etiqueta="Compañero">
+        <select
+          value={empleadoId}
+          onChange={(e) => setEmpleadoId(e.target.value)}
+          className="w-full text-xs border border-slate-200 rounded-lg px-2 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-slate-400"
+        >
+          {empleados.map((e) => (
+            <option key={e.id} value={e.id}>{e.nombre}{e.puesto ? ` · ${e.puesto}` : ''}</option>
+          ))}
+        </select>
+      </Campo>
+
+      <div className="grid grid-cols-2 gap-2">
+        <Campo etiqueta="Desde">
+          <input type="date" value={inicio} onChange={(e) => setInicio(e.target.value)}
+            className="w-full text-xs border border-slate-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-slate-400" />
+        </Campo>
+        <Campo etiqueta="Hasta">
+          <input type="date" value={fin} onChange={(e) => setFin(e.target.value)}
+            className="w-full text-xs border border-slate-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-slate-400" />
+        </Campo>
+      </div>
+
+      {rangoMalo ? (
+        <p className="text-[11px] text-red-600">La fecha final es anterior a la inicial.</p>
+      ) : (
+        <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+          <p className="text-[11px] text-slate-600">
+            Son <span className="font-bold text-slate-800">{habiles} días hábiles</span>
+            {calendario !== habiles && (
+              <span className="text-slate-400"> ({calendario} días de calendario; no se cuentan descansos ni asuetos)</span>
+            )}
+          </p>
+        </div>
+      )}
+
+      <Campo etiqueta="Observaciones (opcional)">
+        <input
+          value={obs}
+          onChange={(e) => setObs(e.target.value)}
+          placeholder="Ej. período 2025 pendiente"
+          className="w-full text-xs border border-slate-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-slate-400"
+        />
+      </Campo>
+
+      <div className="flex gap-2 pt-1">
+        <button onClick={onCerrar} className="flex-1 text-xs font-semibold py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">
+          Cancelar
+        </button>
+        <button
+          onClick={guardar}
+          disabled={guardando || rangoMalo || !empleadoId}
+          className="flex-1 text-xs font-semibold py-2 rounded-lg bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-40 flex items-center justify-center gap-1.5"
+        >
+          {guardando && <Loader2 size={13} className="animate-spin" />}
+          Guardar registro
+        </button>
+      </div>
+    </Marco>
+  );
+}
+
+/* ================================================================== */
+/*  Modal: alta / edición de personal                                  */
+/* ================================================================== */
+function ModalEmpleado({ empleado, guardando, setGuardando, onCerrar, onGuardado, onError }) {
+  const [nombre, setNombre] = useState(empleado?.nombre || '');
+  const [puesto, setPuesto] = useState(empleado?.puesto || '');
+  const [ingreso, setIngreso] = useState(empleado?.fecha_ingreso || '');
+  const [jornada, setJornada] = useState((empleado?.dias_descanso || [0]).join(','));
+
+  const guardar = async () => {
+    if (!nombre.trim()) return;
+    setGuardando(true);
+    const datos = {
+      nombre: nombre.trim(),
+      puesto: puesto.trim() || null,
+      fecha_ingreso: ingreso || null,
+      dias_descanso: jornada.split(',').map(Number),
+    };
+    const { error } = empleado
+      ? await supabase.from('vac_empleados').update(datos).eq('id', empleado.id)
+      : await supabase.from('vac_empleados').insert(datos);
+    setGuardando(false);
+    if (error) {
+      onError(error.code === '23505' ? 'Ya existe un compañero con ese nombre.' : error.message);
+      return;
+    }
+    onGuardado();
+  };
+
+  return (
+    <Marco titulo={empleado ? 'Editar compañero' : 'Agregar compañero'} onCerrar={onCerrar}>
+      <Campo etiqueta="Nombre">
+        <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre completo"
+          className="w-full text-xs border border-slate-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-slate-400" />
+      </Campo>
+      <Campo etiqueta="Puesto (opcional)">
+        <input value={puesto} onChange={(e) => setPuesto(e.target.value)} placeholder="Ej. Técnico"
+          className="w-full text-xs border border-slate-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-slate-400" />
+      </Campo>
+      <Campo etiqueta="Fecha de ingreso (opcional)">
+        <input type="date" value={ingreso} onChange={(e) => setIngreso(e.target.value)}
+          className="w-full text-xs border border-slate-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-slate-400" />
+      </Campo>
+      <Campo etiqueta="Jornada">
+        <div className="relative">
+          <select
+            value={jornada}
+            onChange={(e) => setJornada(e.target.value)}
+            className="w-full appearance-none text-xs border border-slate-200 rounded-lg px-2 py-2 pr-7 bg-white focus:outline-none focus:ring-1 focus:ring-slate-400"
+          >
+            {JORNADAS.map((j) => <option key={j.valor} value={j.valor}>{j.etiqueta}</option>)}
+          </select>
+          <ChevronDown size={13} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+        </div>
+        <p className="text-[10px] text-slate-400 mt-1">Define qué días no se descuentan de sus vacaciones.</p>
+      </Campo>
+
+      <div className="flex gap-2 pt-1">
+        <button onClick={onCerrar} className="flex-1 text-xs font-semibold py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">
+          Cancelar
+        </button>
+        <button
+          onClick={guardar}
+          disabled={guardando || !nombre.trim()}
+          className="flex-1 text-xs font-semibold py-2 rounded-lg bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-40 flex items-center justify-center gap-1.5"
+        >
+          {guardando && <Loader2 size={13} className="animate-spin" />}
+          Guardar
+        </button>
+      </div>
+    </Marco>
+  );
+}
+
+/* ------------------------- piezas compartidas --------------------- */
+function Marco({ titulo, onCerrar, children }) {
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-[2px] flex items-center justify-center p-4" onClick={onCerrar}>
+      <div
+        className="bg-white rounded-xl shadow-xl w-full max-w-sm max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 sticky top-0 bg-white">
+          <h3 className="text-xs font-bold text-slate-800">{titulo}</h3>
+          <button onClick={onCerrar} className="text-slate-400 hover:text-slate-600"><X size={15} /></button>
+        </div>
+        <div className="p-4 space-y-3">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function Campo({ etiqueta, children }) {
+  return (
+    <div>
+      <label className="block text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1">{etiqueta}</label>
+      {children}
+    </div>
+  );
+}
