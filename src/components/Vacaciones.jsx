@@ -766,27 +766,35 @@ function ModalEmpleado({ empleado, guardando, setGuardando, onCerrar, onGuardado
 
   return (
     <Marco titulo={empleado ? 'Editar compañero' : 'Agregar compañero'} onCerrar={onCerrar}>
-      <Campo etiqueta="Código (opcional)">
-        <input
-          value={codigo}
-          onChange={(e) => setCodigo(e.target.value)}
-          placeholder="Ej. T-01"
-          className="w-full text-xs font-mono border border-slate-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-slate-400"
-        />
-        <p className="text-[10px] text-slate-400 mt-1">No se puede repetir entre compañeros.</p>
-      </Campo>
-      <Campo etiqueta="Nombre">
-        <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre completo"
-          className="w-full text-xs border border-slate-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-slate-400" />
-      </Campo>
-      <Campo etiqueta="Puesto (opcional)">
-        <input value={puesto} onChange={(e) => setPuesto(e.target.value)} placeholder="Ej. Técnico"
-          className="w-full text-xs border border-slate-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-slate-400" />
-      </Campo>
-      <Campo etiqueta="Fecha de ingreso (opcional)">
-        <input type="date" value={ingreso} onChange={(e) => setIngreso(e.target.value)}
-          className="w-full text-xs border border-slate-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-slate-400" />
-      </Campo>
+      <div className="grid grid-cols-3 gap-2">
+        <Campo etiqueta="Código">
+          <input
+            value={codigo}
+            onChange={(e) => setCodigo(e.target.value)}
+            placeholder="T-01"
+            title="Opcional, pero no se puede repetir entre compañeros"
+            className="w-full text-xs font-mono border border-slate-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-slate-400"
+          />
+        </Campo>
+        <div className="col-span-2">
+          <Campo etiqueta="Nombre">
+            <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre completo"
+              className="w-full text-xs border border-slate-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-slate-400" />
+          </Campo>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <Campo etiqueta="Puesto">
+          <input value={puesto} onChange={(e) => setPuesto(e.target.value)} placeholder="Ej. Técnico"
+            className="w-full text-xs border border-slate-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-slate-400" />
+        </Campo>
+        <Campo etiqueta="Ingreso">
+          <input type="date" value={ingreso} onChange={(e) => setIngreso(e.target.value)}
+            className="w-full text-xs border border-slate-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-slate-400" />
+        </Campo>
+      </div>
+
       <Campo etiqueta="Jornada">
         <div className="relative">
           <select
@@ -798,7 +806,6 @@ function ModalEmpleado({ empleado, guardando, setGuardando, onCerrar, onGuardado
           </select>
           <ChevronDown size={13} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
         </div>
-        <p className="text-[10px] text-slate-400 mt-1">Define qué días no se descuentan de sus vacaciones.</p>
       </Campo>
 
       <div className="flex gap-2 pt-1">
@@ -821,16 +828,23 @@ function ModalEmpleado({ empleado, guardando, setGuardando, onCerrar, onGuardado
 /* ------------------------- piezas compartidas --------------------- */
 function Marco({ titulo, onCerrar, children }) {
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-[2px] flex items-center justify-center p-4" onClick={onCerrar}>
-      <div
-        className="bg-white rounded-xl shadow-xl w-full max-w-sm max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 sticky top-0 bg-white">
-          <h3 className="text-xs font-bold text-slate-800">{titulo}</h3>
-          <button onClick={onCerrar} className="text-slate-400 hover:text-slate-600"><X size={15} /></button>
+    <div
+      className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-[2px] overflow-y-auto overscroll-contain"
+      onClick={onCerrar}
+    >
+      {/* min-h-full + items-center: centrado cuando cabe, y cuando no cabe el
+          overlay entero hace scroll sin que se coma el encabezado. */}
+      <div className="flex min-h-full items-center justify-center p-4">
+        <div
+          className="bg-white rounded-xl shadow-xl w-full max-w-md"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100">
+            <h3 className="text-xs font-bold text-slate-800">{titulo}</h3>
+            <button onClick={onCerrar} className="text-slate-400 hover:text-slate-600"><X size={15} /></button>
+          </div>
+          <div className="p-4 space-y-2.5">{children}</div>
         </div>
-        <div className="p-4 space-y-3">{children}</div>
       </div>
     </div>
   );
