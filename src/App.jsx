@@ -5,7 +5,8 @@ import ModuloTecnicos from './components/Tecnicos'
 import ModuloPendientes from './components/Gestion'
 import ModuloTablas from './components/Tablas'
 import Dashboard from './components/Dashboard'
-import { Wrench, ClipboardList, BarChart3, Cloud, CloudOff, Loader2, LayoutDashboard } from 'lucide-react'
+import Vacaciones from './components/Vacaciones'
+import { Wrench, ClipboardList, BarChart3, Cloud, CloudOff, Loader2, LayoutDashboard, CalendarDays } from 'lucide-react'
 
 function normalizarTexto(texto) {
   if (!texto) return ''
@@ -15,6 +16,11 @@ function normalizarTexto(texto) {
 export default function App() {
   const [tab, setTab] = useState('dashboard')
   const [syncStatus, setSyncStatus] = useState('cargando')
+  // Vacaciones se monta hasta la primera vez que se abre la pestaña, para no
+  // pegarle a Supabase en cada arranque de la app. Una vez montado se queda,
+  // conservando filtros y datos al cambiar de pestaña.
+  const [vacacionesMontado, setVacacionesMontado] = useState(false)
+  useEffect(() => { if (tab === 'vacaciones') setVacacionesMontado(true) }, [tab])
   const nubeCargada = useRef(false)
   // Cuando aplicamos datos que vienen de la nube, marcamos esto para NO volver
   // a re-subir lo mismo (evita un upsert eco innecesario).
@@ -198,6 +204,7 @@ export default function App() {
     { id: 'tecnicos', label: 'Técnicos', icon: Wrench },
     { id: 'tablas', label: 'Reportes', icon: BarChart3 },
     { id: 'pendientes', label: 'Gestión', icon: ClipboardList },
+    { id: 'vacaciones', label: 'Vacaciones', icon: CalendarDays },
   ]
 
   const hoy = new Date()
@@ -292,6 +299,9 @@ export default function App() {
         </div>
         <div className={tab === 'pendientes' ? 'block fade-in' : 'hidden'}>
           <ModuloPendientes />
+        </div>
+        <div className={tab === 'vacaciones' ? 'block fade-in' : 'hidden'}>
+          {vacacionesMontado && <Vacaciones />}
         </div>
       </main>
     </div>
