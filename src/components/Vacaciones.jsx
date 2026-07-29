@@ -32,7 +32,7 @@ const calcularHabiles = (inicio, fin, descansos, setAsuetos) => {
   const a = aFecha(inicio);
   const b = aFecha(fin);
   if (!a || !b || b < a) return 0;
-  const desc = descansos && descansos.length ? descansos : [0];
+  const desc = descansos && descansos.length ? descansos : [0, 6];
   let n = 0;
   for (const cur = new Date(a); cur <= b; cur.setDate(cur.getDate() + 1)) {
     if (desc.includes(cur.getDay())) continue;
@@ -43,11 +43,13 @@ const calcularHabiles = (inicio, fin, descansos, setAsuetos) => {
 };
 
 const JORNADAS = [
-  { valor: '0',   etiqueta: 'Lunes a sábado (descansa domingo)' },
   { valor: '0,6', etiqueta: 'Lunes a viernes (descansa sábado y domingo)' },
+  { valor: '0',   etiqueta: 'Lunes a sábado (descansa solo domingo)' },
 ];
 
-const jornadaTexto = (arr) => (arr || []).join(',') === '0,6' ? 'Lun–Vie' : 'Lun–Sáb';
+const JORNADA_DEFECTO = '0,6';
+
+const jornadaTexto = (arr) => (arr || []).join(',') === '0' ? 'Lun–Sáb' : 'Lun–Vie';
 
 /* ================================================================== */
 
@@ -55,6 +57,7 @@ export default function Vacaciones() {
   const [pestana, setPestana] = useState('registro');
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
+  const [exportando, setExportando] = useState(false);
   const [error, setError] = useState('');
 
   const [empleados, setEmpleados] = useState([]);
@@ -134,26 +137,195 @@ export default function Vacaciones() {
     cargar();
   };
 
-  const exportarCSV = () => {
-    const filas = [
-      ['Empleado', 'Puesto', 'Desde', 'Hasta', 'Días hábiles', 'Observaciones'],
-      ...gocesFiltrados.map((g) => [
-        g.vac_empleados?.nombre || '',
-        g.vac_empleados?.puesto || '',
-        mostrar(g.fecha_inicio),
-        mostrar(g.fecha_fin),
-        g.dias_habiles,
-        (g.observaciones || '').replace(/"/g, '""'),
-      ]),
-    ];
-    const csv = filas.map((f) => f.map((c) => `"${c}"`).join(',')).join('\r\n');
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `vacaciones_${hoyTexto()}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  /* ------------------------- reporte en Excel -------------------------- */
+  /* ExcelJS se carga con import() dinámico: son ~270 KB que NO entran al
+     bundle principal, solo se bajan la primera vez que se toca el botón. */
+  const exportarExcel = async () => {
+    setExportando(true);
+    try {
+      const ExcelJS = (await import('exceljs')).default;
+
+      const TINTA   = 'FF1E293B'; // encabezados
+      const CEBRA   = 'FFF1F5F9';
+      const LINEA   = 'FFCBD5E1';
+      const TOTALES = 'FFE2E8F0';
+      const borde = {
+        top:    { style: 'thin', color: { argb: LINEA } },
+        left:   { style: 'thin', color: { argb: LINEA } },
+        bottom: { style: 'thin', color: { argb: LINEA } },
+        right:  { style: 'thin', color: { argb: LINEA } },
+      };
+
+      const criterios = [];
+      if (filtroEmpleado) criterios.push(`Personal: ${empleados.find((e) => e.id === filtroEmpleado)?.nombre || ''}`);
+      if (filtroAnio)     criterios.push(`Año: ${filtroAnio}`);
+      if (busqueda)       criterios.push(`Búsqueda: "${busqueda}"`);
+      const subtitulo = `${criterios.length ? criterios.join('   ·   ') : 'Todos los registros'}   ·   Generado el ${new Date().toLocaleDateString('es-GT')}`;
+
+      const wb = new ExcelJS.Workbook();
+      wb.creator = 'Control-Tecnicos';
+      wb.created = new Date();
+
+      /* Título + subtítulo + fila de encabezados. Devuelve la fila de datos. */
+      const armarCabecera = (ws, titulo, columnas) => {
+        const n = columnas.length;
+        const ultima = String.fromCharCode(64 + n);
+
+        ws.mergeCells(`A1:${ultima}1`);
+        const t = ws.getCell('A1');
+        t.value = titulo;
+        t.font = { bold: true, size: 14, color: { argb: TINTA } };
+        t.alignment = { vertical: 'middle' };
+        ws.getRow(1).height = 24;
+
+        ws.mergeCells(`A2:${ultima}2`);
+        const s = ws.getCell('A2');
+        s.value = subtitulo;
+        s.font = { size: 9, italic: true, color: { argb: 'FF64748B' } };
+        ws.getRow(2).height = 16;
+
+        ws.columns = columnas.map((c) => ({ width: c.ancho }));
+
+        const enc = ws.getRow(4);
+        columnas.forEach((c, i) => {
+          const celda = enc.getCell(i + 1);
+          celda.value = c.titulo;
+          celda.font = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
+          celda.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TINTA } };
+          celda.alignment = { horizontal: c.alinear || 'left', vertical: 'middle', wrapText: true };
+          celda.border = borde;
+        });
+        enc.height = 22;
+
+        ws.views = [{ state: 'frozen', ySplit: 4 }];
+        ws.autoFilter = { from: { row: 4, column: 1 }, to: { row: 4, column: n } };
+        return 5;
+      };
+
+      const pintarFila = (fila, columnas, indice) => {
+        columnas.forEach((c, i) => {
+          const celda = fila.getCell(i + 1);
+          celda.border = borde;
+          celda.font = { size: 10 };
+          celda.alignment = { horizontal: c.alinear || 'left', vertical: 'middle', wrapText: c.envolver || false };
+          if (c.formato) celda.numFmt = c.formato;
+          if (indice % 2) celda.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: CEBRA } };
+        });
+      };
+
+      /* ---------- Hoja 1 · Registro ---------- */
+      const colsRegistro = [
+        { titulo: 'Compañero',     ancho: 26 },
+        { titulo: 'Puesto',        ancho: 18 },
+        { titulo: 'Jornada',       ancho: 11, alinear: 'center' },
+        { titulo: 'Desde',         ancho: 12, alinear: 'center', formato: 'dd/mm/yyyy' },
+        { titulo: 'Hasta',         ancho: 12, alinear: 'center', formato: 'dd/mm/yyyy' },
+        { titulo: 'Días hábiles',  ancho: 13, alinear: 'center' },
+        { titulo: 'Observaciones', ancho: 34, envolver: true },
+      ];
+
+      const h1 = wb.addWorksheet('Registro', { properties: { tabColor: { argb: TINTA } } });
+      let r = armarCabecera(h1, 'CONTROL DE VACACIONES · TÉCNICOS', colsRegistro);
+
+      const porEmpleado = new Map(empleados.map((e) => [e.id, e]));
+      const ordenados = [...gocesFiltrados].sort((a, b) => {
+        const na = a.vac_empleados?.nombre || '';
+        const nb = b.vac_empleados?.nombre || '';
+        return na === nb ? a.fecha_inicio.localeCompare(b.fecha_inicio) : na.localeCompare(nb);
+      });
+
+      ordenados.forEach((g, i) => {
+        const fila = h1.getRow(r++);
+        fila.values = [
+          g.vac_empleados?.nombre || '',
+          g.vac_empleados?.puesto || '',
+          jornadaTexto(porEmpleado.get(g.empleado_id)?.dias_descanso),
+          aFecha(g.fecha_inicio),
+          aFecha(g.fecha_fin),
+          g.dias_habiles,
+          g.observaciones || '',
+        ];
+        pintarFila(fila, colsRegistro, i);
+        fila.getCell(6).font = { size: 10, bold: true };
+      });
+
+      if (ordenados.length) {
+        const total = h1.getRow(r);
+        h1.mergeCells(`A${r}:E${r}`);
+        total.getCell(1).value = 'TOTAL DE DÍAS HÁBILES';
+        total.getCell(6).value = ordenados.reduce((s, g) => s + (g.dias_habiles || 0), 0);
+        [1, 2, 3, 4, 5, 6, 7].forEach((c) => {
+          const celda = total.getCell(c);
+          celda.font = { bold: true, size: 10, color: { argb: TINTA } };
+          celda.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TOTALES } };
+          celda.border = borde;
+        });
+        total.getCell(1).alignment = { horizontal: 'right', vertical: 'middle' };
+        total.getCell(6).alignment = { horizontal: 'center', vertical: 'middle' };
+        total.height = 20;
+      }
+
+      /* ---------- Hoja 2 · Resumen por persona ---------- */
+      const colsResumen = [
+        { titulo: 'Compañero',       ancho: 26 },
+        { titulo: 'Puesto',          ancho: 18 },
+        { titulo: 'Jornada',         ancho: 11, alinear: 'center' },
+        { titulo: 'Períodos',        ancho: 11, alinear: 'center' },
+        { titulo: 'Días este año',   ancho: 14, alinear: 'center' },
+        { titulo: 'Días histórico',  ancho: 15, alinear: 'center' },
+        { titulo: 'Último goce',     ancho: 13, alinear: 'center', formato: 'dd/mm/yyyy' },
+      ];
+
+      const h2 = wb.addWorksheet('Resumen por persona');
+      let r2 = armarCabecera(h2, 'RESUMEN POR PERSONA', colsResumen);
+
+      [...resumen].sort((a, b) => a.nombre.localeCompare(b.nombre)).forEach((p, i) => {
+        const fila = h2.getRow(r2++);
+        fila.values = [
+          p.nombre,
+          p.puesto || '',
+          jornadaTexto(p.dias_descanso),
+          p.periodos,
+          p.dias_anio_actual,
+          p.dias_total,
+          p.ultimo_goce ? aFecha(p.ultimo_goce) : '',
+        ];
+        pintarFila(fila, colsResumen, i);
+        fila.getCell(6).font = { size: 10, bold: true };
+      });
+
+      /* ---------- Hoja 3 · Asuetos considerados ---------- */
+      const colsAsuetos = [
+        { titulo: 'Fecha',       ancho: 14, alinear: 'center', formato: 'dd/mm/yyyy' },
+        { titulo: 'Día',         ancho: 12, alinear: 'center' },
+        { titulo: 'Descripción', ancho: 46 },
+      ];
+      const h3 = wb.addWorksheet('Asuetos');
+      let r3 = armarCabecera(h3, 'ASUETOS CONSIDERADOS EN EL CÁLCULO', colsAsuetos);
+      const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+      asuetos.forEach((a, i) => {
+        const fila = h3.getRow(r3++);
+        const d = aFecha(a.fecha);
+        fila.values = [d, DIAS[d.getDay()], a.descripcion];
+        pintarFila(fila, colsAsuetos, i);
+      });
+
+      /* ---------- Descarga ---------- */
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Control_Vacaciones_${hoyTexto()}.xlsx`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) {
+      setError(`No se pudo generar el Excel: ${e.message}`);
+    } finally {
+      setExportando(false);
+    }
   };
 
   /* ---------------------------- render --------------------------- */
@@ -176,11 +348,13 @@ export default function Vacaciones() {
         </div>
         <div className="flex items-center gap-1.5">
           <button
-            onClick={exportarCSV}
-            disabled={!gocesFiltrados.length}
+            onClick={exportarExcel}
+            disabled={!gocesFiltrados.length || exportando}
             className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+            title="Descargar reporte en Excel"
           >
-            <Download size={13} /> CSV
+            {exportando ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+            {exportando ? 'Generando…' : 'Excel'}
           </button>
           <button
             onClick={() => { setEditandoEmpleado(null); setModalEmpleado(true); }}
@@ -512,7 +686,9 @@ function ModalEmpleado({ empleado, guardando, setGuardando, onCerrar, onGuardado
   const [nombre, setNombre] = useState(empleado?.nombre || '');
   const [puesto, setPuesto] = useState(empleado?.puesto || '');
   const [ingreso, setIngreso] = useState(empleado?.fecha_ingreso || '');
-  const [jornada, setJornada] = useState((empleado?.dias_descanso || [0]).join(','));
+  const [jornada, setJornada] = useState(
+    empleado?.dias_descanso ? empleado.dias_descanso.join(',') : JORNADA_DEFECTO
+  );
 
   const guardar = async () => {
     if (!nombre.trim()) return;
