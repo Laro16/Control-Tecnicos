@@ -85,7 +85,7 @@ export default function Vacaciones() {
         supabase.from('vac_resumen').select('*').order('nombre'),
         supabase
           .from('vac_goces')
-          .select('*, vac_empleados(nombre, puesto)')
+          .select('*, vac_empleados(codigo, nombre, puesto)')
           .order('fecha_inicio', { ascending: false }),
         supabase.from('vac_asuetos').select('*').order('fecha'),
       ]);
@@ -114,7 +114,7 @@ export default function Vacaciones() {
     if (filtroEmpleado && g.empleado_id !== filtroEmpleado) return false;
     if (filtroAnio && !g.fecha_inicio.startsWith(filtroAnio)) return false;
     if (busqueda) {
-      const t = `${g.vac_empleados?.nombre || ''} ${g.observaciones || ''}`.toLowerCase();
+      const t = `${g.vac_empleados?.codigo || ''} ${g.vac_empleados?.nombre || ''} ${g.observaciones || ''}`.toLowerCase();
       if (!t.includes(busqueda.toLowerCase())) return false;
     }
     return true;
@@ -155,6 +155,7 @@ export default function Vacaciones() {
         bottom: { style: 'thin', color: { argb: LINEA } },
         right:  { style: 'thin', color: { argb: LINEA } },
       };
+      const col = (i) => String.fromCharCode(64 + i); // 1 -> A
 
       const criterios = [];
       if (filtroEmpleado) criterios.push(`Personal: ${empleados.find((e) => e.id === filtroEmpleado)?.nombre || ''}`);
@@ -166,10 +167,11 @@ export default function Vacaciones() {
       wb.creator = 'Control-Tecnicos';
       wb.created = new Date();
 
-      /* Título + subtítulo + fila de encabezados. Devuelve la fila de datos. */
+      /* Título, subtítulo, encabezados y configuración de impresión.
+         Devuelve el número de la primera fila de datos. */
       const armarCabecera = (ws, titulo, columnas) => {
         const n = columnas.length;
-        const ultima = String.fromCharCode(64 + n);
+        const ultima = col(n);
 
         ws.mergeCells(`A1:${ultima}1`);
         const t = ws.getCell('A1');
@@ -199,6 +201,23 @@ export default function Vacaciones() {
 
         ws.views = [{ state: 'frozen', ySplit: 4 }];
         ws.autoFilter = { from: { row: 4, column: 1 }, to: { row: 4, column: n } };
+
+        /* Impresión: horizontal, ajustado a una hoja de ancho, con el
+           encabezado repetido en cada página y numeración al pie. */
+        ws.pageSetup = {
+          orientation: 'landscape',
+          paperSize: 9,               // A4
+          fitToPage: true,
+          fitToWidth: 1,
+          fitToHeight: 0,
+          horizontalCentered: true,
+          printTitlesRow: '4:4',
+          margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 },
+        };
+        ws.headerFooter = {
+          oddFooter: '&L&9Control-Tecnicos&C&9&P de &N&R&9&D',
+        };
+
         return 5;
       };
 
@@ -213,8 +232,30 @@ export default function Vacaciones() {
         });
       };
 
+      /* Fila de totales con fórmulas SUM reales, no números pegados: si
+         alguien borra o filtra filas en Excel, el total se recalcula. */
+      const filaTotales = (ws, numFila, columnas, etiqueta, colsSumar, desde, hasta) => {
+        const fila = ws.getRow(numFila);
+        const ultimaEtiqueta = Math.min(...colsSumar) - 1;
+        if (ultimaEtiqueta >= 1) ws.mergeCells(`A${numFila}:${col(ultimaEtiqueta)}${numFila}`);
+        fila.getCell(1).value = etiqueta;
+        colsSumar.forEach((c) => {
+          fila.getCell(c).value = { formula: `SUM(${col(c)}${desde}:${col(c)}${hasta})` };
+        });
+        columnas.forEach((_, i) => {
+          const celda = fila.getCell(i + 1);
+          celda.font = { bold: true, size: 10, color: { argb: TINTA } };
+          celda.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TOTALES } };
+          celda.border = borde;
+          celda.alignment = { horizontal: colsSumar.includes(i + 1) ? 'center' : 'left', vertical: 'middle' };
+        });
+        fila.getCell(1).alignment = { horizontal: 'right', vertical: 'middle' };
+        fila.height = 20;
+      };
+
       /* ---------- Hoja 1 · Registro ---------- */
       const colsRegistro = [
+        { titulo: 'Código',        ancho: 11, alinear: 'center' },
         { titulo: 'Compañero',     ancho: 26 },
         { titulo: 'Puesto',        ancho: 18 },
         { titulo: 'Jornada',       ancho: 11, alinear: 'center' },
@@ -225,7 +266,8 @@ export default function Vacaciones() {
       ];
 
       const h1 = wb.addWorksheet('Registro', { properties: { tabColor: { argb: TINTA } } });
-      let r = armarCabecera(h1, 'CONTROL DE VACACIONES · TÉCNICOS', colsRegistro);
+      const inicio1 = armarCabecera(h1, 'CONTROL DE VACACIONES · TÉCNICOS', colsRegistro);
+      let r = inicio1;
 
       const porEmpleado = new Map(empleados.map((e) => [e.id, e]));
       const ordenados = [...gocesFiltrados].sort((a, b) => {
@@ -237,6 +279,7 @@ export default function Vacaciones() {
       ordenados.forEach((g, i) => {
         const fila = h1.getRow(r++);
         fila.values = [
+          g.vac_empleados?.codigo || '',
           g.vac_empleados?.nombre || '',
           g.vac_empleados?.puesto || '',
           jornadaTexto(porEmpleado.get(g.empleado_id)?.dias_descanso),
@@ -246,27 +289,17 @@ export default function Vacaciones() {
           g.observaciones || '',
         ];
         pintarFila(fila, colsRegistro, i);
-        fila.getCell(6).font = { size: 10, bold: true };
+        fila.getCell(1).font = { size: 10, name: 'Consolas' };
+        fila.getCell(7).font = { size: 10, bold: true };
       });
 
       if (ordenados.length) {
-        const total = h1.getRow(r);
-        h1.mergeCells(`A${r}:E${r}`);
-        total.getCell(1).value = 'TOTAL DE DÍAS HÁBILES';
-        total.getCell(6).value = ordenados.reduce((s, g) => s + (g.dias_habiles || 0), 0);
-        [1, 2, 3, 4, 5, 6, 7].forEach((c) => {
-          const celda = total.getCell(c);
-          celda.font = { bold: true, size: 10, color: { argb: TINTA } };
-          celda.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TOTALES } };
-          celda.border = borde;
-        });
-        total.getCell(1).alignment = { horizontal: 'right', vertical: 'middle' };
-        total.getCell(6).alignment = { horizontal: 'center', vertical: 'middle' };
-        total.height = 20;
+        filaTotales(h1, r, colsRegistro, 'TOTAL DE DÍAS HÁBILES', [7], inicio1, r - 1);
       }
 
       /* ---------- Hoja 2 · Resumen por persona ---------- */
       const colsResumen = [
+        { titulo: 'Código',          ancho: 11, alinear: 'center' },
         { titulo: 'Compañero',       ancho: 26 },
         { titulo: 'Puesto',          ancho: 18 },
         { titulo: 'Jornada',         ancho: 11, alinear: 'center' },
@@ -277,11 +310,14 @@ export default function Vacaciones() {
       ];
 
       const h2 = wb.addWorksheet('Resumen por persona');
-      let r2 = armarCabecera(h2, 'RESUMEN POR PERSONA', colsResumen);
+      const inicio2 = armarCabecera(h2, 'RESUMEN POR PERSONA', colsResumen);
+      let r2 = inicio2;
 
-      [...resumen].sort((a, b) => a.nombre.localeCompare(b.nombre)).forEach((p, i) => {
+      const personas = [...resumen].sort((a, b) => a.nombre.localeCompare(b.nombre));
+      personas.forEach((p, i) => {
         const fila = h2.getRow(r2++);
         fila.values = [
+          p.codigo || '',
           p.nombre,
           p.puesto || '',
           jornadaTexto(p.dias_descanso),
@@ -291,8 +327,13 @@ export default function Vacaciones() {
           p.ultimo_goce ? aFecha(p.ultimo_goce) : '',
         ];
         pintarFila(fila, colsResumen, i);
-        fila.getCell(6).font = { size: 10, bold: true };
+        fila.getCell(1).font = { size: 10, name: 'Consolas' };
+        fila.getCell(7).font = { size: 10, bold: true };
       });
+
+      if (personas.length) {
+        filaTotales(h2, r2, colsResumen, 'TOTALES', [5, 6, 7], inicio2, r2 - 1);
+      }
 
       /* ---------- Hoja 3 · Asuetos considerados ---------- */
       const colsAsuetos = [
@@ -456,6 +497,7 @@ export default function Vacaciones() {
                     <table className="w-full text-[11px]">
                       <thead className="bg-slate-50 border-b border-slate-200">
                         <tr className="text-left text-[10px] uppercase tracking-wide text-slate-500">
+                          <th className="px-3 py-2 font-bold">Código</th>
                           <th className="px-3 py-2 font-bold">Compañero</th>
                           <th className="px-3 py-2 font-bold">Desde</th>
                           <th className="px-3 py-2 font-bold">Hasta</th>
@@ -467,6 +509,9 @@ export default function Vacaciones() {
                       <tbody>
                         {gocesFiltrados.map((g, i) => (
                           <tr key={g.id} className={i % 2 ? 'bg-slate-50/50' : ''}>
+                            <td className="px-3 py-2 font-mono text-[10px] text-slate-500 whitespace-nowrap">
+                              {g.vac_empleados?.codigo || '—'}
+                            </td>
                             <td className="px-3 py-2">
                               <span className="font-semibold text-slate-700">{g.vac_empleados?.nombre || '—'}</span>
                               {g.vac_empleados?.puesto && (
@@ -505,6 +550,9 @@ export default function Vacaciones() {
                 <div key={r.id} className="border border-slate-200 rounded-lg p-3 bg-white">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
+                      {r.codigo && (
+                        <p className="text-[9px] font-mono font-bold text-slate-400 tracking-wider">{r.codigo}</p>
+                      )}
                       <p className="text-xs font-bold text-slate-800 truncate">{r.nombre}</p>
                       <p className="text-[10px] text-slate-400">{r.puesto || 'Sin puesto'} · {jornadaTexto(r.dias_descanso)}</p>
                     </div>
@@ -683,6 +731,7 @@ function ModalGoce({ empleados, setAsuetos, guardando, setGuardando, onCerrar, o
 /*  Modal: alta / edición de personal                                  */
 /* ================================================================== */
 function ModalEmpleado({ empleado, guardando, setGuardando, onCerrar, onGuardado, onError }) {
+  const [codigo, setCodigo] = useState(empleado?.codigo || '');
   const [nombre, setNombre] = useState(empleado?.nombre || '');
   const [puesto, setPuesto] = useState(empleado?.puesto || '');
   const [ingreso, setIngreso] = useState(empleado?.fecha_ingreso || '');
@@ -694,6 +743,7 @@ function ModalEmpleado({ empleado, guardando, setGuardando, onCerrar, onGuardado
     if (!nombre.trim()) return;
     setGuardando(true);
     const datos = {
+      codigo: codigo.trim() || null,
       nombre: nombre.trim(),
       puesto: puesto.trim() || null,
       fecha_ingreso: ingreso || null,
@@ -704,7 +754,11 @@ function ModalEmpleado({ empleado, guardando, setGuardando, onCerrar, onGuardado
       : await supabase.from('vac_empleados').insert(datos);
     setGuardando(false);
     if (error) {
-      onError(error.code === '23505' ? 'Ya existe un compañero con ese nombre.' : error.message);
+      onError(
+        error.code === '23505'
+          ? 'Ya existe un compañero con ese nombre o con ese código.'
+          : error.message
+      );
       return;
     }
     onGuardado();
@@ -712,6 +766,15 @@ function ModalEmpleado({ empleado, guardando, setGuardando, onCerrar, onGuardado
 
   return (
     <Marco titulo={empleado ? 'Editar compañero' : 'Agregar compañero'} onCerrar={onCerrar}>
+      <Campo etiqueta="Código (opcional)">
+        <input
+          value={codigo}
+          onChange={(e) => setCodigo(e.target.value)}
+          placeholder="Ej. T-01"
+          className="w-full text-xs font-mono border border-slate-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-slate-400"
+        />
+        <p className="text-[10px] text-slate-400 mt-1">No se puede repetir entre compañeros.</p>
+      </Campo>
       <Campo etiqueta="Nombre">
         <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre completo"
           className="w-full text-xs border border-slate-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-slate-400" />
