@@ -380,18 +380,23 @@ export default function Vacaciones() {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {/* Encabezado */}
-      <div className="flex items-center justify-between gap-2 flex-wrap">
+      <div className="flex items-center justify-between gap-3 flex-wrap rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm">
         <div className="flex items-center gap-2">
-          <CalendarDays size={18} className="text-slate-600" />
-          <h2 className="text-sm font-bold text-slate-800">Control de vacaciones</h2>
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+            <CalendarDays size={17} />
+          </span>
+          <div>
+            <h2 className="text-sm font-bold text-slate-800">Control de vacaciones</h2>
+            <p className="text-[10px] text-slate-400">Registro y seguimiento de días gozados</p>
+          </div>
         </div>
         <div className="flex items-center gap-1.5">
           <button
             onClick={exportarExcel}
             disabled={!gocesFiltrados.length || exportando}
-            className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+            className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm hover:border-slate-300 hover:bg-slate-50 disabled:opacity-40"
             title="Descargar reporte en Excel"
           >
             {exportando ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
@@ -399,14 +404,14 @@ export default function Vacaciones() {
           </button>
           <button
             onClick={() => { setEditandoEmpleado(null); setModalEmpleado(true); }}
-            className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
+            className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm hover:border-slate-300 hover:bg-slate-50"
           >
             <Users size={13} /> Personal
           </button>
           <button
             onClick={() => setModalGoce(true)}
             disabled={!empleados.length}
-            className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-40"
+            className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-slate-800 text-white shadow-sm hover:bg-slate-700 disabled:opacity-40"
           >
             <Plus size={13} /> Registrar vacaciones
           </button>
@@ -436,15 +441,15 @@ export default function Vacaciones() {
       {/* Pestañas */}
       {!!empleados.length && (
         <>
-          <div className="flex gap-1 border-b border-slate-200">
+          <div className="flex w-fit gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
             {[['registro', 'Registro'], ['personal', 'Por persona']].map(([id, txt]) => (
               <button
                 key={id}
                 onClick={() => setPestana(id)}
-                className={`text-[11px] font-semibold px-3 py-2 border-b-2 -mb-px transition-colors ${
+                className={`rounded-lg px-3 py-1.5 text-[11px] font-semibold transition-all ${
                   pestana === id
-                    ? 'border-slate-800 text-slate-800'
-                    : 'border-transparent text-slate-400 hover:text-slate-600'
+                    ? 'bg-slate-800 text-white shadow-sm'
+                    : 'text-slate-400 hover:bg-slate-50 hover:text-slate-700'
                 }`}
               >
                 {txt}
@@ -455,20 +460,20 @@ export default function Vacaciones() {
           {pestana === 'registro' ? (
             <>
               {/* Filtros */}
-              <div className="flex items-center gap-1.5 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
                 <div className="relative flex-1 min-w-[140px]">
                   <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
                     value={busqueda}
                     onChange={(e) => setBusqueda(e.target.value)}
                     placeholder="Buscar…"
-                    className="w-full pl-7 pr-2 py-1.5 text-[11px] border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-400"
+                    className="w-full pl-7 pr-2 py-2 text-[11px] border border-slate-200 rounded-lg bg-slate-50/60 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-400"
                   />
                 </div>
                 <select
                   value={filtroEmpleado}
                   onChange={(e) => setFiltroEmpleado(e.target.value)}
-                  className="text-[11px] border border-slate-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-slate-400"
+                  className="text-[11px] border border-slate-200 rounded-lg px-2.5 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-slate-400"
                 >
                   <option value="">Todo el personal</option>
                   {empleados.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
@@ -476,60 +481,63 @@ export default function Vacaciones() {
                 <select
                   value={filtroAnio}
                   onChange={(e) => setFiltroAnio(e.target.value)}
-                  className="text-[11px] border border-slate-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-slate-400"
+                  className="text-[11px] border border-slate-200 rounded-lg px-2.5 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-slate-400"
                 >
                   <option value="">Todos los años</option>
                   {anios.map((a) => <option key={a} value={a}>{a}</option>)}
                 </select>
-                <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1.5 rounded-lg whitespace-nowrap">
+                <span className="text-[10px] font-bold text-slate-600 bg-slate-100 border border-slate-200 px-2.5 py-2 rounded-lg whitespace-nowrap">
                   {gocesFiltrados.length} reg · {totalFiltrado} días
                 </span>
               </div>
 
               {/* Tabla de goces */}
-              <div className="border border-slate-200 rounded-lg overflow-hidden">
+              <div className="border border-slate-300 rounded-xl overflow-hidden bg-white shadow-sm">
                 {gocesFiltrados.length === 0 ? (
                   <p className="text-[11px] text-slate-400 text-center py-8">
                     No hay registros con estos filtros.
                   </p>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-[11px]">
-                      <thead className="bg-slate-50 border-b border-slate-200">
+                    <table className="w-full text-[11px] border-separate border-spacing-0">
+                      <thead className="bg-slate-100/80">
                         <tr className="text-left text-[10px] uppercase tracking-wide text-slate-500">
-                          <th className="px-3 py-2 font-bold">Código</th>
-                          <th className="px-3 py-2 font-bold">Compañero</th>
-                          <th className="px-3 py-2 font-bold">Desde</th>
-                          <th className="px-3 py-2 font-bold">Hasta</th>
-                          <th className="px-3 py-2 font-bold text-center">Días hábiles</th>
-                          <th className="px-3 py-2 font-bold">Observaciones</th>
-                          <th className="px-3 py-2" />
+                          <th className="border-b border-r border-slate-300 px-3 py-2.5 font-bold">Código</th>
+                          <th className="border-b border-r border-slate-300 px-3 py-2.5 font-bold">Compañero</th>
+                          <th className="border-b border-r border-slate-300 px-3 py-2.5 font-bold">Desde</th>
+                          <th className="border-b border-r border-slate-300 px-3 py-2.5 font-bold">Hasta</th>
+                          <th className="border-b border-r border-slate-300 px-3 py-2.5 font-bold text-center">Días hábiles</th>
+                          <th className="border-b border-r border-slate-300 px-3 py-2.5 font-bold">Observaciones</th>
+                          <th className="border-b border-slate-300 px-3 py-2.5" />
                         </tr>
                       </thead>
                       <tbody>
                         {gocesFiltrados.map((g, i) => (
-                          <tr key={g.id} className={i % 2 ? 'bg-slate-50/50' : ''}>
-                            <td className="px-3 py-2 font-mono text-[10px] text-slate-500 whitespace-nowrap">
+                          <tr
+                            key={g.id}
+                            className={`transition-colors hover:bg-slate-100/80 ${i % 2 ? 'bg-slate-50/60' : 'bg-white'}`}
+                          >
+                            <td className="border-b border-r border-slate-200 px-3 py-2.5 font-mono text-[10px] font-semibold text-slate-500 whitespace-nowrap">
                               {g.vac_empleados?.codigo || '—'}
                             </td>
-                            <td className="px-3 py-2">
-                              <span className="font-semibold text-slate-700">{g.vac_empleados?.nombre || '—'}</span>
+                            <td className="border-b border-r border-slate-200 px-3 py-2.5">
+                              <span className="font-bold text-slate-700">{g.vac_empleados?.nombre || '—'}</span>
                               {g.vac_empleados?.puesto && (
-                                <span className="block text-[10px] text-slate-400">{g.vac_empleados.puesto}</span>
+                                <span className="block mt-0.5 text-[9px] font-medium uppercase tracking-wide text-slate-400">{g.vac_empleados.puesto}</span>
                               )}
                             </td>
-                            <td className="px-3 py-2 text-slate-600 whitespace-nowrap">{mostrar(g.fecha_inicio)}</td>
-                            <td className="px-3 py-2 text-slate-600 whitespace-nowrap">{mostrar(g.fecha_fin)}</td>
-                            <td className="px-3 py-2 text-center">
-                              <span className="inline-block font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">
+                            <td className="border-b border-r border-slate-200 px-3 py-2.5 text-slate-600 whitespace-nowrap">{mostrar(g.fecha_inicio)}</td>
+                            <td className="border-b border-r border-slate-200 px-3 py-2.5 text-slate-600 whitespace-nowrap">{mostrar(g.fecha_fin)}</td>
+                            <td className="border-b border-r border-slate-200 px-3 py-2.5 text-center">
+                              <span className="inline-flex min-w-[30px] items-center justify-center rounded-full border border-slate-200 bg-slate-100 px-2 py-1 font-bold text-slate-700">
                                 {g.dias_habiles}
                               </span>
                             </td>
-                            <td className="px-3 py-2 text-slate-500">{g.observaciones || '—'}</td>
-                            <td className="px-3 py-2 text-right">
+                            <td className="border-b border-r border-slate-200 px-3 py-2.5 text-slate-500">{g.observaciones || '—'}</td>
+                            <td className="border-b border-slate-200 px-2 py-2.5 text-center">
                               <button
                                 onClick={() => borrarGoce(g.id)}
-                                className="text-slate-300 hover:text-red-500 transition-colors"
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-300 transition-colors hover:bg-red-50 hover:text-red-500"
                                 title="Eliminar registro"
                               >
                                 <Trash2 size={13} />
@@ -545,56 +553,84 @@ export default function Vacaciones() {
             </>
           ) : (
             /* Resumen por persona */
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {resumen.map((r) => (
-                <div key={r.id} className="border border-slate-200 rounded-lg p-3 bg-white">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      {r.codigo && (
-                        <p className="text-[9px] font-mono font-bold text-slate-400 tracking-wider">{r.codigo}</p>
-                      )}
-                      <p className="text-xs font-bold text-slate-800 truncate">{r.nombre}</p>
-                      <p className="text-[10px] text-slate-400">{r.puesto || 'Sin puesto'} · {jornadaTexto(r.dias_descanso)}</p>
-                    </div>
-                    <div className="flex gap-1 shrink-0">
-                      <button
-                        onClick={() => {
-                          setEditandoEmpleado(empleados.find((e) => e.id === r.id));
-                          setModalEmpleado(true);
-                        }}
-                        className="text-slate-300 hover:text-slate-600"
-                        title="Editar"
-                      >
-                        <Pencil size={12} />
-                      </button>
-                      <button
-                        onClick={() => borrarEmpleado(r.id, r.nombre)}
-                        className="text-slate-300 hover:text-red-500"
-                        title="Eliminar"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+                    <Users size={15} />
+                  </span>
+                  <div>
+                    <p className="text-[11px] font-bold text-slate-700">Resumen por persona</p>
+                    <p className="text-[10px] text-slate-400">Historial de vacaciones y períodos registrados</p>
                   </div>
-                  <div className="grid grid-cols-3 gap-1 mt-3 text-center">
-                    <div className="bg-slate-50 rounded p-1.5">
-                      <p className="text-sm font-bold text-slate-800">{r.dias_anio_actual}</p>
-                      <p className="text-[9px] text-slate-400 uppercase">Este año</p>
-                    </div>
-                    <div className="bg-slate-50 rounded p-1.5">
-                      <p className="text-sm font-bold text-slate-800">{r.dias_total}</p>
-                      <p className="text-[9px] text-slate-400 uppercase">Histórico</p>
-                    </div>
-                    <div className="bg-slate-50 rounded p-1.5">
-                      <p className="text-sm font-bold text-slate-800">{r.periodos}</p>
-                      <p className="text-[9px] text-slate-400 uppercase">Períodos</p>
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-slate-400 mt-2">
-                    Último goce: {r.ultimo_goce ? mostrar(r.ultimo_goce) : 'nunca'}
-                  </p>
                 </div>
-              ))}
+                <span className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[10px] font-bold text-slate-500 whitespace-nowrap">
+                  {resumen.length} personas
+                </span>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {resumen.map((r) => (
+                  <div
+                    key={r.id}
+                    className="group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
+                  >
+                    <div className="flex items-start justify-between gap-2 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white p-3">
+                      <div className="min-w-0">
+                        {r.codigo && (
+                          <span className="mb-1 inline-flex rounded border border-slate-200 bg-white px-1.5 py-0.5 font-mono text-[9px] font-bold tracking-wider text-slate-400">
+                            {r.codigo}
+                          </span>
+                        )}
+                        <p className="truncate text-xs font-bold text-slate-800">{r.nombre}</p>
+                        <p className="mt-0.5 truncate text-[9px] font-medium uppercase tracking-wide text-slate-400">
+                          {r.puesto || 'Sin puesto'} · {jornadaTexto(r.dias_descanso)}
+                        </p>
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        <button
+                          onClick={() => {
+                            setEditandoEmpleado(empleados.find((e) => e.id === r.id));
+                            setModalEmpleado(true);
+                          }}
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-300 transition-colors hover:border-slate-300 hover:text-slate-600"
+                          title="Editar"
+                        >
+                          <Pencil size={12} />
+                        </button>
+                        <button
+                          onClick={() => borrarEmpleado(r.id, r.nombre)}
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-300 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-500"
+                          title="Eliminar"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 divide-x divide-slate-200 border-b border-slate-200 text-center">
+                      <div className="px-2 py-3">
+                        <p className="text-base font-bold leading-none text-slate-800">{r.dias_anio_actual}</p>
+                        <p className="mt-1.5 text-[8px] font-bold uppercase tracking-wide text-slate-400">Este año</p>
+                      </div>
+                      <div className="px-2 py-3">
+                        <p className="text-base font-bold leading-none text-slate-800">{r.dias_total}</p>
+                        <p className="mt-1.5 text-[8px] font-bold uppercase tracking-wide text-slate-400">Histórico</p>
+                      </div>
+                      <div className="px-2 py-3">
+                        <p className="text-base font-bold leading-none text-slate-800">{r.periodos}</p>
+                        <p className="mt-1.5 text-[8px] font-bold uppercase tracking-wide text-slate-400">Períodos</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 bg-slate-50/60 px-3 py-2 text-[10px] text-slate-400">
+                      <CalendarDays size={12} className="shrink-0" />
+                      <span>Último goce:</span>
+                      <span className="font-semibold text-slate-600">{r.ultimo_goce ? mostrar(r.ultimo_goce) : 'Nunca'}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </>
