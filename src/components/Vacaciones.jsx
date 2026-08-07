@@ -26,16 +26,16 @@ const mostrar = (s) => {
 
 const hoyTexto = () => aTexto(new Date());
 
-/* Mismo cálculo que hace el trigger en Postgres, solo para la vista previa. */
-const calcularHabiles = (inicio, fin, descansos, setAsuetos) => {
+/* Mismo cálculo que hace el trigger en Postgres, solo para la vista previa.
+   Para vacaciones siempre se excluyen sábado, domingo y asuetos. */
+const calcularHabiles = (inicio, fin, setAsuetos) => {
   if (!inicio || !fin) return 0;
   const a = aFecha(inicio);
   const b = aFecha(fin);
   if (!a || !b || b < a) return 0;
-  const desc = descansos && descansos.length ? descansos : [0, 6];
   let n = 0;
   for (const cur = new Date(a); cur <= b; cur.setDate(cur.getDate() + 1)) {
-    if (desc.includes(cur.getDay())) continue;
+    if ([0, 6].includes(cur.getDay())) continue;
     if (setAsuetos.has(aTexto(cur))) continue;
     n++;
   }
@@ -635,8 +635,7 @@ function ModalGoce({ empleados, setAsuetos, guardando, setGuardando, onCerrar, o
   const [fin, setFin] = useState(hoyTexto());
   const [obs, setObs] = useState('');
 
-  const empleado = empleados.find((e) => e.id === empleadoId);
-  const habiles = calcularHabiles(inicio, fin, empleado?.dias_descanso, setAsuetos);
+  const habiles = calcularHabiles(inicio, fin, setAsuetos);
   const calendario = inicio && fin && aFecha(fin) >= aFecha(inicio)
     ? Math.round((aFecha(fin) - aFecha(inicio)) / 86400000) + 1
     : 0;
@@ -695,7 +694,7 @@ function ModalGoce({ empleados, setAsuetos, guardando, setGuardando, onCerrar, o
           <p className="text-[11px] text-slate-600">
             Son <span className="font-bold text-slate-800">{habiles} días hábiles</span>
             {calendario !== habiles && (
-              <span className="text-slate-400"> ({calendario} días de calendario; no se cuentan descansos ni asuetos)</span>
+              <span className="text-slate-400"> ({calendario} días de calendario; no se cuentan sábados, domingos ni asuetos)</span>
             )}
           </p>
         </div>
