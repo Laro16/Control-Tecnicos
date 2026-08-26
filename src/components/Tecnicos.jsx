@@ -6,6 +6,7 @@ import {
   Upload, Clipboard, FileText, FileSpreadsheet, ChevronDown, Wrench, Filter, 
   DownloadCloud, MapPin, ShieldAlert, ShieldCheck, Copy, ChevronRight, Users, Activity
 } from 'lucide-react'
+import { obtenerSerieTicket, resolverSerie, verificarGarantiaTicket } from '../utils/garantias'
 
 const TODAY = () => {
   const d = new Date()
@@ -55,65 +56,6 @@ function normalizarFechaExcel(fechaTexto) {
   return null
 }
 
-// ── GARANTÍA ──
-const CLIENTES_GARANTIA = [
-  { nombre: 'ABCO, S.A.', anios: 1 },
-  { nombre: 'COMERCIALIZADORA  DE ALIMENTOS Y BEBIDAS SAN MIGUEL S.A', anios: 2 },
-  { nombre: 'DISTRIBUIDORA DE LICORES', anios: 1 },
-  { nombre: 'EMBOTELLADORA CENTRAL', anios: 2 },
-  { nombre: 'EMBOTELLADORA LA MARIPOSA', anios: 2 },
-  { nombre: 'IMPORTADORA Y DISTRIBUIDORA DE APARATOS ELECTRICOS, S.A.', anios: 1 },
-  { nombre: 'M.D.T. INTERNACIONAL, S.A.', anios: 1 },
-  { nombre: 'PRODUCTOS LACTEOS DE CENTROAMERICA', anios: 1 },
-  { nombre: 'RICZA', anios: 1 },
-  { nombre: 'SAVONA DE GUATEMALA', anios: 1 },
-  { nombre: 'SERVICOCINAS, SOCIEDAD ANONIMA', anios: 1 },
-  { nombre: 'SUPER VITAMINAS', anios: 1 },
-  { nombre: 'UNISUPER S.A.', anios: 1 },
-  { nombre: 'VIVENDO', anios: 1 },
-  { nombre: 'ARRENDADORA SARITA, S.A., S.A.', anios: 1 },
-   
-]
-
-function buscarClienteGarantia(clienteTexto) {
-  if (!clienteTexto || clienteTexto === '-') return null
-  const clienteNorm = normalizarTexto(clienteTexto)
-  return CLIENTES_GARANTIA.find(c => clienteNorm.includes(normalizarTexto(c.nombre))) || null
-}
-
-function parsearFechaSerie(serie) {
-  if (!serie || serie === '-') return null
-  const limpio = String(serie).replace(/\D/g, '')
-  if (limpio.length < 6) return null
-  const anio = parseInt(limpio.substring(0, 2), 10)
-  const mes = parseInt(limpio.substring(2, 4), 10)
-  const dia = parseInt(limpio.substring(4, 6), 10)
-  if (mes < 1 || mes > 12 || dia < 1 || dia > 31) return null
-  const anioCompleto = anio >= 0 && anio <= 50 ? 2000 + anio : 1900 + anio
-  const fecha = new Date(anioCompleto, mes - 1, dia)
-  if (isNaN(fecha.getTime())) return null
-  return fecha
-}
-
-function verificarGarantia(ticket) {
-  const clienteGarantia = buscarClienteGarantia(ticket['CLIENTE'])
-  if (!clienteGarantia) return null
-  const fechaFab = parsearFechaSerie(ticket['SERIE'])
-  if (!fechaFab) return { esClienteGarantia: true, sinDatosSerie: true, clienteNombre: clienteGarantia.nombre, aniosGarantia: clienteGarantia.anios }
-  const fechaVencimiento = new Date(fechaFab)
-  fechaVencimiento.setFullYear(fechaVencimiento.getFullYear() + clienteGarantia.anios)
-  const hoy = new Date(); hoy.setHours(0, 0, 0, 0)
-  const vencida = hoy > fechaVencimiento
-  const diasRestantes = Math.ceil((fechaVencimiento - hoy) / (1000 * 60 * 60 * 24))
-  return {
-    esClienteGarantia: true, sinDatosSerie: false, vencida, diasRestantes,
-    fechaFabricacion: fechaFab, fechaVencimiento,
-    clienteNombre: clienteGarantia.nombre, aniosGarantia: clienteGarantia.anios,
-    fabDisplay: `${String(fechaFab.getDate()).padStart(2,'0')}/${String(fechaFab.getMonth()+1).padStart(2,'0')}/${fechaFab.getFullYear()}`,
-    vencDisplay: `${String(fechaVencimiento.getDate()).padStart(2,'0')}/${String(fechaVencimiento.getMonth()+1).padStart(2,'0')}/${fechaVencimiento.getFullYear()}`
-  }
-}
-
 function obtenerComentarioProceso(ticket) {
   if (ticket['DESCRIPCIÓN'] && ticket['DESCRIPCIÓN'] !== '-') return ticket['DESCRIPCIÓN']
   if (ticket['GEOLOCALIZACIÓN'] && ticket['GEOLOCALIZACIÓN'] !== '-') return 'Técnico únicamente cargó geolocalización'
@@ -133,7 +75,7 @@ function buildMessage(tecnico, tickets, rutaDefinida) {
     msg += `📍 *DIRECCIÓN:* ${t['DIRECCIÓN'] || '-'}\n`
     msg += `📞 *TELÉFONO:* ${t['TELÉFONO'] || '-'}\n`
     msg += `👤 *CLIENTE:* ${t['CLIENTE'] || '-'}\n`
-    msg += `🧊 *SERIE:* ${t['SERIE'] || '-'}  📦 *MODELO:* ${t['MODELO'] || '-'}\n`
+    msg += `🧊 *SERIE:* ${obtenerSerieTicket(t)}  📦 *MODELO:* ${t['MODELO'] || '-'}\n`
     if (t['ESTADO_LIMPIO'].includes('PROCESO')) {
       const c = obtenerComentarioProceso(t)
       msg += `\n⚠️ *COMENTARIO EN PROCESO:*\n${c}\n`
@@ -154,7 +96,8 @@ function TicketBadge({ estado }) {
 export default function ModuloTecnicos({ 
   allTickets, setAllTickets, nombreArchivo, setNombreArchivo, 
   fechaSubidaExcel, setFechaSubidaExcel,
-  rutasTecnicos, setRutasTecnicos, rutasAutomaticas, valorRutaTecnico, baseMunicipios 
+  rutasTecnicos, setRutasTecnicos, rutasAutomaticas, valorRutaTecnico, baseMunicipios,
+  clientesGarantia = []
 }) {
   const [dragging, setDragging] = useState(false)
   const [expandido, setExpandido] = useState({})
@@ -198,6 +141,8 @@ export default function ModuloTecnicos({
           let clienteOriginal = String(fila['CLIENTE'] || fila['NOMBRE CLIENTE'] || '-').trim()
           let fechaRaw = fila['FECHA REALIZADA'] || fila['FECHA REALIZACION'] || fila['FECHA'] || ''
           const fechaEstructura = normalizarFechaExcel(fechaRaw)
+          const descripcion = fila['DESCRIPCIÓN'] || fila['DESCRIPCION'] || fila['COMENTARIO'] || '-'
+          const serie = resolverSerie(fila['SERIE'] || fila['NO SERIE'], descripcion)
           
           listaTemporal.push({
             tecnico,
@@ -208,7 +153,8 @@ export default function ModuloTecnicos({
             'DIRECCIÓN': fila['DIRECCIÓN'] || fila['DIRECCION'] || '-',
             'TELÉFONO': fila['TELÉFONO'] || fila['TELEFONO'] || fila['TEL'] || '-',
             'CLIENTE': simplificarCliente(clienteOriginal),
-            'SERIE': fila['SERIE'] || fila['NO SERIE'] || '-',
+            'SERIE': serie.valor,
+            'SERIE_ORIGEN': serie.origen,
             'MODELO': fila['MODELO'] || '-',
             'ESTADO': estadoOriginal,
             'ESTADO_LIMPIO': estadoLimpio,
@@ -216,7 +162,7 @@ export default function ModuloTecnicos({
             'FECHA_TEXTO': fechaEstructura ? fechaEstructura.display : (fechaRaw || '-'),
             'FECHA_OBJ': fechaEstructura ? fechaEstructura.dateObj : null,
             'DESCRIPCIÓN INICIAL': fila['DESCRIPCIÓN INICIAL'] || fila['DESCRIPCION INICIAL'] || '-',
-            'DESCRIPCIÓN': fila['DESCRIPCIÓN'] || fila['DESCRIPCION'] || fila['COMENTARIO'] || '-',
+            'DESCRIPCIÓN': descripcion,
             'GEOLOCALIZACIÓN': fila['GEOLOCALIZACION'] || fila['GEOLOCALIZACIÓN'] || fila['GEOLOCALIZACIÓ'] || fila['GEO'] || '-'
           })
         }
@@ -275,7 +221,7 @@ export default function ModuloTecnicos({
     const data = allTickets.map(t => ({
       'TÉCNICO': t.tecnico, 'N° REFERENCIA': t['N° REFERENCIA'], 'NEGOCIO': t['NEGOCIO'],
       'DIRECCIÓN': t['DIRECCIÓN'], 'TELÉFONO': t['TELÉFONO'], 'CLIENTE': t['CLIENTE'],
-      'SERIE': t['SERIE'], 'MODELO': t['MODELO'], 'ESTADO': t['ESTADO'], 'FECHA': t['FECHA_TEXTO'],
+      'SERIE': obtenerSerieTicket(t), 'MODELO': t['MODELO'], 'ESTADO': t['ESTADO'], 'FECHA': t['FECHA_TEXTO'],
       'DESCRIPCIÓN INICIAL': t['DESCRIPCIÓN INICIAL'], 'DESCRIPCIÓN': t['DESCRIPCIÓN']
     }))
     const ws = XLSX.utils.json_to_sheet(data)
@@ -287,7 +233,7 @@ export default function ModuloTecnicos({
   function generarExcelTecnico(tecnico, tickets) {
     const data = tickets.map(t => ({
       'N° REFERENCIA': t['N° REFERENCIA'], 'NEGOCIO': t['NEGOCIO'], 'DIRECCIÓN': t['DIRECCIÓN'],
-      'TELÉFONO': t['TELÉFONO'], 'CLIENTE': t['CLIENTE'], 'SERIE': t['SERIE'], 'MODELO': t['MODELO'],
+      'TELÉFONO': t['TELÉFONO'], 'CLIENTE': t['CLIENTE'], 'SERIE': obtenerSerieTicket(t), 'MODELO': t['MODELO'],
       'ESTADO': t['ESTADO'], 'DESCRIPCIÓN INICIAL': t['DESCRIPCIÓN INICIAL'], 'COMENTARIO': t['DESCRIPCIÓN']
     }))
     const ws = XLSX.utils.json_to_sheet(data)
@@ -330,7 +276,7 @@ export default function ModuloTecnicos({
         }])
       }
 
-      let info = `Negocio: ${t['NEGOCIO'] || '-'}\nDirección: ${t['DIRECCIÓN'] || '-'}\nTeléfono: ${t['TELÉFONO'] || '-'}\nCliente: ${t['CLIENTE'] || '-'}\nSerie: ${t['SERIE'] || '-'} | Modelo: ${t['MODELO'] || '-'}`
+      let info = `Negocio: ${t['NEGOCIO'] || '-'}\nDirección: ${t['DIRECCIÓN'] || '-'}\nTeléfono: ${t['TELÉFONO'] || '-'}\nCliente: ${t['CLIENTE'] || '-'}\nSerie: ${obtenerSerieTicket(t)} | Modelo: ${t['MODELO'] || '-'}`
       
       // Fila principal del ticket
       body.push([
@@ -445,11 +391,11 @@ export default function ModuloTecnicos({
 
   const alertasGarantia = useMemo(() => {
     return ticketsPendientesTotales.map(t => {
-      const garantia = verificarGarantia(t)
+      const garantia = verificarGarantiaTicket(t, clientesGarantia)
       if (!garantia) return null
       return { ticket: t, garantia }
     }).filter(Boolean)
-  }, [ticketsPendientesTotales])
+  }, [ticketsPendientesTotales, clientesGarantia])
 
   const alertasVencidas = alertasGarantia.filter(a => a.garantia.vencida === true)
   const alertasVigentes = alertasGarantia.filter(a => a.garantia.vencida === false && !a.garantia.sinDatosSerie)
@@ -614,7 +560,7 @@ export default function ModuloTecnicos({
                           {a.ticket['DESCRIPCIÓN INICIAL'] && <p className="text-[9px] text-slate-500 italic leading-snug">📋 {a.ticket['DESCRIPCIÓN INICIAL']}</p>}
                           <div className="flex flex-col sm:flex-row sm:gap-4 text-[9px] font-medium text-slate-500">
                             <p>📍 {a.ticket['DIRECCIÓN'] || '-'}</p>
-                            <p className="shrink-0">🧊 Serie: <span className="font-bold text-slate-700">{a.ticket['SERIE'] || '-'}</span></p>
+                            <p className="shrink-0">🧊 Serie: <span className="font-bold text-slate-700">{obtenerSerieTicket(a.ticket)}</span></p>
                           </div>
                         </div>
                       ))}
@@ -631,7 +577,7 @@ export default function ModuloTecnicos({
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-mono text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">#{a.ticket['N° REFERENCIA']}</span>
                             <span className="text-[10px] font-semibold text-slate-500">{a.ticket.tecnico}</span>
-                            <span className="text-[9px] font-semibold text-amber-600 ml-auto shrink-0">Serie: "{a.ticket['SERIE']}" · {a.garantia.aniosGarantia}a</span>
+                            <span className="text-[9px] font-semibold text-amber-600 ml-auto shrink-0">Serie: "{obtenerSerieTicket(a.ticket)}" · {a.garantia.aniosGarantia}a</span>
                           </div>
                           <p className="text-[10px] font-semibold text-slate-700">{a.ticket['NEGOCIO']} — {a.ticket['CLIENTE']}</p>
                           {a.ticket['DESCRIPCIÓN INICIAL'] && <p className="text-[9px] text-slate-500 italic leading-snug">📋 {a.ticket['DESCRIPCIÓN INICIAL']}</p>}
@@ -657,7 +603,7 @@ export default function ModuloTecnicos({
                           {a.ticket['DESCRIPCIÓN INICIAL'] && <p className="text-[9px] text-slate-500 italic leading-snug">📋 {a.ticket['DESCRIPCIÓN INICIAL']}</p>}
                           <div className="flex flex-col sm:flex-row sm:gap-4 text-[9px] font-medium text-slate-500">
                             <p>📍 {a.ticket['DIRECCIÓN'] || '-'}</p>
-                            <p className="shrink-0">🧊 Serie: <span className="font-bold text-slate-700">{a.ticket['SERIE'] || '-'}</span></p>
+                            <p className="shrink-0">🧊 Serie: <span className="font-bold text-slate-700">{obtenerSerieTicket(a.ticket)}</span></p>
                           </div>
                         </div>
                       ))}
@@ -768,7 +714,7 @@ export default function ModuloTecnicos({
                   {expandido[tecnico] && (
                     <div className="p-3 sm:p-4 space-y-4 slide-up bg-slate-50/60">
                       {tickets.map((t, i) => {
-                        const g = verificarGarantia(t)
+                        const g = verificarGarantiaTicket(t, clientesGarantia)
                         const esProceso = t['ESTADO_LIMPIO'].includes('PROCESO')
                         const esAgencia = t['ESTADO_LIMPIO'].includes('AGENCIA')
                         const borderColor = g?.vencida ? 'border-l-rose-500' 
@@ -820,7 +766,7 @@ export default function ModuloTecnicos({
                                 </div>
                                 <div className="flex gap-1.5">
                                   <span className="text-slate-400 shrink-0 w-12 font-semibold">SERIE</span>
-                                  <span className="text-slate-700 font-mono font-semibold text-[10px]">{t['SERIE'] || '-'}</span>
+                                  <span className="text-slate-700 font-mono font-semibold text-[10px]">{obtenerSerieTicket(t)}</span>
                                 </div>
                               </div>
                             </div>
@@ -841,7 +787,7 @@ export default function ModuloTecnicos({
                             {g?.sinDatosSerie && (
                               <div className="mx-3 mb-2 text-[10px] text-amber-700 bg-amber-50 rounded-md px-3 py-1.5 border-l-[3px] border-amber-400">
                                 <span className="font-bold">⚠️ VERIFICAR — </span>
-                                {g.clienteNombre} ({g.aniosGarantia}a) — Serie: "{t['SERIE']}"
+                                {g.clienteNombre} ({g.aniosGarantia}a) — Serie: "{obtenerSerieTicket(t)}"
                               </div>
                             )}
                             

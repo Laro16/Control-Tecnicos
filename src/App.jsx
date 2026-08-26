@@ -6,6 +6,7 @@ import ModuloPendientes from './components/Gestion'
 import ModuloTablas from './components/Tablas'
 import Dashboard from './components/Dashboard'
 import Vacaciones from './components/Vacaciones'
+import garantiasUrl from './Garantias.xlsx?url'
 import { Wrench, ClipboardList, BarChart3, Cloud, CloudOff, Loader2, LayoutDashboard, CalendarDays } from 'lucide-react'
 
 function normalizarTexto(texto) {
@@ -63,6 +64,52 @@ export default function App() {
   // ── Rutas compartidas entre Técnicos y Tablas ──
   const [rutasTecnicos, setRutasTecnicos] = useState({})
   const [baseMunicipios, setBaseMunicipios] = useState([])
+  const [clientesGarantia, setClientesGarantia] = useState([])
+
+  // El catálogo de garantías vive en el Excel para que pueda mantenerse sin
+  // tocar el código. Se toma únicamente la pestaña GENERAL.
+  useEffect(() => {
+    async function cargarGarantias() {
+      try {
+        const response = await fetch(garantiasUrl)
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        const wb = XLSX.read(await response.arrayBuffer(), { type: 'array' })
+        const nombreHoja = wb.SheetNames.find(nombre => normalizarTexto(nombre) === 'GENERAL')
+        if (!nombreHoja) throw new Error('No existe la pestaña GENERAL')
+
+        const matrix = XLSX.utils.sheet_to_json(wb.Sheets[nombreHoja], { header: 1, defval: '' })
+        let filaEncabezado = -1
+        let columnaCliente = -1
+        let columnaAnios = -1
+
+        for (let i = 0; i < matrix.length; i++) {
+          const encabezados = matrix[i].map(normalizarTexto)
+          const cliente = encabezados.indexOf('CLIENTE')
+          const anios = encabezados.indexOf('ANOS')
+          if (cliente !== -1 && anios !== -1) {
+            filaEncabezado = i
+            columnaCliente = cliente
+            columnaAnios = anios
+            break
+          }
+        }
+        if (filaEncabezado === -1) throw new Error('No se encontraron los encabezados CLIENTE y Años')
+
+        const catalogo = new Map()
+        for (let i = filaEncabezado + 1; i < matrix.length; i++) {
+          const nombre = String(matrix[i][columnaCliente] || '').trim()
+          const anios = Number(matrix[i][columnaAnios])
+          if (!nombre || !Number.isFinite(anios) || anios <= 0) continue
+          catalogo.set(normalizarTexto(nombre), { nombre, anios })
+        }
+        setClientesGarantia(Array.from(catalogo.values()))
+      } catch (error) {
+        console.warn('No se pudo cargar Garantias.xlsx:', error)
+        setClientesGarantia([])
+      }
+    }
+    cargarGarantias()
+  }, [])
 
   // Cargar Rutas.xlsx UNA sola vez aquí (no en cada módulo)
   useEffect(() => {
@@ -279,6 +326,7 @@ export default function App() {
             nombreArchivo={nombreArchivo}
             fechaSubidaExcel={fechaSubidaExcel}
             onNavigate={setTab}
+            clientesGarantia={clientesGarantia}
           />
         </div>
         <div className={tab === 'tecnicos' ? 'block fade-in' : 'hidden'}>
@@ -294,6 +342,7 @@ export default function App() {
             rutasAutomaticas={rutasAutomaticas}
             valorRutaTecnico={valorRutaTecnico}
             baseMunicipios={baseMunicipios}
+            clientesGarantia={clientesGarantia}
           />
         </div>
         <div className={tab === 'tablas' ? 'block fade-in' : 'hidden'}>

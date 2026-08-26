@@ -3,53 +3,21 @@ import {
   AlertTriangle, ArrowRight, CheckCircle2, Clock3, FileSpreadsheet,
   Gauge, ShieldAlert, TrendingUp, Users, Wrench
 } from 'lucide-react'
+import { verificarGarantiaTicket } from '../utils/garantias'
 
-function normalizarTexto(texto) {
-  if (!texto) return ''
-  return String(texto).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim()
-}
-
-const CLIENTES_GARANTIA = [
-  { nombre: 'ABCO', anios: 1 },
-  { nombre: 'COMERCIALIZADORA DE ALIMENTOS Y BEBIDAS SAN MIGUEL', anios: 2 },
-  { nombre: 'DISTRIBUIDORA DE LICORES', anios: 1 },
-  { nombre: 'EMBOTELLADORA CENTRAL', anios: 2 },
-  { nombre: 'EMBOTELLADORA LA MARIPOSA', anios: 2 },
-  { nombre: 'GARANTIA IMPORTADORA Y DISTRIBUIDORA DE APARATOS ELECTRICOS', anios: 1 },
-  { nombre: 'M.D.T. INTERNACIONAL', anios: 1 },
-  { nombre: 'PRODUCTOS LACTEOS DE CENTROAMERICA', anios: 1 },
-  { nombre: 'RICZA', anios: 1 },
-  { nombre: 'SAVONA DE GUATEMALA', anios: 1 },
-  { nombre: 'SERVICOCINAS', anios: 1 },
-  { nombre: 'SUPER VITAMINAS', anios: 1 },
-  { nombre: 'UNISUPER', anios: 1 },
-  { nombre: 'VIVENDO', anios: 1 },
-]
-
-function contarGarantias(tickets) {
+function contarGarantias(tickets, clientesGarantia) {
   let vencidas = 0, vigentes = 0, sinSerie = 0
   tickets.forEach(t => {
-    const clienteNorm = normalizarTexto(t.CLIENTE)
-    const match = CLIENTES_GARANTIA.find(c => clienteNorm.includes(normalizarTexto(c.nombre)))
-    if (!match) return
-    const serie = String(t.SERIE || '').replace(/\D/g, '')
-    if (serie.length < 6) { sinSerie++; return }
-    const anio = parseInt(serie.substring(0, 2), 10)
-    const mes = parseInt(serie.substring(2, 4), 10)
-    const dia = parseInt(serie.substring(4, 6), 10)
-    if (mes < 1 || mes > 12 || dia < 1 || dia > 31) { sinSerie++; return }
-    const anioCompleto = anio <= 50 ? 2000 + anio : 1900 + anio
-    const fabricacion = new Date(anioCompleto, mes - 1, dia)
-    const vencimiento = new Date(fabricacion)
-    vencimiento.setFullYear(vencimiento.getFullYear() + match.anios)
-    const hoy = new Date(); hoy.setHours(0, 0, 0, 0)
-    if (hoy > vencimiento) vencidas++
+    const garantia = verificarGarantiaTicket(t, clientesGarantia)
+    if (!garantia) return
+    if (garantia.sinDatosSerie) sinSerie++
+    else if (garantia.vencida) vencidas++
     else vigentes++
   })
   return { vencidas, vigentes, sinSerie }
 }
 
-export default function Dashboard({ allTickets, nombreArchivo, fechaSubidaExcel, onNavigate }) {
+export default function Dashboard({ allTickets, nombreArchivo, fechaSubidaExcel, onNavigate, clientesGarantia = [] }) {
   const stats = useMemo(() => {
     if (allTickets.length === 0) return null
 
@@ -92,11 +60,11 @@ export default function Dashboard({ allTickets, nombreArchivo, fechaSubidaExcel,
       maxProd: productividad[0]?.[1] || 1,
       carga,
       maxCarga: carga[0]?.[1] || 1,
-      garantias: contarGarantias(pendientes),
+      garantias: contarGarantias(pendientes, clientesGarantia),
       tecnicos: new Set(allTickets.map(t => t.tecnico).filter(Boolean)).size,
       avance: Math.round((finalizados.length / allTickets.length) * 100),
     }
-  }, [allTickets])
+  }, [allTickets, clientesGarantia])
 
   if (!stats) {
     return (
