@@ -13,6 +13,16 @@ function normalizarTexto(texto) {
   return String(texto).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim()
 }
 
+const ESTADOS_ACTIVOS_RUTA = new Set([
+  'EN PROCESO',
+  'ASIGNADA A TECNICO',
+  'ASIGNADA A AGENCIA',
+])
+
+function esEstadoActivoRuta(ticket) {
+  return ESTADOS_ACTIVOS_RUTA.has(normalizarTexto(ticket?.ESTADO || ticket?.ESTADO_LIMPIO))
+}
+
 export default function App() {
   const [tab, setTab] = useState('dashboard')
   const [syncStatus, setSyncStatus] = useState('cargando')
@@ -101,9 +111,7 @@ export default function App() {
     const autoRutas = {}
     if (baseMunicipios.length === 0 || allTickets.length === 0) return autoRutas
 
-    const ticketsActivos = allTickets.filter(t => 
-      t.ESTADO_LIMPIO.includes('TECNICO') || t.ESTADO_LIMPIO.includes('PROCESO') || t.ESTADO_LIMPIO.includes('AGENCIA')
-    )
+    const ticketsActivos = allTickets.filter(esEstadoActivoRuta)
     const ticketsPorTecnico = {}
     ticketsActivos.forEach(t => {
       let tec = t.tecnico === 'SIN TÉCNICO' || !t.tecnico || t.tecnico === '-' ? 'SIN ASIGNAR' : t.tecnico
@@ -211,31 +219,31 @@ export default function App() {
   const fechaHoy = hoy.toLocaleDateString('es-GT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 
   return (
-    <div className="min-h-screen bg-slate-100 font-sans">
+    <div className="app-shell min-h-screen font-sans">
       {/* ── HEADER ── */}
-      <header className="bg-slate-900 sticky top-0 z-40 shadow-lg shadow-slate-900/20">
-        <div className="max-w-5xl mx-auto px-4 py-2 flex items-center justify-between gap-3">
+      <header className="sticky top-0 z-40 border-b border-white/10 bg-slate-950/95 shadow-[0_12px_30px_rgba(15,23,42,0.16)] backdrop-blur-xl">
+        <div className="max-w-7xl mx-auto px-3 sm:px-5 py-2.5 flex items-center justify-between gap-3">
           {/* Logo + fecha */}
           <div className="flex items-center gap-2.5 shrink-0">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
-              <Wrench size={13} strokeWidth={2.5} />
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-400 via-sky-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-sky-500/25 ring-1 ring-white/20">
+              <Wrench size={16} strokeWidth={2.5} />
             </div>
             <div className="hidden sm:block">
-              <p className="font-bold text-white text-sm leading-none tracking-tight">TicketManager</p>
-              <p className="text-[9px] font-medium text-slate-500 leading-none mt-0.5 capitalize">{fechaHoy}</p>
+              <p className="font-extrabold text-white text-sm leading-none tracking-tight">TicketManager <span className="text-sky-400">Pro</span></p>
+              <p className="text-[9px] font-medium text-slate-400 leading-none mt-1 capitalize">{fechaHoy}</p>
             </div>
           </div>
 
           {/* Nav */}
-          <nav className="flex bg-slate-800/80 p-0.5 rounded-lg">
+          <nav className="flex bg-white/[0.07] p-1 rounded-xl ring-1 ring-white/10">
             {tabs.map(t => (
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={`flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 rounded-md font-semibold transition-all ${
+                className={`flex items-center gap-1.5 text-[11px] px-2.5 sm:px-3 py-2 rounded-lg font-bold transition-all ${
                   tab === t.id 
-                    ? 'bg-white text-slate-800 shadow-sm' 
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-white text-slate-900 shadow-md shadow-black/10' 
+                    : 'text-slate-400 hover:text-white hover:bg-white/[0.06]'
                 }`}
               >
                 <t.icon size={12} />
@@ -247,7 +255,7 @@ export default function App() {
           {/* Sync */}
           <button
             onClick={() => { if (nubeCargada.current) cargarDesdeNube(true) }}
-            className="flex items-center gap-1.5 shrink-0 p-1 rounded-md hover:bg-slate-800 transition-colors"
+            className="flex items-center gap-1.5 shrink-0 px-2 py-1.5 rounded-lg hover:bg-white/[0.06] transition-colors"
             title={syncStatus === 'sincronizado' ? 'Sincronizado · Tap para refrescar' : syncStatus === 'error' ? 'Sin conexión · Tap para reintentar' : 'Sincronizando...'}
           >
             {syncStatus === 'cargando' 
@@ -264,7 +272,7 @@ export default function App() {
       </header>
 
       {/* ── CONTENT ── */}
-      <main className="max-w-5xl mx-auto px-4 py-5">
+      <main className="max-w-7xl mx-auto px-3 sm:px-5 py-5 sm:py-7">
         <div className={tab === 'dashboard' ? 'block fade-in' : 'hidden'}>
           <Dashboard 
             allTickets={allTickets}

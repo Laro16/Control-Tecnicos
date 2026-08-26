@@ -10,6 +10,8 @@ function normalizarTexto(texto) {
   return String(texto).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim()
 }
 
+const ESTADOS_ACTIVOS_RUTA = new Set(['EN PROCESO', 'ASIGNADA A TECNICO', 'ASIGNADA A AGENCIA'])
+
 export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnicos, rutasAutomaticas, valorRutaTecnico }) {
   const [fechaInicio, setFechaInicio] = useState('')
   const [fechaFin, setFechaFin] = useState('')
@@ -87,8 +89,8 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
   })
 
   // ── TABLA 2: ENVEJECIMIENTO ──
-  const ticketsActivos = allTickets.filter(t => 
-    t.ESTADO_LIMPIO.includes('TECNICO') || t.ESTADO_LIMPIO.includes('PROCESO') || t.ESTADO_LIMPIO.includes('AGENCIA')
+  const ticketsActivos = allTickets.filter(t =>
+    ESTADOS_ACTIVOS_RUTA.has(normalizarTexto(t.ESTADO || t.ESTADO_LIMPIO))
   ).map(t => {
     let tec = t.tecnico
     if (tec === 'SIN TÉCNICO' || !tec || tec === '-') tec = 'SIN ASIGNAR'

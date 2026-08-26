@@ -1,0 +1,32 @@
+[
+  {
+    codigo_supabase ALTER TABLE public.pendientes ENABLE ROW LEVEL SECURITY;
+  },
+  {
+    codigo_supabase ALTER TABLE public.excel_sync ENABLE ROW LEVEL SECURITY;
+  },
+  {
+    codigo_supabase ALTER TABLE public.vac_asuetos ENABLE ROW LEVEL SECURITY;
+  },
+  {
+    codigo_supabase ALTER TABLE public.vac_goces ENABLE ROW LEVEL SECURITY;
+  },
+  {
+    codigo_supabase ALTER TABLE public.vac_empleados ENABLE ROW LEVEL SECURITY;
+  },
+  {
+    codigo_supabase CREATE POLICY Allow all ON public.pendientes FOR ALL TO public USING (true) WITH CHECK (true);
+  },
+  {
+    codigo_supabase CREATE POLICY Acceso público excel_sync ON public.excel_sync FOR ALL TO public USING (true) WITH CHECK (true);
+  },
+  {
+    codigo_supabase CREATE POLICY Acceso público vac_asuetos ON public.vac_asuetos FOR ALL TO public USING (true) WITH CHECK (true);
+  },
+  {
+    codigo_supabase CREATE POLICY Acceso público vac_goces ON public.vac_goces FOR ALL TO public USING (true) WITH CHECK (true);
+  },
+  {
+    codigo_supabase CREATE POLICY Acceso público vac_empleados ON public.vac_empleados FOR ALL TO public USING (true) WITH CHECK (true);
+  }
+]

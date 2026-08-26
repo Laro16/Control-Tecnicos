@@ -4,7 +4,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { 
   Upload, Clipboard, FileText, FileSpreadsheet, ChevronDown, Wrench, Filter, 
-  DownloadCloud, MapPin, ShieldAlert, ShieldCheck, Copy, ChevronRight
+  DownloadCloud, MapPin, ShieldAlert, ShieldCheck, Copy, ChevronRight, Users, Activity
 } from 'lucide-react'
 
 const TODAY = () => {
@@ -15,6 +15,18 @@ const TODAY = () => {
 function normalizarTexto(texto) {
   if (!texto) return ''
   return String(texto).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim()
+}
+
+const ESTADOS_ACTIVOS_RUTA = new Set(['EN PROCESO', 'ASIGNADA A TECNICO', 'ASIGNADA A AGENCIA'])
+
+function esEstadoActivoRuta(ticket) {
+  return ESTADOS_ACTIVOS_RUTA.has(normalizarTexto(ticket?.ESTADO || ticket?.ESTADO_LIMPIO))
+}
+
+function limpiarReferencia(valor) {
+  if (valor === null || valor === undefined) return ''
+  const referencia = String(valor).trim()
+  return referencia === '-' ? '' : referencia
 }
 
 function simplificarCliente(cliente) {
@@ -189,7 +201,9 @@ export default function ModuloTecnicos({
           
           listaTemporal.push({
             tecnico,
-            'N° REFERENCIA': fila['N° REFERENCIA'] || fila['NO REFERENCIA'] || fila['REFERENCIA'] || fila['TICKET'] || '-',
+            // La referencia vacía se conserva vacía. Usar "-" aquí hacía que
+            // todas las celdas sin dato aparecieran como un falso duplicado.
+            'N° REFERENCIA': limpiarReferencia(fila['N° REFERENCIA'] ?? fila['NO REFERENCIA'] ?? fila['REFERENCIA'] ?? fila['TICKET']),
             'NEGOCIO': fila['NEGOCIO'] || fila['NOMBRE NEGOCIO'] || fila['SUCURSAL'] || '-',
             'DIRECCIÓN': fila['DIRECCIÓN'] || fila['DIRECCION'] || '-',
             'TELÉFONO': fila['TELÉFONO'] || fila['TELEFONO'] || fila['TEL'] || '-',
@@ -214,9 +228,7 @@ export default function ModuloTecnicos({
         setAllTickets(listaTemporal)
         setFiltroTecnico('Todos')
         // Recalcular rutas al subir Excel nuevo
-        const ticketsActivosParaRuta = listaTemporal.filter(t => 
-          t.ESTADO_LIMPIO.includes('TECNICO') || t.ESTADO_LIMPIO.includes('PROCESO') || t.ESTADO_LIMPIO.includes('AGENCIA')
-        )
+        const ticketsActivosParaRuta = listaTemporal.filter(esEstadoActivoRuta)
         const nuevasRutas = {}
         const ticketsPorTecnico = {}
         ticketsActivosParaRuta.forEach(t => {
@@ -444,45 +456,71 @@ export default function ModuloTecnicos({
   const alertasSinSerie = alertasGarantia.filter(a => a.garantia.sinDatosSerie === true)
 
   const ticketsDuplicados = useMemo(() => {
-    const conteo = {}
+    const conteo = new Map()
     allTickets.forEach(t => {
-      const ref = String(t['N° REFERENCIA'] || '').trim()
+      const ref = limpiarReferencia(t['N° REFERENCIA'])
       if (!ref) return
-      if (!conteo[ref]) conteo[ref] = []
-      conteo[ref].push(t)
+      const clave = normalizarTexto(ref)
+      if (!conteo.has(clave)) conteo.set(clave, { ref, tickets: [] })
+      conteo.get(clave).tickets.push(t)
     })
-    return Object.entries(conteo)
-      .filter(([, arr]) => arr.length > 1)
-      .map(([ref, arr]) => ({ ref, tickets: arr, cantidad: arr.length }))
+    return Array.from(conteo.values())
+      .filter(({ tickets }) => tickets.length > 1)
+      .map(({ ref, tickets }) => ({ ref, tickets, cantidad: tickets.length }))
       .sort((a, b) => b.cantidad - a.cantidad)
   }, [allTickets])
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5 fade-in">
+      <section className="workspace-hero">
+        <div className="relative z-10 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div className="mb-3 flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.18em] text-sky-300">
+              <Activity size={13} /> Operación en campo
+            </div>
+            <h1 className="text-2xl font-black tracking-tight sm:text-3xl">Control por técnico</h1>
+            <p className="mt-2 max-w-xl text-xs leading-relaxed text-slate-300 sm:text-sm">Carga la base, distribuye las órdenes y revisa rutas, garantías y posibles duplicados desde un único tablero.</p>
+          </div>
+          {allTickets.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <button onClick={generarPDFGlobalEnProceso} className="flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 text-[10px] font-extrabold text-white transition hover:bg-white/15">
+                <FileText size={13} /> En proceso
+              </button>
+              <button onClick={descargarExcelCompleto} className="flex items-center gap-1.5 rounded-xl bg-white px-3.5 py-2.5 text-[10px] font-extrabold text-slate-900 shadow-lg transition hover:bg-sky-50">
+                <DownloadCloud size={13} /> Base completa
+              </button>
+            </div>
+          )}
+        </div>
+      </section>
+
       {/* ── Upload zone ── */}
       <div
-        className={`card flex items-center gap-3 px-4 py-3 cursor-pointer transition-all border-2 border-dashed ${dragging ? 'border-sky-400 bg-sky-50' : 'border-slate-200 hover:border-slate-300'}`}
+        className={`card group flex cursor-pointer items-center gap-4 border-2 border-dashed px-4 py-4 transition-all ${dragging ? 'border-sky-400 bg-sky-50' : 'border-slate-200 hover:border-sky-300 hover:bg-sky-50/40'}`}
         onClick={() => fileRef.current.click()}
         onDragOver={e => { e.preventDefault(); setDragging(true) }}
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
       >
-        <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
-          <Upload size={15} className="text-slate-400" />
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-600 ring-1 ring-sky-100 transition group-hover:bg-sky-100">
+          <Upload size={18} />
         </div>
         <div className="flex-1 min-w-0 text-xs">
           {nombreArchivo ? (
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-bold text-sky-600 truncate max-w-[250px]">{nombreArchivo}</span>
+              <span className="font-extrabold text-slate-800 truncate max-w-[300px]">{nombreArchivo}</span>
               {fechaSubidaExcel && <span className="text-slate-400 font-medium text-[10px]">· {fechaSubidaExcel}</span>}
             </div>
           ) : (
-            <p className="font-semibold text-slate-500">Arrastra o selecciona el archivo de tickets</p>
+            <div>
+              <p className="font-extrabold text-slate-700">Cargar base de tickets</p>
+              <p className="mt-0.5 text-[10px] font-medium text-slate-400">Arrastra el archivo aquí o haz clic para seleccionarlo</p>
+            </div>
           )}
         </div>
         {allTickets.length > 0 && (
-          <button onClick={(e) => { e.stopPropagation(); descargarExcelCompleto() }} className="btn-success flex items-center gap-1.5 shrink-0 text-[10px]">
-            <DownloadCloud size={12} /> Excel
+          <button onClick={(e) => { e.stopPropagation(); descargarExcelCompleto() }} className="btn-success hidden items-center gap-1.5 shrink-0 text-[10px] sm:flex">
+            <DownloadCloud size={12} /> Descargar
           </button>
         )}
         <input ref={fileRef} type="file" className="hidden" onChange={onFileChange} />
@@ -493,29 +531,29 @@ export default function ModuloTecnicos({
           {/* ── Stats strip + Filtros ── */}
           <div className="card overflow-hidden">
             {/* Stats strip */}
-            <div className="flex border-b border-slate-100">
-              <div className="flex-1 px-3 py-2 text-center border-r border-slate-100">
-                <p className="text-lg font-black text-slate-800 leading-none">{ticketsPendientesTotales.length}</p>
-                <p className="text-[9px] font-semibold text-slate-400 uppercase mt-0.5">Pendientes</p>
+            <div className="grid grid-cols-2 border-b border-slate-100 sm:grid-cols-4">
+              <div className="px-4 py-3.5 border-r border-b sm:border-b-0 border-slate-100">
+                <p className="text-2xl font-black text-slate-900 leading-none">{ticketsPendientesTotales.length}</p>
+                <p className="text-[9px] font-extrabold text-slate-400 uppercase mt-1 tracking-wider">Pendientes</p>
               </div>
-              <div className="flex-1 px-3 py-2 text-center border-r border-slate-100 cursor-pointer hover:bg-amber-50 transition-colors" onClick={() => setFiltroEstadoGlobal('En Proceso')}>
-                <p className="text-lg font-black text-amber-600 leading-none">{ticketsPendientesTotales.filter(t => t.ESTADO_LIMPIO.includes('PROCESO')).length}</p>
-                <p className="text-[9px] font-semibold text-slate-400 uppercase mt-0.5">En Proceso</p>
+              <button className="px-4 py-3.5 text-left border-b sm:border-b-0 border-r border-slate-100 cursor-pointer hover:bg-amber-50 transition-colors" onClick={() => setFiltroEstadoGlobal('En Proceso')}>
+                <p className="text-2xl font-black text-amber-600 leading-none">{ticketsPendientesTotales.filter(t => t.ESTADO_LIMPIO.includes('PROCESO')).length}</p>
+                <p className="text-[9px] font-extrabold text-slate-400 uppercase mt-1 tracking-wider">En proceso</p>
+              </button>
+              <div className="px-4 py-3.5 border-r border-slate-100">
+                <p className="text-2xl font-black text-sky-600 leading-none">{tecnicosConPendientes.length}</p>
+                <p className="text-[9px] font-extrabold text-slate-400 uppercase mt-1 tracking-wider">Técnicos</p>
               </div>
-              <div className="flex-1 px-3 py-2 text-center border-r border-slate-100">
-                <p className="text-lg font-black text-sky-600 leading-none">{tecnicosConPendientes.length}</p>
-                <p className="text-[9px] font-semibold text-slate-400 uppercase mt-0.5">Técnicos</p>
-              </div>
-              <div className="flex-1 px-3 py-2 text-center">
-                <p className="text-lg font-black text-emerald-600 leading-none">{allTickets.filter(t => t.ESTADO_LIMPIO.includes('FINALIZADA')).length}</p>
-                <p className="text-[9px] font-semibold text-slate-400 uppercase mt-0.5">Finalizados</p>
+              <div className="px-4 py-3.5">
+                <p className="text-2xl font-black text-emerald-600 leading-none">{allTickets.filter(t => t.ESTADO_LIMPIO.includes('FINALIZADA')).length}</p>
+                <p className="text-[9px] font-extrabold text-slate-400 uppercase mt-1 tracking-wider">Finalizados</p>
               </div>
             </div>
 
             {/* Filtros */}
-            <div className="p-3 space-y-2.5">
+            <div className="p-4 space-y-3.5">
               <div>
-                <label className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block">Técnico</label>
+                <label className="section-title mb-2 block">Técnico</label>
                 <div className="flex flex-wrap gap-1">
                   <button onClick={() => setFiltroTecnico('Todos')} className={`pill ${filtroTecnico === 'Todos' ? 'pill-active' : 'pill-inactive'}`}>Todos</button>
                   {tecnicosConPendientes.map(t => (
@@ -526,12 +564,12 @@ export default function ModuloTecnicos({
               
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-slate-100 pt-2.5">
                 <div className="flex flex-wrap gap-1 items-center">
-                  <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider mr-1">Estado:</span>
+                  <span className="section-title mr-1">Estado</span>
                   {['Todos', 'Asignada a Técnico', 'En Proceso', 'Asignada a Agencia'].map(est => (
                     <button key={est} onClick={() => setFiltroEstadoGlobal(est)} className={`pill ${filtroEstadoGlobal === est ? 'pill-active' : 'pill-inactive'}`}>{est}</button>
                   ))}
                 </div>
-                <button onClick={generarPDFGlobalEnProceso} className="btn-danger flex items-center gap-1 text-[10px] shrink-0">
+                <button onClick={generarPDFGlobalEnProceso} className="btn-danger flex items-center gap-1 text-[10px] shrink-0 sm:hidden">
                   <FileText size={11} /> PDF En Proceso
                 </button>
               </div>
@@ -698,27 +736,30 @@ export default function ModuloTecnicos({
               const rutaActual = valorRutaTecnico(tecnico)
 
               return (
-                <div key={tecnico} className="card-section fade-in">
+                <div key={tecnico} className="card-section fade-in transition hover:border-sky-200">
                   {/* Header del técnico */}
-                  <div className="bg-slate-800 px-4 py-2.5">
+                  <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 via-white to-sky-50/40 px-4 py-3.5">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2.5">
-                        <p className="font-bold text-white text-xs uppercase tracking-wider">{tecnico}</p>
-                        <span className="text-[10px] font-semibold text-slate-400">{tickets.length} orden{tickets.length !== 1 ? 'es' : ''}</span>
+                        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-900 text-white shadow-sm"><Users size={15} /></span>
+                        <div>
+                          <p className="font-extrabold text-slate-900 text-xs uppercase tracking-wider">{tecnico}</p>
+                          <span className="text-[10px] font-semibold text-slate-400">{tickets.length} orden{tickets.length !== 1 ? 'es' : ''}</span>
+                        </div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
-                        <button onClick={() => {navigator.clipboard.writeText(buildMessage(tecnico, tickets, rutaActual)); alert('Copiado')}} className="p-1.5 rounded-md hover:bg-slate-700 text-slate-400 hover:text-white transition" title="Copiar WhatsApp"><Copy size={12} /></button>
-                        <button onClick={() => generarPDFIndividual(tecnico, tickets, rutaActual)} className="p-1.5 rounded-md hover:bg-slate-700 text-slate-400 hover:text-white transition" title="Descargar PDF"><FileText size={12} /></button>
-                        <button onClick={() => generarExcelTecnico(tecnico, tickets)} className="p-1.5 rounded-md hover:bg-slate-700 text-slate-400 hover:text-white transition" title="Descargar Excel"><FileSpreadsheet size={12} /></button>
-                        <button onClick={() => setExpandido(p => ({ ...p, [tecnico]: !p[tecnico] }))} className="p-1.5 rounded-md hover:bg-slate-700 text-slate-400 hover:text-white transition ml-1">
+                        <button onClick={() => {navigator.clipboard.writeText(buildMessage(tecnico, tickets, rutaActual)); alert('Copiado')}} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-400 hover:border-sky-200 hover:text-sky-600 transition" title="Copiar WhatsApp"><Copy size={12} /></button>
+                        <button onClick={() => generarPDFIndividual(tecnico, tickets, rutaActual)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-400 hover:border-sky-200 hover:text-sky-600 transition" title="Descargar PDF"><FileText size={12} /></button>
+                        <button onClick={() => generarExcelTecnico(tecnico, tickets)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-400 hover:border-emerald-200 hover:text-emerald-600 transition" title="Descargar Excel"><FileSpreadsheet size={12} /></button>
+                        <button onClick={() => setExpandido(p => ({ ...p, [tecnico]: !p[tecnico] }))} className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition ml-1" title={expandido[tecnico] ? 'Contraer' : 'Ver tickets'}>
                           <ChevronDown size={14} className={`transition-transform ${expandido[tecnico] ? 'rotate-180' : ''}`} />
                         </button>
                       </div>
                     </div>
                     {rutaActual && (
                       <div className="flex items-center gap-1.5 mt-1">
-                        <MapPin size={10} className="text-sky-400 shrink-0" />
-                        <span className="text-[10px] font-medium text-sky-300 uppercase">{rutaActual}</span>
+                        <MapPin size={10} className="text-sky-500 shrink-0" />
+                        <span className="text-[10px] font-bold text-sky-700 uppercase">{rutaActual}</span>
                       </div>
                     )}
                   </div>

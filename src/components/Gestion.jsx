@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react'
 import JSZip from 'jszip'
 import { supabase } from '../supabase.jsx'
 import {
-  Plus, Pencil, Trash2, CheckCircle, X, ClipboardList, AlertCircle, RotateCcw, 
-  Paperclip, DownloadCloud, Eye, Image as ImageIcon, Download, FileText
+  Plus, Pencil, Trash2, CheckCircle, X, ClipboardList, RotateCcw, 
+  Paperclip, DownloadCloud, Download, CalendarClock, Briefcase,
+  ListTodo, CircleDollarSign, ArrowUpRight
 } from 'lucide-react'
 
 const PRIORIDADES = ['Baja', 'Media', 'Alta']
@@ -188,7 +189,25 @@ export default function ModuloPendientes() {
   }
 
   const itemsFiltrados = vistaActual === 'Tarea' ? items.filter(i => i.tipo === 'Tarea') : items.filter(i => i.tipo === 'Particular')
-  const filtrados = filtro === 'Todos' ? itemsFiltrados : itemsFiltrados.filter(i => i.estado === filtro)
+  const baseFiltrada = filtro === 'Todos' ? itemsFiltrados : itemsFiltrados.filter(i => i.estado === filtro)
+  const prioridadEstado = estado => {
+    if (estado === 'Pendiente' || estado === 'Pendiente de pago') return 0
+    if (estado === 'En proceso' || estado === 'En Proceso') return 1
+    if (estado === 'Realizado' || estado === 'Completada' || estado === 'Pagado') return 2
+    return 3
+  }
+  const prioridadNivel = { Alta: 0, Media: 1, Baja: 2 }
+  // Los pendientes siempre encabezan la lista. Dentro del mismo estado se
+  // ordenan por prioridad, fecha y creación para que lo urgente quede visible.
+  const filtrados = [...baseFiltrada].sort((a, b) => {
+    const porEstado = prioridadEstado(a.estado) - prioridadEstado(b.estado)
+    if (porEstado !== 0) return porEstado
+    const porPrioridad = (prioridadNivel[a.prioridad] ?? 3) - (prioridadNivel[b.prioridad] ?? 3)
+    if (porPrioridad !== 0) return porPrioridad
+    const porFecha = String(a.fecha || '9999-12-31').localeCompare(String(b.fecha || '9999-12-31'))
+    if (porFecha !== 0) return porFecha
+    return String(b.created_at || '').localeCompare(String(a.created_at || ''))
+  })
   const estadosFiltro = vistaActual === 'Tarea' ? ['Todos', ...ESTADOS_TAREA] : ['Todos', ...ESTADOS_PARTICULAR]
 
   const pendientesCount = itemsFiltrados.filter(i => i.estado === 'Pendiente' || i.estado === 'Pendiente de pago').length
@@ -196,104 +215,108 @@ export default function ModuloPendientes() {
   const completadosCount = itemsFiltrados.filter(i => ['Realizado', 'Completada', 'Pagado'].includes(i.estado)).length
 
   return (
-    <div className="space-y-4 fade-in">
-      {/* ── Header con selector, stats y filtros ── */}
-      <div className="card overflow-hidden">
-        {/* Selector de vista */}
-        <div className="flex">
+    <div className="space-y-5 fade-in">
+      <section className="workspace-hero">
+        <div className="relative z-10 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div className="mb-3 flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.18em] text-sky-300">
+              {vistaActual === 'Tarea' ? <ListTodo size={13} /> : <Briefcase size={13} />}
+              Espacio de gestión
+            </div>
+            <h1 className="text-2xl font-black tracking-tight sm:text-3xl">
+              {vistaActual === 'Tarea' ? 'Pendientes y seguimiento' : 'Servicios particulares'}
+            </h1>
+            <p className="mt-2 max-w-xl text-xs leading-relaxed text-slate-300 sm:text-sm">
+              {vistaActual === 'Tarea'
+                ? 'Lo pendiente aparece primero, ordenado por prioridad y fecha para empezar por lo más importante.'
+                : 'Controla el avance, los pagos y los documentos de cada servicio particular.'}
+            </p>
+          </div>
+          <button onClick={abrirNuevo} className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-xs font-extrabold text-slate-900 shadow-lg transition hover:bg-sky-50 active:scale-[0.98]">
+            <Plus size={15} /> Nuevo {vistaActual === 'Tarea' ? 'pendiente' : 'servicio'}
+          </button>
+        </div>
+        <div className="relative z-10 mt-5 flex w-full gap-1 rounded-xl bg-white/[0.08] p-1 ring-1 ring-white/10 sm:w-fit">
           {['Tarea', 'Particular'].map(v => (
             <button key={v} onClick={() => { setVistaActual(v); setFiltro('Todos') }}
-              className={`flex-1 py-2.5 text-xs font-bold uppercase tracking-wider transition-all ${
-                vistaActual === v 
-                  ? 'bg-slate-800 text-white' 
-                  : 'bg-slate-100 text-slate-400 hover:text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              {v === 'Tarea' ? '📋 Mis Pendientes' : '🔧 Servicios Particulares'}
+              className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2 text-[10px] font-extrabold transition sm:flex-none ${vistaActual === v ? 'bg-white text-slate-900 shadow-md' : 'text-slate-300 hover:bg-white/[0.06] hover:text-white'}`}>
+              {v === 'Tarea' ? <ClipboardList size={13} /> : <CircleDollarSign size={13} />}
+              {v === 'Tarea' ? 'Mis pendientes' : 'Servicios particulares'}
             </button>
           ))}
         </div>
+      </section>
 
-        {/* Stats strip */}
-        <div className="flex border-b border-slate-100">
-          <div className="flex-1 px-3 py-2 text-center border-r border-slate-100">
-            <p className="text-lg font-black text-amber-600 leading-none">{pendientesCount}</p>
-            <p className="text-[9px] font-semibold text-slate-400 uppercase mt-0.5">Pendientes</p>
-          </div>
-          <div className="flex-1 px-3 py-2 text-center border-r border-slate-100">
-            <p className="text-lg font-black text-sky-600 leading-none">{procesoCount}</p>
-            <p className="text-[9px] font-semibold text-slate-400 uppercase mt-0.5">En Proceso</p>
-          </div>
-          <div className="flex-1 px-3 py-2 text-center border-r border-slate-100">
-            <p className="text-lg font-black text-emerald-600 leading-none">{completadosCount}</p>
-            <p className="text-[9px] font-semibold text-slate-400 uppercase mt-0.5">Completados</p>
-          </div>
-          <div className="flex-1 px-3 py-2 text-center">
-            <p className="text-lg font-black text-slate-800 leading-none">{itemsFiltrados.length}</p>
-            <p className="text-[9px] font-semibold text-slate-400 uppercase mt-0.5">Total</p>
-          </div>
-        </div>
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <SummaryCard label="Pendientes" value={pendientesCount} tone="amber" />
+        <SummaryCard label="En proceso" value={procesoCount} tone="sky" />
+        <SummaryCard label="Completados" value={completadosCount} tone="emerald" />
+        <SummaryCard label="Total" value={itemsFiltrados.length} tone="slate" />
+      </section>
 
-        {/* Filtros + botón nuevo */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 p-3">
-          <div className="flex flex-wrap gap-1">
+      <section className="card flex flex-col items-start justify-between gap-3 p-3 sm:flex-row sm:items-center">
+        <div>
+          <p className="section-title mb-2">Filtrar por estado</p>
+          <div className="flex flex-wrap gap-1.5">
             {estadosFiltro.map(e => (
               <button key={e} onClick={() => setFiltro(e)} className={`pill ${filtro === e ? 'pill-active' : 'pill-inactive'}`}>{e}</button>
             ))}
           </div>
-          <button onClick={abrirNuevo} className="btn-primary flex items-center gap-1.5 shrink-0">
-            <Plus size={13} /> Nuevo {vistaActual === 'Tarea' ? 'Pendiente' : 'Servicio'}
-          </button>
         </div>
-      </div>
+        <p className="shrink-0 rounded-xl bg-slate-100 px-3 py-2 text-[10px] font-bold text-slate-500">
+          {filtrados.length} {filtrados.length === 1 ? 'resultado' : 'resultados'}
+        </p>
+      </section>
 
       {error && !modal && <div className="text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2.5">{error}</div>}
 
       {/* ── Lista ── */}
       {cargando ? (
-        <div className="text-center py-16 text-slate-400"><RotateCcw size={24} className="mx-auto mb-3 animate-spin text-sky-500" /><p className="text-xs font-semibold">Cargando…</p></div>
+        <div className="card text-center py-16 text-slate-400"><RotateCcw size={24} className="mx-auto mb-3 animate-spin text-sky-500" /><p className="text-xs font-semibold">Cargando…</p></div>
       ) : filtrados.length === 0 ? (
         <div className="text-center py-16 text-slate-400 card"><ClipboardList size={40} className="mx-auto mb-3 text-slate-300" /><p className="text-sm font-semibold text-slate-500">No hay registros</p></div>
       ) : (
-        <div className="space-y-3">
+        <div className="grid items-start gap-4 xl:grid-cols-2">
           {filtrados.map(item => {
             const isDone = item.estado === 'Realizado' || item.estado === 'Completada' || item.estado === 'Pagado'
             const isCancelled = item.estado === 'Cancelado'
-            const isOverdue = item.fecha && new Date(item.fecha) < new Date() && !isDone && !isCancelled
+            const isPending = item.estado === 'Pendiente' || item.estado === 'Pendiente de pago'
+            const isOverdue = item.fecha && item.fecha < obtenerFechaHoy() && !isDone && !isCancelled
+            const accent = isOverdue ? 'border-t-rose-500' : isPending ? 'border-t-amber-400' : item.estado.toLowerCase().includes('proceso') ? 'border-t-sky-500' : 'border-t-emerald-500'
             return (
-              <div key={item.id} className={`card-section transition-all ${isDone || isCancelled ? 'opacity-50' : ''}`}>
-                {/* Header oscuro */}
-                <div className={`px-4 py-2 flex items-center justify-between gap-2 ${item.tipo === 'Particular' ? 'bg-gradient-to-r from-slate-800 to-slate-700' : 'bg-slate-800'}`}>
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <p className={`font-bold text-white text-xs uppercase tracking-wide truncate ${isDone ? 'line-through opacity-60' : ''}`}>{item.titulo}</p>
-                    {isOverdue && <span className="text-[8px] font-bold bg-rose-500 text-white px-1.5 py-0.5 rounded shrink-0 animate-pulse">VENCIDO</span>}
+              <article key={item.id} className={`card-section border-t-4 ${accent} transition-all hover:-translate-y-0.5 hover:shadow-lg ${isDone || isCancelled ? 'opacity-60' : ''}`}>
+                <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-4 py-3.5">
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+                      <span className="text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-400">{item.tipo === 'Particular' ? 'Servicio particular' : 'Pendiente'}</span>
+                      {isOverdue && <span className="rounded-md bg-rose-500 px-1.5 py-0.5 text-[8px] font-black text-white">VENCIDO</span>}
+                    </div>
+                    <h2 className={`truncate text-sm font-extrabold text-slate-900 ${isDone ? 'line-through text-slate-400' : ''}`}>{item.titulo}</h2>
                   </div>
-                  <div className="flex items-center gap-0.5 shrink-0">
-                    <button onClick={() => abrirEditar(item)} className="p-1.5 rounded-md hover:bg-slate-600 text-slate-400 hover:text-white transition"><Pencil size={12} /></button>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button onClick={() => abrirEditar(item)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-400 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-600" title="Editar"><Pencil size={13} /></button>
                     {item.tipo === 'Tarea' && (
-                      <button onClick={() => eliminar(item.id)} className="p-1.5 rounded-md hover:bg-slate-600 text-slate-400 hover:text-rose-300 transition"><Trash2 size={12} /></button>
+                      <button onClick={() => eliminar(item.id)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-400 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600" title="Eliminar"><Trash2 size={13} /></button>
                     )}
                   </div>
                 </div>
 
-                {/* Contenido */}
-                <div className="p-3 space-y-2.5">
-                  {/* Badges de estado */}
+                <div className="space-y-3 p-4">
                   <div className="flex items-center justify-between flex-wrap gap-1.5">
                     <div className="flex items-center gap-1.5">
-                      <button onClick={() => cambiarEstado(item.id, item.estado, item.tipo)} className={`text-[10px] font-bold px-2.5 py-1 rounded-md border cursor-pointer hover:shadow-sm transition ${estBadge(item.estado)}`}>{item.estado}</button>
-                      <span className={`text-[10px] font-bold px-2 py-1 rounded-md border ${prioBadge(item.prioridad)}`}>{item.prioridad}</span>
+                      <button onClick={() => cambiarEstado(item.id, item.estado, item.tipo)} title="Cambiar al siguiente estado" className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-extrabold transition hover:shadow-sm ${estBadge(item.estado)}`}>{item.estado}<ArrowUpRight size={10} /></button>
+                      <span className={`rounded-lg border px-2.5 py-1.5 text-[10px] font-extrabold ${prioBadge(item.prioridad)}`}>{item.prioridad}</span>
                     </div>
                     {item.fecha && (
-                      <span className={`text-[10px] font-semibold px-2 py-1 rounded-md ${isOverdue ? 'text-rose-600 bg-rose-50 border border-rose-200' : 'text-slate-500 bg-slate-50 border border-slate-200'}`}>
-                        📅 {item.fecha}
+                      <span className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-bold ${isOverdue ? 'text-rose-600 bg-rose-50 border-rose-200' : 'text-slate-500 bg-slate-50 border-slate-200'}`}>
+                        <CalendarClock size={11} /> {item.fecha}
                       </span>
                     )}
                   </div>
 
                   {/* Datos Particular */}
                   {item.tipo === 'Particular' && (
-                    <div className="bg-slate-50 rounded-lg p-2.5 space-y-1">
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 space-y-1">
                       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
                         <div className="flex gap-1.5">
                           <span className="text-slate-400 shrink-0 w-16 font-semibold">ORDEN</span>
@@ -320,7 +343,7 @@ export default function ModuloPendientes() {
                   )}
                   
                   {item.descripcion && (
-                    <div className="text-[11px] text-slate-500 bg-slate-50 rounded-md px-3 py-2 border-l-[3px] border-sky-300">
+                    <div className="rounded-xl bg-sky-50 px-3 py-2.5 text-[11px] text-slate-600 ring-1 ring-inset ring-sky-100">
                       <span className="font-medium leading-relaxed">{item.descripcion}</span>
                     </div>
                   )}
@@ -332,13 +355,13 @@ export default function ModuloPendientes() {
                         <span className="text-[9px] font-semibold text-slate-400 flex items-center gap-1 uppercase"><Paperclip size={10} /> {item.archivos.length} adjuntos</span>
                         <button onClick={() => descargarZIP(item)} className="text-[9px] font-bold flex items-center gap-1 text-sky-600 hover:text-sky-800 transition"><DownloadCloud size={10}/> ZIP</button>
                       </div>
-                      <div className="flex flex-wrap gap-1">
+                      <div className="flex flex-wrap gap-1.5">
                         {item.archivos.map((arch, idx) => {
                           const archObj = typeof arch === 'string' ? JSON.parse(arch) : arch
                           const url = archObj.url, nombre = archObj.nombre, tipoDoc = archObj.tipoDoc || 'Adjunto'
                           const isImage = url.match(/\.(jpeg|jpg|gif|png|webp)$/i) || nombre.match(/\.(jpeg|jpg|gif|png|webp)$/i)
                           return (
-                            <div key={idx} className="flex items-center gap-1 bg-slate-50 border border-slate-100 rounded px-2 py-1 text-[9px] hover:border-sky-200 transition">
+                            <div key={idx} className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-[9px] hover:border-sky-200 transition">
                               {item.tipo === 'Particular' && <span className="bg-sky-100 text-sky-700 font-bold px-1 py-0.5 rounded text-[8px]">{tipoDoc}</span>}
                               {isImage ? (
                                 <button onClick={() => setImgPreview(url)} className="text-sky-600 hover:text-sky-800 font-semibold truncate max-w-[120px]">{nombre}</button>
@@ -353,7 +376,7 @@ export default function ModuloPendientes() {
                     </div>
                   )}
                 </div>
-              </div>
+              </article>
             )
           })}
         </div>
@@ -362,10 +385,13 @@ export default function ModuloPendientes() {
       {/* ── Modal ── */}
       {modal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg slide-up max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-5 py-3 sticky top-0 bg-slate-800 z-10 rounded-t-xl">
-              <h3 className="font-bold text-white text-xs uppercase tracking-wider">{editId ? 'Editar' : 'Nuevo'} {form.tipo === 'Particular' ? 'Servicio Particular' : 'Pendiente'}</h3>
-              <button onClick={() => setModal(false)} className="p-1 rounded-md hover:bg-slate-700 text-slate-400 hover:text-white transition"><X size={14} /></button>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl slide-up max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-5 py-4 sticky top-0 bg-slate-950 z-10 rounded-t-2xl">
+              <div>
+                <p className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-sky-400">Gestión</p>
+                <h3 className="mt-1 font-extrabold text-white text-sm">{editId ? 'Editar' : 'Nuevo'} {form.tipo === 'Particular' ? 'servicio particular' : 'pendiente'}</h3>
+              </div>
+              <button onClick={() => setModal(false)} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition"><X size={15} /></button>
             </div>
             
             <div className="px-5 py-4 space-y-4">
@@ -373,7 +399,7 @@ export default function ModuloPendientes() {
 
               <div>
                 <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Título *</label>
-                <input type="text" value={form.titulo} onChange={e => setForm(p => ({ ...p, titulo: e.target.value }))} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:border-sky-400 focus:ring-1 focus:ring-sky-100 outline-none font-semibold text-slate-800 bg-slate-50 focus:bg-white transition" placeholder="Ej: Mantenimiento Preventivo" />
+                <input type="text" value={form.titulo} onChange={e => setForm(p => ({ ...p, titulo: e.target.value }))} className="control-field text-sm" placeholder="Ej: Mantenimiento Preventivo" />
               </div>
 
               {form.tipo === 'Particular' && (
@@ -388,7 +414,7 @@ export default function ModuloPendientes() {
 
               <div>
                 <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Descripción / Notas</label>
-                <textarea value={form.descripcion} onChange={e => setForm(p => ({ ...p, descripcion: e.target.value }))} rows={3} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:border-sky-400 focus:ring-1 focus:ring-sky-100 outline-none resize-none font-medium text-slate-700 bg-slate-50 focus:bg-white transition" placeholder="Detalles adicionales..." />
+                <textarea value={form.descripcion} onChange={e => setForm(p => ({ ...p, descripcion: e.target.value }))} rows={3} className="control-field resize-none" placeholder="Detalles adicionales..." />
               </div>
 
               {/* Archivos */}
@@ -459,18 +485,18 @@ export default function ModuloPendientes() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Fecha</label>
-                  <input type="date" value={form.fecha} onChange={e => setForm(p => ({ ...p, fecha: e.target.value }))} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none font-semibold text-slate-700 bg-slate-50 focus:bg-white focus:border-sky-400 transition" />
+                  <input type="date" value={form.fecha} onChange={e => setForm(p => ({ ...p, fecha: e.target.value }))} className="control-field" />
                 </div>
                 <div>
                   <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Estado</label>
-                  <select value={form.estado} onChange={e => setForm(p => ({ ...p, estado: e.target.value }))} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none font-semibold text-slate-700 bg-slate-50 focus:bg-white focus:border-sky-400 transition">
+                  <select value={form.estado} onChange={e => setForm(p => ({ ...p, estado: e.target.value }))} className="control-field">
                     {(form.tipo === 'Particular' ? ESTADOS_PARTICULAR : ESTADOS_TAREA).map(e => <option key={e}>{e}</option>)}
                   </select>
                 </div>
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 px-5 py-3.5 border-t border-slate-100 bg-slate-50 rounded-b-xl">
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl">
               <button onClick={() => setModal(false)} disabled={subiendoFiles} className="btn-ghost">Cancelar</button>
               <button onClick={guardar} disabled={subiendoFiles} className="btn-primary flex items-center gap-1.5">
                 {subiendoFiles ? <RotateCcw size={13} className="animate-spin" /> : <CheckCircle size={13} />} 
@@ -488,6 +514,21 @@ export default function ModuloPendientes() {
           <img src={imgPreview} alt="Vista previa" className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" onClick={e => e.stopPropagation()} />
         </div>
       )}
+    </div>
+  )
+}
+
+function SummaryCard({ label, value, tone }) {
+  const tones = {
+    amber: 'bg-amber-50 text-amber-700 ring-amber-100',
+    sky: 'bg-sky-50 text-sky-700 ring-sky-100',
+    emerald: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
+    slate: 'bg-white text-slate-700 ring-slate-200',
+  }
+  return (
+    <div className={`rounded-2xl p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] ring-1 ring-inset ${tones[tone]}`}>
+      <p className="text-3xl font-black tracking-tight">{value}</p>
+      <p className="mt-1 text-[9px] font-extrabold uppercase tracking-[0.12em] opacity-70">{label}</p>
     </div>
   )
 }

@@ -380,43 +380,40 @@ export default function Vacaciones() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5 fade-in">
       {/* Encabezado */}
-      <div className="flex items-center justify-between gap-3 flex-wrap rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm">
-        <div className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
-            <CalendarDays size={17} />
-          </span>
+      <section className="workspace-hero">
+        <div className="relative z-10 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="text-sm font-bold text-slate-800">Control de vacaciones</h2>
-            <p className="text-[10px] text-slate-400">Registro y seguimiento de días gozados</p>
+            <div className="mb-3 flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.18em] text-sky-300">
+              <CalendarDays size={13} /> Gestión de personal
+            </div>
+            <h1 className="text-2xl font-black tracking-tight sm:text-3xl">Control de vacaciones</h1>
+            <p className="mt-2 max-w-xl text-xs leading-relaxed text-slate-300 sm:text-sm">Registra períodos, consulta el historial y mantén una visión clara de los días gozados por persona.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={exportarExcel} disabled={!gocesFiltrados.length || exportando} className="flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 text-[10px] font-extrabold text-white transition hover:bg-white/15 disabled:opacity-40" title="Descargar reporte en Excel">
+              {exportando ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+              {exportando ? 'Generando…' : 'Exportar Excel'}
+            </button>
+            <button onClick={() => { setEditandoEmpleado(null); setModalEmpleado(true); }} className="flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 text-[10px] font-extrabold text-white transition hover:bg-white/15">
+              <Users size={13} /> Personal
+            </button>
+            <button onClick={() => setModalGoce(true)} disabled={!empleados.length} className="flex items-center gap-1.5 rounded-xl bg-white px-3.5 py-2.5 text-[10px] font-extrabold text-slate-900 shadow-lg transition hover:bg-sky-50 disabled:opacity-40">
+              <Plus size={13} /> Registrar vacaciones
+            </button>
           </div>
         </div>
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={exportarExcel}
-            disabled={!gocesFiltrados.length || exportando}
-            className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm hover:border-slate-300 hover:bg-slate-50 disabled:opacity-40"
-            title="Descargar reporte en Excel"
-          >
-            {exportando ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
-            {exportando ? 'Generando…' : 'Excel'}
-          </button>
-          <button
-            onClick={() => { setEditandoEmpleado(null); setModalEmpleado(true); }}
-            className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm hover:border-slate-300 hover:bg-slate-50"
-          >
-            <Users size={13} /> Personal
-          </button>
-          <button
-            onClick={() => setModalGoce(true)}
-            disabled={!empleados.length}
-            className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-slate-800 text-white shadow-sm hover:bg-slate-700 disabled:opacity-40"
-          >
-            <Plus size={13} /> Registrar vacaciones
-          </button>
-        </div>
-      </div>
+      </section>
+
+      {!!empleados.length && (
+        <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <VacationStat value={empleados.length} label="Personas" tone="sky" />
+          <VacationStat value={goces.length} label="Períodos registrados" tone="slate" />
+          <VacationStat value={goces.reduce((s, g) => s + (g.dias_habiles || 0), 0)} label="Días históricos" tone="emerald" />
+          <VacationStat value={asuetos.length} label="Asuetos configurados" tone="amber" />
+        </section>
+      )}
 
       {error && (
         <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
@@ -441,14 +438,14 @@ export default function Vacaciones() {
       {/* Pestañas */}
       {!!empleados.length && (
         <>
-          <div className="flex w-fit gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+          <div className="card flex w-full gap-1 p-1.5 sm:w-fit">
             {[['registro', 'Registro'], ['personal', 'Por persona']].map(([id, txt]) => (
               <button
                 key={id}
                 onClick={() => setPestana(id)}
-                className={`rounded-lg px-3 py-1.5 text-[11px] font-semibold transition-all ${
+                className={`flex-1 rounded-xl px-4 py-2 text-[11px] font-extrabold transition-all sm:flex-none ${
                   pestana === id
-                    ? 'bg-slate-800 text-white shadow-sm'
+                    ? 'bg-slate-900 text-white shadow-md'
                     : 'text-slate-400 hover:bg-slate-50 hover:text-slate-700'
                 }`}
               >
@@ -460,20 +457,20 @@ export default function Vacaciones() {
           {pestana === 'registro' ? (
             <>
               {/* Filtros */}
-              <div className="flex items-center gap-2 flex-wrap rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+              <div className="card flex items-center gap-2 flex-wrap p-3">
                 <div className="relative flex-1 min-w-[140px]">
                   <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
                     value={busqueda}
                     onChange={(e) => setBusqueda(e.target.value)}
                     placeholder="Buscar…"
-                    className="w-full pl-7 pr-2 py-2 text-[11px] border border-slate-200 rounded-lg bg-slate-50/60 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-400"
+                    className="control-field pl-8"
                   />
                 </div>
                 <select
                   value={filtroEmpleado}
                   onChange={(e) => setFiltroEmpleado(e.target.value)}
-                  className="text-[11px] border border-slate-200 rounded-lg px-2.5 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-slate-400"
+                  className="control-field w-auto min-w-[150px]"
                 >
                   <option value="">Todo el personal</option>
                   {empleados.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
@@ -481,18 +478,18 @@ export default function Vacaciones() {
                 <select
                   value={filtroAnio}
                   onChange={(e) => setFiltroAnio(e.target.value)}
-                  className="text-[11px] border border-slate-200 rounded-lg px-2.5 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-slate-400"
+                  className="control-field w-auto min-w-[140px]"
                 >
                   <option value="">Todos los años</option>
                   {anios.map((a) => <option key={a} value={a}>{a}</option>)}
                 </select>
-                <span className="text-[10px] font-bold text-slate-600 bg-slate-100 border border-slate-200 px-2.5 py-2 rounded-lg whitespace-nowrap">
+                <span className="text-[10px] font-extrabold text-sky-700 bg-sky-50 border border-sky-100 px-3 py-2.5 rounded-xl whitespace-nowrap">
                   {gocesFiltrados.length} reg · {totalFiltrado} días
                 </span>
               </div>
 
               {/* Tabla de goces */}
-              <div className="border border-slate-300 rounded-xl overflow-hidden bg-white shadow-sm">
+              <div className="card-section">
                 {gocesFiltrados.length === 0 ? (
                   <p className="text-[11px] text-slate-400 text-center py-8">
                     No hay registros con estos filtros.
@@ -500,8 +497,8 @@ export default function Vacaciones() {
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-[11px] border-separate border-spacing-0">
-                      <thead className="bg-slate-100/80">
-                        <tr className="text-left text-[10px] uppercase tracking-wide text-slate-500">
+                      <thead className="bg-slate-950">
+                        <tr className="text-left text-[9px] uppercase tracking-[0.12em] text-slate-300">
                           <th className="border-b border-r border-slate-300 px-3 py-2.5 font-bold">Código</th>
                           <th className="border-b border-r border-slate-300 px-3 py-2.5 font-bold">Compañero</th>
                           <th className="border-b border-r border-slate-300 px-3 py-2.5 font-bold">Desde</th>
@@ -515,7 +512,7 @@ export default function Vacaciones() {
                         {gocesFiltrados.map((g, i) => (
                           <tr
                             key={g.id}
-                            className={`transition-colors hover:bg-slate-100/80 ${i % 2 ? 'bg-slate-50/60' : 'bg-white'}`}
+                            className={`transition-colors hover:bg-sky-50/70 ${i % 2 ? 'bg-slate-50/60' : 'bg-white'}`}
                           >
                             <td className="border-b border-r border-slate-200 px-3 py-2.5 font-mono text-[10px] font-semibold text-slate-500 whitespace-nowrap">
                               {g.vac_empleados?.codigo || '—'}
@@ -554,7 +551,7 @@ export default function Vacaciones() {
           ) : (
             /* Resumen por persona */
             <div className="space-y-3">
-              <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm">
+              <div className="card flex items-center justify-between gap-3 px-4 py-3">
                 <div className="flex items-center gap-2">
                   <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
                     <Users size={15} />
@@ -573,9 +570,9 @@ export default function Vacaciones() {
                 {resumen.map((r) => (
                   <div
                     key={r.id}
-                    className="group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
+                    className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.055)] transition-all hover:-translate-y-0.5 hover:border-sky-200 hover:shadow-lg"
                   >
-                    <div className="flex items-start justify-between gap-2 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white p-3">
+                    <div className="flex items-start justify-between gap-2 border-b border-slate-100 bg-gradient-to-r from-sky-50/70 to-white p-4">
                       <div className="min-w-0">
                         {r.codigo && (
                           <span className="mb-1 inline-flex rounded border border-slate-200 bg-white px-1.5 py-0.5 font-mono text-[9px] font-bold tracking-wider text-slate-400">
@@ -658,6 +655,21 @@ export default function Vacaciones() {
           onError={setError}
         />
       )}
+    </div>
+  );
+}
+
+function VacationStat({ value, label, tone }) {
+  const tones = {
+    sky: 'bg-sky-50 text-sky-700 ring-sky-100',
+    slate: 'bg-white text-slate-700 ring-slate-200',
+    emerald: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
+    amber: 'bg-amber-50 text-amber-700 ring-amber-100',
+  };
+  return (
+    <div className={`rounded-2xl p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] ring-1 ring-inset ${tones[tone]}`}>
+      <p className="text-3xl font-black tracking-tight">{value}</p>
+      <p className="mt-1 text-[9px] font-extrabold uppercase tracking-[0.12em] opacity-70">{label}</p>
     </div>
   );
 }
