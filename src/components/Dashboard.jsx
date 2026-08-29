@@ -6,15 +6,16 @@ import {
 import { verificarGarantiaTicket } from '../utils/garantias'
 
 function contarGarantias(tickets, clientesGarantia) {
-  let vencidas = 0, vigentes = 0, sinSerie = 0
+  let vencidas = 0, vigentes = 0, sinSerie = 0, tipoIncorrecto = 0
   tickets.forEach(t => {
     const garantia = verificarGarantiaTicket(t, clientesGarantia)
     if (!garantia) return
-    if (garantia.sinDatosSerie) sinSerie++
+    if (garantia.tipoIncorrecto) tipoIncorrecto++
+    else if (garantia.sinDatosSerie) sinSerie++
     else if (garantia.vencida) vencidas++
     else vigentes++
   })
-  return { vencidas, vigentes, sinSerie }
+  return { vencidas, vigentes, sinSerie, tipoIncorrecto }
 }
 
 export default function Dashboard({ allTickets, nombreArchivo, fechaSubidaExcel, onNavigate, clientesGarantia = [] }) {
@@ -161,10 +162,11 @@ export default function Dashboard({ allTickets, nombreArchivo, fechaSubidaExcel,
         <RankingPanel title="Carga por técnico" subtitle="Tickets que requieren seguimiento" icon={Users} rows={stats.carga} max={stats.maxCarga} color="bg-sky-500" empty="Sin tickets pendientes" onClick={() => onNavigate('tecnicos')} />
       </section>
 
-      {(stats.garantias.vencidas > 0 || stats.garantias.vigentes > 0 || stats.garantias.sinSerie > 0) && (
+      {(stats.garantias.vencidas > 0 || stats.garantias.vigentes > 0 || stats.garantias.sinSerie > 0 || stats.garantias.tipoIncorrecto > 0) && (
         <button onClick={() => onNavigate('tecnicos')} className="card-section w-full text-left transition hover:border-sky-200 hover:shadow-lg">
           <PanelHeader icon={ShieldAlert} title="Control de garantías" subtitle="Validaciones que requieren atención operativa" />
-          <div className="grid gap-3 p-5 sm:grid-cols-3">
+          <div className="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-4">
+            <GuaranteeCard value={stats.garantias.tipoIncorrecto} label="Tipo incorrecto" detail="Cambiar Normal por Garantia" tone="violet" />
             <GuaranteeCard value={stats.garantias.vencidas} label="Vencidas" detail="No atender bajo garantía" tone="rose" />
             <GuaranteeCard value={stats.garantias.vigentes} label="Vigentes" detail="Atención cubierta" tone="emerald" />
             <GuaranteeCard value={stats.garantias.sinSerie} label="Por verificar" detail="Serie incompleta o inválida" tone="amber" />
@@ -246,6 +248,7 @@ function GuaranteeCard({ value, label, detail, tone }) {
     rose: 'bg-rose-50 text-rose-700 ring-rose-100',
     emerald: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
     amber: 'bg-amber-50 text-amber-700 ring-amber-100',
+    violet: 'bg-violet-50 text-violet-700 ring-violet-100',
   }
   return (
     <div className={`rounded-xl p-4 ring-1 ring-inset ${tones[tone]}`}>

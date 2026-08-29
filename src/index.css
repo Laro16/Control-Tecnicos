@@ -32,10 +32,10 @@
 
   /* Cards */
   .card {
-    @apply bg-white rounded-2xl border border-slate-200/80 shadow-[0_10px_30px_rgba(15,23,42,0.055)];
+    @apply bg-white rounded-2xl border-[1.5px] border-slate-300 shadow-[0_10px_30px_rgba(15,23,42,0.065)];
   }
   .card-section {
-    @apply bg-white rounded-2xl border border-slate-200/80 shadow-[0_10px_30px_rgba(15,23,42,0.055)] overflow-hidden;
+    @apply bg-white rounded-2xl border-[1.5px] border-slate-300 shadow-[0_10px_30px_rgba(15,23,42,0.065)] overflow-hidden;
   }
 
   /* Buttons */
@@ -92,8 +92,115 @@
 }
 
 .control-field {
-  @apply w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-semibold text-slate-700 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100;
+  @apply w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-xs font-semibold text-slate-700 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100;
 }
+
+/* Las divisiones deben seguir siendo visibles en fichas densas y tablas. */
+main .border-slate-100 { border-color: #e2e8f0; }
+main .border-slate-200 { border-color: #cbd5e1; }
+
+/* ── Dark mode ── */
+html.dark {
+  color-scheme: dark;
+}
+
+html.dark body {
+  background: #020617;
+  color: #e2e8f0;
+}
+
+html.dark .app-shell {
+  background:
+    radial-gradient(circle at 8% -4%, rgba(14, 165, 233, 0.13), transparent 28rem),
+    radial-gradient(circle at 92% 10%, rgba(99, 102, 241, 0.10), transparent 24rem),
+    #020617;
+}
+
+html.dark .card,
+html.dark .card-section {
+  background-color: #0f172a;
+  border-color: #475569;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+}
+
+html.dark main .bg-white { background-color: #0f172a !important; }
+html.dark main .bg-slate-50,
+html.dark main [class*="bg-slate-50/"] { background-color: #111c2f !important; }
+html.dark main .bg-slate-100,
+html.dark main [class*="bg-slate-100/"] { background-color: #1e293b !important; }
+
+html.dark main .text-slate-900,
+html.dark main .text-slate-800 { color: #f1f5f9 !important; }
+html.dark main .text-slate-700,
+html.dark main .text-slate-600 { color: #cbd5e1 !important; }
+html.dark main .text-slate-500 { color: #94a3b8 !important; }
+html.dark main .text-slate-400,
+html.dark main .text-slate-300 { color: #94a3b8 !important; }
+html.dark main .text-sky-700,
+html.dark main .text-sky-600 { color: #7dd3fc !important; }
+html.dark main .text-emerald-800,
+html.dark main .text-emerald-700,
+html.dark main .text-emerald-600 { color: #6ee7b7 !important; }
+html.dark main .text-amber-800,
+html.dark main .text-amber-700,
+html.dark main .text-amber-600,
+html.dark main .text-amber-500 { color: #fcd34d !important; }
+html.dark main .text-orange-700,
+html.dark main .text-orange-600 { color: #fdba74 !important; }
+html.dark main .text-rose-800,
+html.dark main .text-rose-700,
+html.dark main .text-rose-600 { color: #fda4af !important; }
+html.dark main .text-red-700,
+html.dark main .text-red-600 { color: #fca5a5 !important; }
+html.dark main .text-violet-800,
+html.dark main .text-violet-700,
+html.dark main .text-violet-600 { color: #c4b5fd !important; }
+html.dark main .text-green-700,
+html.dark main .text-green-600 { color: #86efac !important; }
+
+html.dark main .border-slate-100,
+html.dark main .border-slate-200,
+html.dark main .border-slate-300 { border-color: #475569 !important; }
+html.dark main .divide-slate-200 > :not([hidden]) ~ :not([hidden]),
+html.dark main .divide-slate-300 > :not([hidden]) ~ :not([hidden]) { border-color: #475569 !important; }
+
+html.dark main input,
+html.dark main select,
+html.dark main textarea {
+  background-color: #111c2f !important;
+  border-color: #475569 !important;
+  color: #e2e8f0 !important;
+}
+html.dark main input::placeholder,
+html.dark main textarea::placeholder { color: #64748b; }
+html.dark main option { background: #0f172a; color: #e2e8f0; }
+
+html.dark main .bg-sky-50,
+html.dark main [class*="bg-sky-50/"] { background-color: rgba(14, 165, 233, 0.13) !important; }
+html.dark main .bg-emerald-50,
+html.dark main [class*="bg-emerald-50/"] { background-color: rgba(16, 185, 129, 0.13) !important; }
+html.dark main .bg-amber-50,
+html.dark main [class*="bg-amber-50/"] { background-color: rgba(245, 158, 11, 0.13) !important; }
+html.dark main .bg-orange-50,
+html.dark main [class*="bg-orange-50/"] { background-color: rgba(249, 115, 22, 0.13) !important; }
+html.dark main .bg-rose-50,
+html.dark main [class*="bg-rose-50/"] { background-color: rgba(244, 63, 94, 0.13) !important; }
+html.dark main .bg-red-50,
+html.dark main [class*="bg-red-50/"] { background-color: rgba(239, 68, 68, 0.13) !important; }
+html.dark main .bg-violet-50,
+html.dark main [class*="bg-violet-50/"] { background-color: rgba(139, 92, 246, 0.14) !important; }
+html.dark main .bg-green-50,
+html.dark main [class*="bg-green-50/"] { background-color: rgba(34, 197, 94, 0.13) !important; }
+
+html.dark main .bg-rose-100 { background-color: rgba(244, 63, 94, 0.22) !important; }
+html.dark main .bg-amber-100 { background-color: rgba(245, 158, 11, 0.22) !important; }
+html.dark main .bg-emerald-100 { background-color: rgba(16, 185, 129, 0.22) !important; }
+html.dark main .bg-violet-100 { background-color: rgba(139, 92, 246, 0.22) !important; }
+html.dark main .from-sky-50\/70 { --tw-gradient-from: rgba(14, 165, 233, 0.12) var(--tw-gradient-from-position); }
+html.dark main .to-white { --tw-gradient-to: #0f172a var(--tw-gradient-to-position); }
+
+html.dark .section-title { color: #94a3b8; }
+html.dark ::-webkit-scrollbar-thumb { background: #475569; }
 
 /* ── Animations ── */
 .fade-in {

@@ -57,6 +57,7 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
       const pA = a.split('/'); const pB = b.split('/')
       return new Date(pA[2], pA[1]-1, pA[0]) - new Date(pB[2], pB[1]-1, pB[0])
     })
+  const productividadCompacta = columnasFechas.length === 1
 
   const tecnicosUnicos = Array.from(new Set(ticketsFinalizados.map(t => t.tecnico)))
 
@@ -225,10 +226,10 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
             <button onClick={() => { setFechaInicio(''); setFechaFin('') }} className="text-[9px] font-semibold text-slate-400 hover:text-white px-2 py-0.5 rounded hover:bg-slate-700 transition">Todo</button>
           </div>
         </div>
-        <div className="flex items-center gap-2 px-4 py-2.5 bg-white">
-          <input type="date" value={fechaInicio} onChange={e => setFechaInicio(e.target.value)} className="border border-slate-200 rounded-md px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-slate-50 outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-100 transition" />
+        <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 bg-white">
+          <input type="date" value={fechaInicio} onChange={e => setFechaInicio(e.target.value)} className="min-w-0 border border-slate-300 rounded-md px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-slate-50 outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-100 transition" />
           <span className="text-slate-300 font-bold text-xs">→</span>
-          <input type="date" value={fechaFin} onChange={e => setFechaFin(e.target.value)} className="border border-slate-200 rounded-md px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-slate-50 outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-100 transition" />
+          <input type="date" value={fechaFin} onChange={e => setFechaFin(e.target.value)} className="min-w-0 border border-slate-300 rounded-md px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-slate-50 outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-100 transition" />
           {(fechaInicio || fechaFin) && (
             <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
               {granTotalFinalizadas} resultado{granTotalFinalizadas !== 1 ? 's' : ''}
@@ -238,7 +239,7 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
       </div>
 
       {/* ── TABLA 1: CONTROL DE PRODUCTIVIDAD ── */}
-      <div>
+      <div className={productividadCompacta ? 'w-full max-w-[520px]' : ''}>
         <div ref={tablaFinalizadasRef} className="card-section">
           <div className="px-4 py-2.5 bg-slate-800">
             <div className="text-[11px] font-bold text-white uppercase tracking-wider flex items-center gap-2">
@@ -248,7 +249,10 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
             </div>
           </div>
           <div className="overflow-x-auto bg-white">
-            <table className="w-full border-collapse" style={{ tableLayout: columnasFechas.length <= 3 ? 'fixed' : 'auto' }}>
+            <table
+              className={`${productividadCompacta ? 'w-[520px]' : 'w-full'} border-collapse`}
+              style={{ tableLayout: columnasFechas.length <= 3 ? 'fixed' : 'auto' }}
+            >
               {columnasFechas.length <= 3 && (
                 <colgroup>
                   <col style={{ width: '200px' }} />

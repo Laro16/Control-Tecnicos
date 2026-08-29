@@ -514,24 +514,24 @@ export default function Vacaciones() {
                             key={g.id}
                             className={`transition-colors hover:bg-sky-50/70 ${i % 2 ? 'bg-slate-50/60' : 'bg-white'}`}
                           >
-                            <td className="border-b border-r border-slate-200 px-3 py-2.5 font-mono text-[10px] font-semibold text-slate-500 whitespace-nowrap">
+                            <td className="border-b border-r border-slate-300 px-3 py-2.5 font-mono text-[10px] font-semibold text-slate-500 whitespace-nowrap">
                               {g.vac_empleados?.codigo || '—'}
                             </td>
-                            <td className="border-b border-r border-slate-200 px-3 py-2.5">
+                            <td className="border-b border-r border-slate-300 px-3 py-2.5">
                               <span className="font-bold text-slate-700">{g.vac_empleados?.nombre || '—'}</span>
                               {g.vac_empleados?.puesto && (
                                 <span className="block mt-0.5 text-[9px] font-medium uppercase tracking-wide text-slate-400">{g.vac_empleados.puesto}</span>
                               )}
                             </td>
-                            <td className="border-b border-r border-slate-200 px-3 py-2.5 text-slate-600 whitespace-nowrap">{mostrar(g.fecha_inicio)}</td>
-                            <td className="border-b border-r border-slate-200 px-3 py-2.5 text-slate-600 whitespace-nowrap">{mostrar(g.fecha_fin)}</td>
-                            <td className="border-b border-r border-slate-200 px-3 py-2.5 text-center">
+                            <td className="border-b border-r border-slate-300 px-3 py-2.5 text-slate-600 whitespace-nowrap">{mostrar(g.fecha_inicio)}</td>
+                            <td className="border-b border-r border-slate-300 px-3 py-2.5 text-slate-600 whitespace-nowrap">{mostrar(g.fecha_fin)}</td>
+                            <td className="border-b border-r border-slate-300 px-3 py-2.5 text-center">
                               <span className="inline-flex min-w-[30px] items-center justify-center rounded-full border border-slate-200 bg-slate-100 px-2 py-1 font-bold text-slate-700">
                                 {g.dias_habiles}
                               </span>
                             </td>
-                            <td className="border-b border-r border-slate-200 px-3 py-2.5 text-slate-500">{g.observaciones || '—'}</td>
-                            <td className="border-b border-slate-200 px-2 py-2.5 text-center">
+                            <td className="border-b border-r border-slate-300 px-3 py-2.5 text-slate-500">{g.observaciones || '—'}</td>
+                            <td className="border-b border-slate-300 px-2 py-2.5 text-center">
                               <button
                                 onClick={() => borrarGoce(g.id)}
                                 className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-300 transition-colors hover:bg-red-50 hover:text-red-500"
@@ -570,9 +570,9 @@ export default function Vacaciones() {
                 {resumen.map((r) => (
                   <div
                     key={r.id}
-                    className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.055)] transition-all hover:-translate-y-0.5 hover:border-sky-200 hover:shadow-lg"
+                    className="group overflow-hidden rounded-2xl border-[1.5px] border-slate-300 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.065)] transition-all hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-lg"
                   >
-                    <div className="flex items-start justify-between gap-2 border-b border-slate-100 bg-gradient-to-r from-sky-50/70 to-white p-4">
+                    <div className="flex items-start justify-between gap-2 border-b border-slate-300 bg-gradient-to-r from-sky-50/70 to-white p-4">
                       <div className="min-w-0">
                         {r.codigo && (
                           <span className="mb-1 inline-flex rounded border border-slate-200 bg-white px-1.5 py-0.5 font-mono text-[9px] font-bold tracking-wider text-slate-400">
@@ -605,7 +605,7 @@ export default function Vacaciones() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-3 divide-x divide-slate-200 border-b border-slate-200 text-center">
+                    <div className="grid grid-cols-3 divide-x divide-slate-300 border-b border-slate-300 text-center">
                       <div className="px-2 py-3">
                         <p className="text-base font-bold leading-none text-slate-800">{r.dias_anio_actual}</p>
                         <p className="mt-1.5 text-[8px] font-bold uppercase tracking-wide text-slate-400">Este año</p>
@@ -667,7 +667,7 @@ function VacationStat({ value, label, tone }) {
     amber: 'bg-amber-50 text-amber-700 ring-amber-100',
   };
   return (
-    <div className={`rounded-2xl p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] ring-1 ring-inset ${tones[tone]}`}>
+    <div className={`rounded-2xl p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] ring-2 ring-inset ${tones[tone]}`}>
       <p className="text-3xl font-black tracking-tight">{value}</p>
       <p className="mt-1 text-[9px] font-extrabold uppercase tracking-[0.12em] opacity-70">{label}</p>
     </div>

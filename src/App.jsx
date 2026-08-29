@@ -7,7 +7,7 @@ import ModuloTablas from './components/Tablas'
 import Dashboard from './components/Dashboard'
 import Vacaciones from './components/Vacaciones'
 import garantiasUrl from './Garantias.xlsx?url'
-import { Wrench, ClipboardList, BarChart3, Cloud, CloudOff, Loader2, LayoutDashboard, CalendarDays } from 'lucide-react'
+import { Wrench, ClipboardList, BarChart3, Cloud, CloudOff, Loader2, LayoutDashboard, CalendarDays, Moon, Sun } from 'lucide-react'
 
 function normalizarTexto(texto) {
   if (!texto) return ''
@@ -27,6 +27,12 @@ function esEstadoActivoRuta(ticket) {
 export default function App() {
   const [tab, setTab] = useState('dashboard')
   const [syncStatus, setSyncStatus] = useState('cargando')
+  const [tema, setTema] = useState(() => localStorage.getItem('ticketmanager_theme') || 'claro')
+  useEffect(() => {
+    const oscuro = tema === 'oscuro'
+    document.documentElement.classList.toggle('dark', oscuro)
+    localStorage.setItem('ticketmanager_theme', tema)
+  }, [tema])
   // Vacaciones se monta hasta la primera vez que se abre la pestaña, para no
   // pegarle a Supabase en cada arranque de la app. Una vez montado se queda,
   // conservando filtros y datos al cambiar de pestaña.
@@ -169,7 +175,9 @@ export default function App() {
     Object.keys(ticketsPorTecnico).forEach(tec => {
       let encontrados = new Set()
       ticketsPorTecnico[tec].forEach(t => {
-        const textoBuscar = normalizarTexto(`${t['DIRECCIÓN']} ${t['NEGOCIO']}`)
+        // La ruta se deduce exclusivamente del encabezado DIRECCIÓN. El nombre
+        // del negocio puede contener municipios que no corresponden a la visita.
+        const textoBuscar = normalizarTexto(t['DIRECCIÓN'])
         baseMunicipios.forEach(muniOriginal => {
           const muniLimpio = normalizarTexto(muniOriginal)
           const escaped = muniLimpio.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -299,22 +307,34 @@ export default function App() {
             ))}
           </nav>
 
-          {/* Sync */}
-          <button
-            onClick={() => { if (nubeCargada.current) cargarDesdeNube(true) }}
-            className="flex items-center gap-1.5 shrink-0 px-2 py-1.5 rounded-lg hover:bg-white/[0.06] transition-colors"
-            title={syncStatus === 'sincronizado' ? 'Sincronizado · Tap para refrescar' : syncStatus === 'error' ? 'Sin conexión · Tap para reintentar' : 'Sincronizando...'}
-          >
-            {syncStatus === 'cargando' 
-              ? <Loader2 size={11} className="text-slate-400 animate-spin" />
-              : syncStatus === 'error'
-                ? <CloudOff size={11} className="text-rose-400" />
-                : <Cloud size={11} className="text-emerald-400" />
-            }
-            <span className={`text-[9px] font-medium hidden sm:inline ${syncStatus === 'sincronizado' ? 'text-emerald-500' : syncStatus === 'error' ? 'text-rose-400' : 'text-slate-500'}`}>
-              {syncStatus === 'sincronizado' ? 'Sync OK' : syncStatus === 'error' ? 'Offline' : 'Sync...'}
-            </span>
-          </button>
+          <div className="flex shrink-0 items-center gap-0.5">
+            <button
+              type="button"
+              onClick={() => setTema(actual => actual === 'oscuro' ? 'claro' : 'oscuro')}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/[0.08] hover:text-white"
+              title={tema === 'oscuro' ? 'Usar modo claro' : 'Usar modo oscuro'}
+              aria-label={tema === 'oscuro' ? 'Usar modo claro' : 'Usar modo oscuro'}
+            >
+              {tema === 'oscuro' ? <Sun size={13} /> : <Moon size={13} />}
+            </button>
+
+            {/* Sync */}
+            <button
+              onClick={() => { if (nubeCargada.current) cargarDesdeNube(true) }}
+              className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-white/[0.06] transition-colors"
+              title={syncStatus === 'sincronizado' ? 'Sincronizado · Tap para refrescar' : syncStatus === 'error' ? 'Sin conexión · Tap para reintentar' : 'Sincronizando...'}
+            >
+              {syncStatus === 'cargando' 
+                ? <Loader2 size={11} className="text-slate-400 animate-spin" />
+                : syncStatus === 'error'
+                  ? <CloudOff size={11} className="text-rose-400" />
+                  : <Cloud size={11} className="text-emerald-400" />
+              }
+              <span className={`text-[9px] font-medium hidden sm:inline ${syncStatus === 'sincronizado' ? 'text-emerald-500' : syncStatus === 'error' ? 'text-rose-400' : 'text-slate-500'}`}>
+                {syncStatus === 'sincronizado' ? 'Sync OK' : syncStatus === 'error' ? 'Offline' : 'Sync...'}
+              </span>
+            </button>
+          </div>
         </div>
       </header>
 

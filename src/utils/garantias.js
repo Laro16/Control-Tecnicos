@@ -97,6 +97,24 @@ export function verificarGarantiaTicket(ticket, clientesGarantia = []) {
   const clienteGarantia = buscarClienteGarantia(ticket?.CLIENTE, clientesGarantia)
   if (!clienteGarantia) return null
 
+  const tipoActual = ticket?.TIPO === null || ticket?.TIPO === undefined
+    ? ''
+    : String(ticket.TIPO).trim()
+
+  // El cliente sí pertenece al catálogo de Garantias.xlsx, pero el archivo
+  // diario lo clasificó como Normal. Se devuelve una alerta específica para
+  // no contarlo por error como garantía vigente, vencida o sin serie.
+  if (normalizarTextoGarantia(tipoActual) === 'NORMAL') {
+    return {
+      esClienteGarantia: true,
+      tipoIncorrecto: true,
+      tipoActual: tipoActual || 'Normal',
+      tipoEsperado: 'Garantia',
+      clienteNombre: clienteGarantia.nombre,
+      aniosGarantia: clienteGarantia.anios,
+    }
+  }
+
   const fechaFabricacion = parsearFechaSerie(obtenerSerieTicket(ticket))
   if (!fechaFabricacion) {
     return {

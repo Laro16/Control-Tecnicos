@@ -4,7 +4,8 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { 
   Upload, Clipboard, FileText, FileSpreadsheet, ChevronDown, Wrench, Filter, 
-  DownloadCloud, MapPin, ShieldAlert, ShieldCheck, Copy, ChevronRight, Users, Activity
+  DownloadCloud, MapPin, ShieldAlert, ShieldCheck, Copy, ChevronRight, Users, Activity,
+  Phone, Navigation, MessageCircle, Check
 } from 'lucide-react'
 import { obtenerSerieTicket, resolverSerie, verificarGarantiaTicket } from '../utils/garantias'
 
@@ -28,14 +29,6 @@ function limpiarReferencia(valor) {
   if (valor === null || valor === undefined) return ''
   const referencia = String(valor).trim()
   return referencia === '-' ? '' : referencia
-}
-
-function simplificarCliente(cliente) {
-  if (!cliente) return '-'
-  const upper = normalizarTexto(cliente)
-  if (upper.includes('COMERCIALIZADORA Y PRODUCTORA DE BEBIDAS LOS VOLCANES')) return 'Los Volcanes'
-  if (upper.includes('CERVECERIA CENTROAMERICANA')) return 'Cervecería'
-  return cliente
 }
 
 function normalizarFechaExcel(fechaTexto) {
@@ -85,6 +78,82 @@ function buildMessage(tecnico, tickets, rutaDefinida) {
   return msg
 }
 
+function buildTicketMessage(ticket) {
+  return [
+    `🔧 *TICKET ${ticket['N° REFERENCIA'] || '-'}*`,
+    `🏪 *NEGOCIO:* ${ticket['NEGOCIO'] || '-'}`,
+    `👤 *CLIENTE:* ${ticket['CLIENTE'] || '-'}`,
+    `📍 *DIRECCIÓN:* ${ticket['DIRECCIÓN'] || '-'}`,
+    `📞 *TELÉFONO:* ${ticket['TELÉFONO'] || '-'}`,
+    `🧊 *SERIE:* ${obtenerSerieTicket(ticket)}`,
+    `📦 *MODELO:* ${ticket['MODELO'] || '-'}`,
+    `📝 *DESCRIPCIÓN INICIAL:* ${ticket['DESCRIPCIÓN INICIAL'] || '-'}`,
+    `📌 *ESTADO:* ${ticket['ESTADO'] || '-'}`,
+  ].join('\n')
+}
+
+function obtenerTelefonoAccion(telefono) {
+  if (!telefono || telefono === '-') return ''
+  const coincidencia = String(telefono).match(/\+?\d[\d\s().-]{6,}/)
+  if (!coincidencia) return ''
+  const limpio = coincidencia[0].replace(/[^\d+]/g, '')
+  return /^\+?\d{7,15}$/.test(limpio) ? limpio : ''
+}
+
+function TicketActions({ ticket, onCopy, compact = false }) {
+  const telefono = obtenerTelefonoAccion(ticket['TELÉFONO'])
+  const direccion = ticket['DIRECCIÓN'] && ticket['DIRECCIÓN'] !== '-' ? ticket['DIRECCIÓN'] : ''
+  const mapsUrl = direccion
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${direccion} ${ticket['NEGOCIO'] || ''}`.trim())}`
+    : ''
+  const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(buildTicketMessage(ticket))}`
+  const base = `flex min-h-10 items-center justify-center gap-1.5 rounded-lg border px-2.5 text-[10px] font-extrabold transition active:scale-[0.98] ${compact ? 'sm:min-h-8' : 'sm:min-h-9'}`
+
+  return (
+    <div className={`grid grid-cols-2 gap-2 ${compact ? 'pt-1 sm:flex sm:flex-wrap' : 'border-t border-slate-100 px-3 py-3 sm:grid-cols-4'}`}>
+      {telefono ? (
+        <a href={`tel:${telefono}`} className={`${base} border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100`} title={`Llamar a ${telefono}`}>
+          <Phone size={12} /> Llamar
+        </a>
+      ) : (
+        <span className={`${base} cursor-not-allowed border-slate-200 bg-slate-50 text-slate-300`} title="Sin teléfono válido">
+          <Phone size={12} /> Sin teléfono
+        </span>
+      )}
+      {mapsUrl ? (
+        <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className={`${base} border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100`} title="Abrir dirección en Google Maps">
+          <Navigation size={12} /> Maps
+        </a>
+      ) : (
+        <span className={`${base} cursor-not-allowed border-slate-200 bg-slate-50 text-slate-300`} title="Sin dirección">
+          <Navigation size={12} /> Sin dirección
+        </span>
+      )}
+      <button type="button" onClick={() => onCopy(ticket)} className={`${base} border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50`} title="Copiar todos los datos del ticket">
+        <Copy size={12} /> Copiar
+      </button>
+      <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" className={`${base} border-green-200 bg-green-50 text-green-700 hover:bg-green-100`} title="Compartir ticket por WhatsApp">
+        <MessageCircle size={12} /> WhatsApp
+      </a>
+    </div>
+  )
+}
+
+function WarrantyClient({ ticket, tone = 'rose' }) {
+  const tones = {
+    rose: 'border-rose-300 bg-white text-rose-800',
+    amber: 'border-amber-300 bg-white text-amber-800',
+    emerald: 'border-emerald-300 bg-white text-emerald-800',
+    violet: 'border-violet-300 bg-white text-violet-800',
+  }
+  return (
+    <div className={`flex flex-col gap-0.5 rounded-lg border px-3 py-2 sm:flex-row sm:items-center sm:gap-2 ${tones[tone]}`} title="Dato tomado del encabezado CLIENTE del Excel diario">
+      <span className="text-[9px] font-black uppercase tracking-[0.14em] opacity-70">Cliente</span>
+      <span className="text-[11px] font-black leading-tight">{ticket['CLIENTE'] || 'SIN DATO EN CLIENTE'}</span>
+    </div>
+  )
+}
+
 function TicketBadge({ estado }) {
   const n = normalizarTexto(estado)
   let cls = 'badge-asignada'
@@ -105,7 +174,19 @@ export default function ModuloTecnicos({
   const [filtroEstadoGlobal, setFiltroEstadoGlobal] = useState('Todos')
   const [garantiaAbierta, setGarantiaAbierta] = useState(false)
   const [duplicadosAbierta, setDuplicadosAbierta] = useState(false)
+  const [toast, setToast] = useState('')
   const fileRef = useRef()
+
+  async function copiarTicket(ticket) {
+    try {
+      await navigator.clipboard.writeText(buildTicketMessage(ticket))
+      setToast('Datos del ticket copiados')
+      setTimeout(() => setToast(''), 2200)
+    } catch {
+      setToast('No se pudo copiar el ticket')
+      setTimeout(() => setToast(''), 2200)
+    }
+  }
 
   function procesarExcel(file) {
     if (!file) return
@@ -138,7 +219,7 @@ export default function ModuloTecnicos({
         if (esAsignadoTecnico || esEnProceso || esAsignadoAgencia || esFinalizada) {
           let tecnico = String(fila['TÉCNICO'] || fila['TECNICO'] || fila['TÉCNICOS'] || fila['TECNICOS'] || '').trim()
           if (!tecnico || tecnico === '') tecnico = 'SIN TÉCNICO'
-          let clienteOriginal = String(fila['CLIENTE'] || fila['NOMBRE CLIENTE'] || '-').trim()
+          let clienteOriginal = String(fila['CLIENTE'] || '-').trim()
           let fechaRaw = fila['FECHA REALIZADA'] || fila['FECHA REALIZACION'] || fila['FECHA'] || ''
           const fechaEstructura = normalizarFechaExcel(fechaRaw)
           const descripcion = fila['DESCRIPCIÓN'] || fila['DESCRIPCION'] || fila['COMENTARIO'] || '-'
@@ -152,7 +233,10 @@ export default function ModuloTecnicos({
             'NEGOCIO': fila['NEGOCIO'] || fila['NOMBRE NEGOCIO'] || fila['SUCURSAL'] || '-',
             'DIRECCIÓN': fila['DIRECCIÓN'] || fila['DIRECCION'] || '-',
             'TELÉFONO': fila['TELÉFONO'] || fila['TELEFONO'] || fila['TEL'] || '-',
-            'CLIENTE': simplificarCliente(clienteOriginal),
+            // Se conserva exactamente el dato del encabezado CLIENTE para que
+            // la alerta identifique al cliente real sin abreviarlo ni inferirlo.
+            'CLIENTE': clienteOriginal || '-',
+            'TIPO': fila['TIPO'] || '-',
             'SERIE': serie.valor,
             'SERIE_ORIGEN': serie.origen,
             'MODELO': fila['MODELO'] || '-',
@@ -184,7 +268,7 @@ export default function ModuloTecnicos({
         Object.keys(ticketsPorTecnico).forEach(tec => {
           let encontrados = new Set()
           ticketsPorTecnico[tec].forEach(t => {
-            const textoBuscar = normalizarTexto(`${t['DIRECCIÓN']} ${t['NEGOCIO']}`)
+            const textoBuscar = normalizarTexto(t['DIRECCIÓN'])
             baseMunicipios.forEach(muniOriginal => {
               const muniLimpio = normalizarTexto(muniOriginal)
               const escaped = muniLimpio.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -221,7 +305,7 @@ export default function ModuloTecnicos({
     const data = allTickets.map(t => ({
       'TÉCNICO': t.tecnico, 'N° REFERENCIA': t['N° REFERENCIA'], 'NEGOCIO': t['NEGOCIO'],
       'DIRECCIÓN': t['DIRECCIÓN'], 'TELÉFONO': t['TELÉFONO'], 'CLIENTE': t['CLIENTE'],
-      'SERIE': obtenerSerieTicket(t), 'MODELO': t['MODELO'], 'ESTADO': t['ESTADO'], 'FECHA': t['FECHA_TEXTO'],
+      'TIPO': t['TIPO'], 'SERIE': obtenerSerieTicket(t), 'MODELO': t['MODELO'], 'ESTADO': t['ESTADO'], 'FECHA': t['FECHA_TEXTO'],
       'DESCRIPCIÓN INICIAL': t['DESCRIPCIÓN INICIAL'], 'DESCRIPCIÓN': t['DESCRIPCIÓN']
     }))
     const ws = XLSX.utils.json_to_sheet(data)
@@ -233,7 +317,7 @@ export default function ModuloTecnicos({
   function generarExcelTecnico(tecnico, tickets) {
     const data = tickets.map(t => ({
       'N° REFERENCIA': t['N° REFERENCIA'], 'NEGOCIO': t['NEGOCIO'], 'DIRECCIÓN': t['DIRECCIÓN'],
-      'TELÉFONO': t['TELÉFONO'], 'CLIENTE': t['CLIENTE'], 'SERIE': obtenerSerieTicket(t), 'MODELO': t['MODELO'],
+      'TELÉFONO': t['TELÉFONO'], 'CLIENTE': t['CLIENTE'], 'TIPO': t['TIPO'], 'SERIE': obtenerSerieTicket(t), 'MODELO': t['MODELO'],
       'ESTADO': t['ESTADO'], 'DESCRIPCIÓN INICIAL': t['DESCRIPCIÓN INICIAL'], 'COMENTARIO': t['DESCRIPCIÓN']
     }))
     const ws = XLSX.utils.json_to_sheet(data)
@@ -397,9 +481,10 @@ export default function ModuloTecnicos({
     }).filter(Boolean)
   }, [ticketsPendientesTotales, clientesGarantia])
 
-  const alertasVencidas = alertasGarantia.filter(a => a.garantia.vencida === true)
-  const alertasVigentes = alertasGarantia.filter(a => a.garantia.vencida === false && !a.garantia.sinDatosSerie)
-  const alertasSinSerie = alertasGarantia.filter(a => a.garantia.sinDatosSerie === true)
+  const alertasTipoIncorrecto = alertasGarantia.filter(a => a.garantia.tipoIncorrecto === true)
+  const alertasVencidas = alertasGarantia.filter(a => !a.garantia.tipoIncorrecto && a.garantia.vencida === true)
+  const alertasVigentes = alertasGarantia.filter(a => !a.garantia.tipoIncorrecto && a.garantia.vencida === false && !a.garantia.sinDatosSerie)
+  const alertasSinSerie = alertasGarantia.filter(a => !a.garantia.tipoIncorrecto && a.garantia.sinDatosSerie === true)
 
   const ticketsDuplicados = useMemo(() => {
     const conteo = new Map()
@@ -418,6 +503,11 @@ export default function ModuloTecnicos({
 
   return (
     <div className="space-y-5 fade-in">
+      {toast && (
+        <div className="fixed left-1/2 top-16 z-50 flex -translate-x-1/2 items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-[11px] font-bold text-white shadow-2xl toast-enter">
+          <Check size={13} className="text-emerald-400" /> {toast}
+        </div>
+      )}
       <section className="workspace-hero">
         <div className="relative z-10 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -534,6 +624,7 @@ export default function ModuloTecnicos({
                   <span className="font-bold text-slate-600 text-[10px] uppercase tracking-wider">Alertas de Garantía</span>
                 </div>
                 <div className="flex items-center gap-1.5">
+                  {alertasTipoIncorrecto.length > 0 && <span className="text-[9px] font-bold bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded">{alertasTipoIncorrecto.length} tipo incorrecto</span>}
                   {alertasVencidas.length > 0 && <span className="text-[9px] font-bold bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded">{alertasVencidas.length} vencida{alertasVencidas.length !== 1 ? 's' : ''}</span>}
                   {alertasSinSerie.length > 0 && <span className="text-[9px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">{alertasSinSerie.length} sin serie</span>}
                   {alertasVigentes.length > 0 && <span className="text-[9px] font-bold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">{alertasVigentes.length} vigente{alertasVigentes.length !== 1 ? 's' : ''}</span>}
@@ -543,8 +634,34 @@ export default function ModuloTecnicos({
 
               {garantiaAbierta && (
                 <div className="slide-up">
+                  {alertasTipoIncorrecto.length > 0 && (
+                    <div className="space-y-2.5 border-t border-slate-200 p-3">
+                      <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-violet-700">
+                        <span className="h-1.5 w-1.5 rounded-full bg-violet-500"></span>
+                        Cliente de garantía clasificado como Normal
+                      </p>
+                      {alertasTipoIncorrecto.map((a, i) => (
+                        <div key={i} className="space-y-2 rounded-lg border border-violet-300 border-l-[4px] border-l-violet-600 bg-violet-50 px-3 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded bg-violet-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-violet-800">#{a.ticket['N° REFERENCIA'] || '-'}</span>
+                            <span className="text-[10px] font-semibold text-slate-500">{a.ticket.tecnico}</span>
+                            <span className="ml-auto rounded-md border border-violet-300 bg-white px-2 py-1 text-[9px] font-black text-violet-800">
+                              TIPO: {a.garantia.tipoActual} → {a.garantia.tipoEsperado}
+                            </span>
+                          </div>
+                          <p className="text-[11px] font-bold text-slate-800">{a.ticket['NEGOCIO'] || '-'}</p>
+                          <WarrantyClient ticket={a.ticket} tone="violet" />
+                          <p className="text-[10px] font-semibold leading-relaxed text-violet-800">
+                            Este cliente aparece en Garantias.xlsx, pero el Excel diario tiene TIPO "Normal". Debe decir "Garantia" para evaluarlo como garantía.
+                          </p>
+                          <p className="text-[9px] font-medium text-slate-500">📍 {a.ticket['DIRECCIÓN'] || '-'}</p>
+                          <TicketActions ticket={a.ticket} onCopy={copiarTicket} compact />
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {alertasVencidas.length > 0 && (
-                    <div className="p-3 space-y-2.5 border-t border-slate-100">
+                    <div className={`p-3 space-y-2.5 border-t ${alertasTipoIncorrecto.length ? 'border-slate-300' : 'border-slate-200'}`}>
                       <p className="text-[10px] font-bold text-rose-600 uppercase flex items-center gap-1.5 mb-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
                         Garantía vencida — No atender bajo garantía
@@ -556,18 +673,20 @@ export default function ModuloTecnicos({
                             <span className="text-[10px] font-semibold text-slate-500">{a.ticket.tecnico}</span>
                             <span className="text-[9px] font-semibold text-rose-600 ml-auto shrink-0">Fab: {a.garantia.fabDisplay} · Venció: {a.garantia.vencDisplay} · {a.garantia.aniosGarantia}a</span>
                           </div>
-                          <p className="text-[10px] font-semibold text-slate-700">{a.ticket['NEGOCIO']}</p>
+                          <p className="text-[11px] font-bold text-slate-800">{a.ticket['NEGOCIO'] || '-'}</p>
+                          <WarrantyClient ticket={a.ticket} tone="rose" />
                           {a.ticket['DESCRIPCIÓN INICIAL'] && <p className="text-[9px] text-slate-500 italic leading-snug">📋 {a.ticket['DESCRIPCIÓN INICIAL']}</p>}
                           <div className="flex flex-col sm:flex-row sm:gap-4 text-[9px] font-medium text-slate-500">
                             <p>📍 {a.ticket['DIRECCIÓN'] || '-'}</p>
                             <p className="shrink-0">🧊 Serie: <span className="font-bold text-slate-700">{obtenerSerieTicket(a.ticket)}</span></p>
                           </div>
+                          <TicketActions ticket={a.ticket} onCopy={copiarTicket} compact />
                         </div>
                       ))}
                     </div>
                   )}
                   {alertasSinSerie.length > 0 && (
-                    <div className={`p-3 space-y-2.5 ${alertasVencidas.length ? 'border-t border-slate-100' : ''}`}>
+                    <div className={`p-3 space-y-2.5 ${(alertasTipoIncorrecto.length || alertasVencidas.length) ? 'border-t border-slate-300' : ''}`}>
                       <p className="text-[10px] font-bold text-amber-600 uppercase flex items-center gap-1.5 mb-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
                         Verificar serie manualmente
@@ -579,15 +698,17 @@ export default function ModuloTecnicos({
                             <span className="text-[10px] font-semibold text-slate-500">{a.ticket.tecnico}</span>
                             <span className="text-[9px] font-semibold text-amber-600 ml-auto shrink-0">Serie: "{obtenerSerieTicket(a.ticket)}" · {a.garantia.aniosGarantia}a</span>
                           </div>
-                          <p className="text-[10px] font-semibold text-slate-700">{a.ticket['NEGOCIO']} — {a.ticket['CLIENTE']}</p>
+                          <p className="text-[11px] font-bold text-slate-800">{a.ticket['NEGOCIO'] || '-'}</p>
+                          <WarrantyClient ticket={a.ticket} tone="amber" />
                           {a.ticket['DESCRIPCIÓN INICIAL'] && <p className="text-[9px] text-slate-500 italic leading-snug">📋 {a.ticket['DESCRIPCIÓN INICIAL']}</p>}
                           <p className="text-[9px] font-medium text-slate-500">📍 {a.ticket['DIRECCIÓN'] || '-'}</p>
+                          <TicketActions ticket={a.ticket} onCopy={copiarTicket} compact />
                         </div>
                       ))}
                     </div>
                   )}
                   {alertasVigentes.length > 0 && (
-                    <div className={`p-3 space-y-2.5 ${(alertasVencidas.length || alertasSinSerie.length) ? 'border-t border-slate-100' : ''}`}>
+                    <div className={`p-3 space-y-2.5 ${(alertasTipoIncorrecto.length || alertasVencidas.length || alertasSinSerie.length) ? 'border-t border-slate-300' : ''}`}>
                       <p className="text-[10px] font-bold text-emerald-600 uppercase flex items-center gap-1.5 mb-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                         Garantía vigente
@@ -599,12 +720,14 @@ export default function ModuloTecnicos({
                             <span className="text-[10px] font-semibold text-slate-500">{a.ticket.tecnico}</span>
                             <span className="text-[9px] font-semibold text-emerald-600 ml-auto shrink-0">{a.garantia.diasRestantes}d restantes · {a.garantia.aniosGarantia}a</span>
                           </div>
-                          <p className="text-[10px] font-semibold text-slate-700">{a.ticket['NEGOCIO']}</p>
+                          <p className="text-[11px] font-bold text-slate-800">{a.ticket['NEGOCIO'] || '-'}</p>
+                          <WarrantyClient ticket={a.ticket} tone="emerald" />
                           {a.ticket['DESCRIPCIÓN INICIAL'] && <p className="text-[9px] text-slate-500 italic leading-snug">📋 {a.ticket['DESCRIPCIÓN INICIAL']}</p>}
                           <div className="flex flex-col sm:flex-row sm:gap-4 text-[9px] font-medium text-slate-500">
                             <p>📍 {a.ticket['DIRECCIÓN'] || '-'}</p>
                             <p className="shrink-0">🧊 Serie: <span className="font-bold text-slate-700">{obtenerSerieTicket(a.ticket)}</span></p>
                           </div>
+                          <TicketActions ticket={a.ticket} onCopy={copiarTicket} compact />
                         </div>
                       ))}
                     </div>
@@ -717,23 +840,26 @@ export default function ModuloTecnicos({
                         const g = verificarGarantiaTicket(t, clientesGarantia)
                         const esProceso = t['ESTADO_LIMPIO'].includes('PROCESO')
                         const esAgencia = t['ESTADO_LIMPIO'].includes('AGENCIA')
-                        const borderColor = g?.vencida ? 'border-l-rose-500' 
+                        const borderColor = g?.tipoIncorrecto ? 'border-l-violet-500'
+                          : g?.vencida ? 'border-l-rose-500' 
                           : esProceso ? 'border-l-amber-400' 
                           : esAgencia ? 'border-l-violet-400' 
                           : 'border-l-sky-400'
-                        const headerBg = g?.vencida ? 'bg-rose-50' 
+                        const headerBg = g?.tipoIncorrecto ? 'bg-violet-50'
+                          : g?.vencida ? 'bg-rose-50' 
                           : esProceso ? 'bg-amber-50/60' 
                           : esAgencia ? 'bg-violet-50/60' 
                           : 'bg-slate-50'
                         return (
-                          <div key={i} className={`rounded-lg border border-slate-200 border-l-[4px] ${borderColor} overflow-hidden bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)]`}>
+                          <div key={i} className={`rounded-lg border-[1.5px] border-slate-300 border-l-[4px] ${borderColor} overflow-hidden bg-white shadow-[0_1px_4px_rgba(0,0,0,0.07)]`}>
                             {/* Badge row */}
                             <div className={`flex items-center gap-1.5 flex-wrap px-3 py-2.5 ${headerBg} border-b border-slate-100`}>
                               <span className="font-mono text-[10px] font-bold text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-100">#{t['N° REFERENCIA']}</span>
                               <TicketBadge estado={t['ESTADO']} />
+                              {g?.tipoIncorrecto && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-violet-600 text-white flex items-center gap-0.5"><ShieldAlert size={9} /> TIPO NORMAL</span>}
                               {g?.vencida && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-rose-600 text-white flex items-center gap-0.5"><ShieldAlert size={9} /> VENCIDA</span>}
-                              {g && !g.vencida && !g.sinDatosSerie && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-600 text-white flex items-center gap-0.5"><ShieldCheck size={9} /> VIGENTE</span>}
-                              {g?.sinDatosSerie && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500 text-white flex items-center gap-0.5"><ShieldAlert size={9} /> VERIFICAR</span>}
+                              {g && !g.tipoIncorrecto && !g.vencida && !g.sinDatosSerie && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-600 text-white flex items-center gap-0.5"><ShieldCheck size={9} /> VIGENTE</span>}
+                              {g?.sinDatosSerie && !g.tipoIncorrecto && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500 text-white flex items-center gap-0.5"><ShieldAlert size={9} /> VERIFICAR</span>}
                             </div>
                             
                             {/* Negocio */}
@@ -772,19 +898,25 @@ export default function ModuloTecnicos({
                             </div>
 
                             {/* Garantía inline */}
+                            {g?.tipoIncorrecto && (
+                              <div className="mx-3 mb-2 rounded-md border-l-[3px] border-violet-500 bg-violet-100 px-3 py-1.5 text-[10px] text-violet-800">
+                                <span className="font-bold">⚠️ TIPO INCORRECTO — </span>
+                                Cliente de garantía con TIPO "{g.tipoActual}"; debe decir "{g.tipoEsperado}".
+                              </div>
+                            )}
                             {g?.vencida && (
                               <div className="mx-3 mb-2 text-[10px] text-rose-700 bg-rose-100 rounded-md px-3 py-1.5 border-l-[3px] border-rose-500">
                                 <span className="font-bold">⚠️ NO ATENDER — </span>
                                 Fab: {g.fabDisplay} · Venció: {g.vencDisplay} · {g.aniosGarantia}a ({g.clienteNombre})
                               </div>
                             )}
-                            {g && !g.vencida && !g.sinDatosSerie && (
+                            {g && !g.tipoIncorrecto && !g.vencida && !g.sinDatosSerie && (
                               <div className="mx-3 mb-2 text-[10px] text-emerald-700 bg-emerald-50 rounded-md px-3 py-1.5 border-l-[3px] border-emerald-400">
                                 <span className="font-bold">✅ VIGENTE — </span>
                                 Fab: {g.fabDisplay} · Vence: {g.vencDisplay} · {g.diasRestantes}d ({g.clienteNombre})
                               </div>
                             )}
-                            {g?.sinDatosSerie && (
+                            {g?.sinDatosSerie && !g.tipoIncorrecto && (
                               <div className="mx-3 mb-2 text-[10px] text-amber-700 bg-amber-50 rounded-md px-3 py-1.5 border-l-[3px] border-amber-400">
                                 <span className="font-bold">⚠️ VERIFICAR — </span>
                                 {g.clienteNombre} ({g.aniosGarantia}a) — Serie: "{obtenerSerieTicket(t)}"
@@ -797,6 +929,7 @@ export default function ModuloTecnicos({
                                 <span className="font-semibold">{obtenerComentarioProceso(t)}</span>
                               </div>
                             )}
+                            <TicketActions ticket={t} onCopy={copiarTicket} />
                           </div>
                         )
                       })}
