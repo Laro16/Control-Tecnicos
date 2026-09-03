@@ -6,6 +6,9 @@ import ModuloPendientes from './components/Gestion'
 import ModuloTablas from './components/Tablas'
 import Dashboard from './components/Dashboard'
 import Vacaciones from './components/Vacaciones'
+import Notificaciones from './components/Notificaciones'
+import { obtenerControlAlertas } from './utils/alertas'
+import useHistorialSeries from './hooks/useHistorialSeries'
 import garantiasUrl from './Garantias.xlsx?url'
 import { Wrench, ClipboardList, BarChart3, Cloud, CloudOff, Loader2, LayoutDashboard, CalendarDays, Moon, Sun } from 'lucide-react'
 
@@ -27,6 +30,17 @@ function esEstadoActivoRuta(ticket) {
 export default function App() {
   const [tab, setTab] = useState('dashboard')
   const [syncStatus, setSyncStatus] = useState('cargando')
+  const [solicitudAlerta, setSolicitudAlerta] = useState(null)
+  const [diaAlertas, setDiaAlertas] = useState(() => new Date().toDateString())
+  useEffect(() => {
+    const actualizarDia = () => setDiaAlertas(new Date().toDateString())
+    const intervalo = window.setInterval(actualizarDia, 60000)
+    window.addEventListener('focus', actualizarDia)
+    return () => {
+      window.clearInterval(intervalo)
+      window.removeEventListener('focus', actualizarDia)
+    }
+  }, [])
   const [tema, setTema] = useState(() => localStorage.getItem('ticketmanager_theme') || 'claro')
   useEffect(() => {
     const oscuro = tema === 'oscuro'
@@ -71,6 +85,17 @@ export default function App() {
   const [rutasTecnicos, setRutasTecnicos] = useState({})
   const [baseMunicipios, setBaseMunicipios] = useState([])
   const [clientesGarantia, setClientesGarantia] = useState([])
+  const [estadoCatalogoGarantias, setEstadoCatalogoGarantias] = useState('cargando')
+  const historialSeries = useHistorialSeries(allTickets)
+  const controlAlertas = useMemo(
+    () => obtenerControlAlertas(allTickets, clientesGarantia, historialSeries.historial),
+    [allTickets, clientesGarantia, diaAlertas, historialSeries.historial]
+  )
+
+  function verAlertas(tipo) {
+    setTab('tecnicos')
+    setSolicitudAlerta(actual => ({ tipo, secuencia: (actual?.secuencia || 0) + 1 }))
+  }
 
   // El catálogo de garantías vive en el Excel para que pueda mantenerse sin
   // tocar el código. Se toma únicamente la pestaña GENERAL.
@@ -109,9 +134,11 @@ export default function App() {
           catalogo.set(normalizarTexto(nombre), { nombre, anios })
         }
         setClientesGarantia(Array.from(catalogo.values()))
+        setEstadoCatalogoGarantias('listo')
       } catch (error) {
         console.warn('No se pudo cargar Garantias.xlsx:', error)
         setClientesGarantia([])
+        setEstadoCatalogoGarantias('error')
       }
     }
     cargarGarantias()
@@ -277,7 +304,7 @@ export default function App() {
     <div className="app-shell min-h-screen font-sans">
       {/* ── HEADER ── */}
       <header className="sticky top-0 z-40 border-b border-white/10 bg-slate-950/95 shadow-[0_12px_30px_rgba(15,23,42,0.16)] backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-3 sm:px-5 py-2.5 flex items-center justify-between gap-3">
+        <div className="max-w-7xl mx-auto px-3 sm:px-5 py-2.5 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 sm:gap-3">
           {/* Logo + fecha */}
           <div className="flex items-center gap-2.5 shrink-0">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-400 via-sky-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-sky-500/25 ring-1 ring-white/20">
@@ -290,24 +317,26 @@ export default function App() {
           </div>
 
           {/* Nav */}
-          <nav className="flex bg-white/[0.07] p-1 rounded-xl ring-1 ring-white/10">
+          <nav aria-label="Secciones principales" className="order-3 flex w-full justify-between bg-white/[0.07] p-1 rounded-xl ring-1 ring-white/10 sm:order-none sm:w-auto">
             {tabs.map(t => (
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={`flex items-center gap-1.5 text-[11px] px-2.5 sm:px-3 py-2 rounded-lg font-bold transition-all ${
+                aria-current={tab === t.id ? 'page' : undefined}
+                className={`flex flex-1 flex-col sm:flex-none sm:flex-row items-center gap-1 sm:gap-1.5 text-[10px] sm:text-[11px] px-1 sm:px-3 py-2 rounded-lg font-bold transition-all ${
                   tab === t.id 
                     ? 'bg-white text-slate-900 shadow-md shadow-black/10' 
                     : 'text-slate-400 hover:text-white hover:bg-white/[0.06]'
                 }`}
               >
                 <t.icon size={12} />
-                <span className="hidden sm:inline">{t.label}</span>
+                <span>{t.label}</span>
               </button>
             ))}
           </nav>
 
           <div className="flex shrink-0 items-center gap-0.5">
+            <Notificaciones control={controlAlertas} estadoCatalogo={estadoCatalogoGarantias} estadoHistorial={historialSeries.estado} onVerAlertas={verAlertas} />
             <button
               type="button"
               onClick={() => setTema(actual => actual === 'oscuro' ? 'claro' : 'oscuro')}
@@ -363,6 +392,9 @@ export default function App() {
             valorRutaTecnico={valorRutaTecnico}
             baseMunicipios={baseMunicipios}
             clientesGarantia={clientesGarantia}
+            controlAlertas={controlAlertas}
+            solicitudAlerta={solicitudAlerta}
+            historialSeries={historialSeries}
           />
         </div>
         <div className={tab === 'tablas' ? 'block fade-in' : 'hidden'}>

@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -8,6 +8,8 @@ import {
   Phone, Navigation, MessageCircle, Check
 } from 'lucide-react'
 import { obtenerSerieTicket, resolverSerie, verificarGarantiaTicket } from '../utils/garantias'
+import { claveAtencion, normalizarSerieHistorial } from '../utils/historialSeries'
+import HistorialSeries from './HistorialSeries'
 
 const TODAY = () => {
   const d = new Date()
@@ -166,7 +168,7 @@ export default function ModuloTecnicos({
   allTickets, setAllTickets, nombreArchivo, setNombreArchivo, 
   fechaSubidaExcel, setFechaSubidaExcel,
   rutasTecnicos, setRutasTecnicos, rutasAutomaticas, valorRutaTecnico, baseMunicipios,
-  clientesGarantia = []
+  clientesGarantia = [], controlAlertas, solicitudAlerta, historialSeries
 }) {
   const [dragging, setDragging] = useState(false)
   const [expandido, setExpandido] = useState({})
@@ -176,6 +178,27 @@ export default function ModuloTecnicos({
   const [duplicadosAbierta, setDuplicadosAbierta] = useState(false)
   const [toast, setToast] = useState('')
   const fileRef = useRef()
+  const ultimaAlertaEnfocada = useRef(null)
+
+  useEffect(() => {
+    if (!solicitudAlerta || solicitudAlerta.tipo === 'reincidencias') return
+    if (solicitudAlerta.tipo === 'duplicados') setDuplicadosAbierta(true)
+    else setGarantiaAbierta(true)
+  }, [solicitudAlerta])
+
+  useEffect(() => {
+    if (!solicitudAlerta || solicitudAlerta.tipo === 'reincidencias' || ultimaAlertaEnfocada.current === solicitudAlerta.secuencia) return
+    const abierta = solicitudAlerta.tipo === 'duplicados' ? duplicadosAbierta : garantiaAbierta
+    if (!abierta) return
+    const frame = requestAnimationFrame(() => {
+      const destino = document.getElementById(`alertas-${solicitudAlerta.tipo}`)
+      if (!destino) return
+      destino.focus({ preventScroll: true })
+      destino.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+      ultimaAlertaEnfocada.current = solicitudAlerta.secuencia
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [solicitudAlerta, garantiaAbierta, duplicadosAbierta])
 
   async function copiarTicket(ticket) {
     try {
@@ -473,33 +496,14 @@ export default function ModuloTecnicos({
   })
   const tecnicosConPendientes = Object.keys(gruposPendientesAgrupados).sort()
 
-  const alertasGarantia = useMemo(() => {
-    return ticketsPendientesTotales.map(t => {
-      const garantia = verificarGarantiaTicket(t, clientesGarantia)
-      if (!garantia) return null
-      return { ticket: t, garantia }
-    }).filter(Boolean)
-  }, [ticketsPendientesTotales, clientesGarantia])
-
-  const alertasTipoIncorrecto = alertasGarantia.filter(a => a.garantia.tipoIncorrecto === true)
-  const alertasVencidas = alertasGarantia.filter(a => !a.garantia.tipoIncorrecto && a.garantia.vencida === true)
-  const alertasVigentes = alertasGarantia.filter(a => !a.garantia.tipoIncorrecto && a.garantia.vencida === false && !a.garantia.sinDatosSerie)
-  const alertasSinSerie = alertasGarantia.filter(a => !a.garantia.tipoIncorrecto && a.garantia.sinDatosSerie === true)
-
-  const ticketsDuplicados = useMemo(() => {
-    const conteo = new Map()
-    allTickets.forEach(t => {
-      const ref = limpiarReferencia(t['N° REFERENCIA'])
-      if (!ref) return
-      const clave = normalizarTexto(ref)
-      if (!conteo.has(clave)) conteo.set(clave, { ref, tickets: [] })
-      conteo.get(clave).tickets.push(t)
-    })
-    return Array.from(conteo.values())
-      .filter(({ tickets }) => tickets.length > 1)
-      .map(({ ref, tickets }) => ({ ref, tickets, cantidad: tickets.length }))
-      .sort((a, b) => b.cantidad - a.cantidad)
-  }, [allTickets])
+  const {
+    garantias: alertasGarantia, tipoIncorrecto: alertasTipoIncorrecto,
+    vencidas: alertasVencidas, vigentes: alertasVigentes,
+    sinSerie: alertasSinSerie, duplicados: ticketsDuplicados,
+  } = controlAlertas
+  const reincidenciasPorTicket = new Map(controlAlertas.reincidencias.map(alerta => [
+    claveAtencion({ serie: alerta.serie, referencia: normalizarTexto(alerta.ticket['N° REFERENCIA']) }), alerta,
+  ]))
 
   return (
     <div className="space-y-5 fade-in">
@@ -562,6 +566,7 @@ export default function ModuloTecnicos({
         <input ref={fileRef} type="file" className="hidden" onChange={onFileChange} />
       </div>
 
+      {allTickets.length === 0 && <HistorialSeries datos={historialSeries} reincidencias={controlAlertas.reincidencias} solicitudAlerta={solicitudAlerta} />}
       {allTickets.length > 0 && (
         <>
           {/* ── Stats strip + Filtros ── */}
@@ -617,13 +622,14 @@ export default function ModuloTecnicos({
             <div className="card-section">
               <button
                 onClick={() => setGarantiaAbierta(!garantiaAbierta)}
-                className="w-full flex items-center justify-between px-4 py-2 bg-slate-50 hover:bg-slate-100 transition-colors"
+                aria-expanded={garantiaAbierta}
+                className="w-full flex flex-wrap items-center justify-between gap-2 px-4 py-2 bg-slate-50 hover:bg-slate-100 transition-colors"
               >
                 <div className="flex items-center gap-2">
                   <ShieldAlert size={13} className="text-rose-500" />
                   <span className="font-bold text-slate-600 text-[10px] uppercase tracking-wider">Alertas de Garantía</span>
                 </div>
-                <div className="flex items-center gap-1.5">
+                <div className="flex flex-wrap items-center gap-1.5">
                   {alertasTipoIncorrecto.length > 0 && <span className="text-[9px] font-bold bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded">{alertasTipoIncorrecto.length} tipo incorrecto</span>}
                   {alertasVencidas.length > 0 && <span className="text-[9px] font-bold bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded">{alertasVencidas.length} vencida{alertasVencidas.length !== 1 ? 's' : ''}</span>}
                   {alertasSinSerie.length > 0 && <span className="text-[9px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">{alertasSinSerie.length} sin serie</span>}
@@ -635,13 +641,13 @@ export default function ModuloTecnicos({
               {garantiaAbierta && (
                 <div className="slide-up">
                   {alertasTipoIncorrecto.length > 0 && (
-                    <div className="space-y-2.5 border-t border-slate-200 p-3">
+                    <div id="alertas-tipo-incorrecto" tabIndex={-1} className="alert-anchor space-y-2.5 border-t border-slate-200 p-3">
                       <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-violet-700">
                         <span className="h-1.5 w-1.5 rounded-full bg-violet-500"></span>
                         Cliente de garantía clasificado como Normal
                       </p>
                       {alertasTipoIncorrecto.map((a, i) => (
-                        <div key={i} className="space-y-2 rounded-lg border border-violet-300 border-l-[4px] border-l-violet-600 bg-violet-50 px-3 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+                        <div key={i} className="alert-card space-y-2 rounded-lg border border-violet-300 border-l-[4px] border-l-violet-600 bg-violet-50 px-3 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="rounded bg-violet-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-violet-800">#{a.ticket['N° REFERENCIA'] || '-'}</span>
                             <span className="text-[10px] font-semibold text-slate-500">{a.ticket.tecnico}</span>
@@ -661,13 +667,13 @@ export default function ModuloTecnicos({
                     </div>
                   )}
                   {alertasVencidas.length > 0 && (
-                    <div className={`p-3 space-y-2.5 border-t ${alertasTipoIncorrecto.length ? 'border-slate-300' : 'border-slate-200'}`}>
+                    <div id="alertas-vencidas" tabIndex={-1} className={`alert-anchor p-3 space-y-2.5 border-t ${alertasTipoIncorrecto.length ? 'border-slate-300' : 'border-slate-200'}`}>
                       <p className="text-[10px] font-bold text-rose-600 uppercase flex items-center gap-1.5 mb-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
                         Garantía vencida — No atender bajo garantía
                       </p>
                       {alertasVencidas.map((a, i) => (
-                        <div key={i} className="bg-rose-50 border border-rose-200 border-l-[4px] border-l-rose-500 rounded-lg px-3 py-2.5 space-y-1.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+                        <div key={i} className="alert-card bg-rose-50 border border-rose-200 border-l-[4px] border-l-rose-500 rounded-lg px-3 py-2.5 space-y-1.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-mono text-[10px] font-bold text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded">#{a.ticket['N° REFERENCIA']}</span>
                             <span className="text-[10px] font-semibold text-slate-500">{a.ticket.tecnico}</span>
@@ -686,13 +692,13 @@ export default function ModuloTecnicos({
                     </div>
                   )}
                   {alertasSinSerie.length > 0 && (
-                    <div className={`p-3 space-y-2.5 ${(alertasTipoIncorrecto.length || alertasVencidas.length) ? 'border-t border-slate-300' : ''}`}>
+                    <div id="alertas-sin-serie" tabIndex={-1} className={`alert-anchor p-3 space-y-2.5 ${(alertasTipoIncorrecto.length || alertasVencidas.length) ? 'border-t border-slate-300' : ''}`}>
                       <p className="text-[10px] font-bold text-amber-600 uppercase flex items-center gap-1.5 mb-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
                         Verificar serie manualmente
                       </p>
                       {alertasSinSerie.map((a, i) => (
-                        <div key={i} className="bg-amber-50 border border-amber-200 border-l-[4px] border-l-amber-500 rounded-lg px-3 py-2.5 space-y-1.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+                        <div key={i} className="alert-card bg-amber-50 border border-amber-200 border-l-[4px] border-l-amber-500 rounded-lg px-3 py-2.5 space-y-1.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-mono text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">#{a.ticket['N° REFERENCIA']}</span>
                             <span className="text-[10px] font-semibold text-slate-500">{a.ticket.tecnico}</span>
@@ -714,7 +720,7 @@ export default function ModuloTecnicos({
                         Garantía vigente
                       </p>
                       {alertasVigentes.map((a, i) => (
-                        <div key={i} className="bg-emerald-50 border border-emerald-200 border-l-[4px] border-l-emerald-500 rounded-lg px-3 py-2.5 space-y-1.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+                        <div key={i} className="alert-card bg-emerald-50 border border-emerald-200 border-l-[4px] border-l-emerald-500 rounded-lg px-3 py-2.5 space-y-1.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-mono text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">#{a.ticket['N° REFERENCIA']}</span>
                             <span className="text-[10px] font-semibold text-slate-500">{a.ticket.tecnico}</span>
@@ -739,10 +745,11 @@ export default function ModuloTecnicos({
 
           {/* ── Tickets Duplicados (colapsable) ── */}
           {ticketsDuplicados.length > 0 && (
-            <div className="card-section">
+            <div id="alertas-duplicados" tabIndex={-1} className="alert-anchor card-section">
               <button
                 onClick={() => setDuplicadosAbierta(!duplicadosAbierta)}
-                className="w-full flex items-center justify-between px-4 py-2 bg-slate-50 hover:bg-slate-100 transition-colors"
+                aria-expanded={duplicadosAbierta}
+                className="w-full flex flex-wrap items-center justify-between gap-2 px-4 py-2 bg-slate-50 hover:bg-slate-100 transition-colors"
               >
                 <div className="flex items-center gap-2">
                   <Copy size={13} className="text-orange-500" />
@@ -759,7 +766,7 @@ export default function ModuloTecnicos({
               {duplicadosAbierta && (
                 <div className="slide-up p-3 space-y-2.5 border-t border-slate-100">
                   {ticketsDuplicados.map((dup, i) => (
-                    <div key={i} className="bg-orange-50 border border-orange-200 border-l-[4px] border-l-orange-500 rounded-lg overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+                    <div key={i} className="alert-card bg-orange-50 border border-orange-200 border-l-[4px] border-l-orange-500 rounded-lg overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
                       <div className="flex items-center gap-2 flex-wrap px-3 py-2 bg-orange-100/50 border-b border-orange-200">
                         <span className="font-mono text-[10px] font-bold text-orange-700 bg-orange-100 px-1.5 py-0.5 rounded border border-orange-200">#{dup.ref}</span>
                         <span className="text-[9px] font-bold text-orange-600">{dup.cantidad}x duplicado</span>
@@ -784,6 +791,7 @@ export default function ModuloTecnicos({
             </div>
           )}
 
+          <HistorialSeries datos={historialSeries} reincidencias={controlAlertas.reincidencias} solicitudAlerta={solicitudAlerta} />
           {/* ── Tarjetas de técnicos ── */}
           {tecnicosConPendientes
             .filter(tecnico => filtroTecnico === 'Todos' || filtroTecnico === tecnico)
@@ -838,6 +846,7 @@ export default function ModuloTecnicos({
                     <div className="p-3 sm:p-4 space-y-4 slide-up bg-slate-50/60">
                       {tickets.map((t, i) => {
                         const g = verificarGarantiaTicket(t, clientesGarantia)
+                        const reincidencia = reincidenciasPorTicket.get(claveAtencion({ serie: normalizarSerieHistorial(obtenerSerieTicket(t)), referencia: normalizarTexto(t['N° REFERENCIA']) }))
                         const esProceso = t['ESTADO_LIMPIO'].includes('PROCESO')
                         const esAgencia = t['ESTADO_LIMPIO'].includes('AGENCIA')
                         const borderColor = g?.tipoIncorrecto ? 'border-l-violet-500'
@@ -851,11 +860,12 @@ export default function ModuloTecnicos({
                           : esAgencia ? 'bg-violet-50/60' 
                           : 'bg-slate-50'
                         return (
-                          <div key={i} className={`rounded-lg border-[1.5px] border-slate-300 border-l-[4px] ${borderColor} overflow-hidden bg-white shadow-[0_1px_4px_rgba(0,0,0,0.07)]`}>
+                          <div key={i} className={`alert-card rounded-lg border-[1.5px] border-slate-300 border-l-[4px] ${borderColor} overflow-hidden bg-white shadow-[0_1px_4px_rgba(0,0,0,0.07)]`}>
                             {/* Badge row */}
                             <div className={`flex items-center gap-1.5 flex-wrap px-3 py-2.5 ${headerBg} border-b border-slate-100`}>
                               <span className="font-mono text-[10px] font-bold text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-100">#{t['N° REFERENCIA']}</span>
                               <TicketBadge estado={t['ESTADO']} />
+                              {reincidencia && <span className="rounded-md bg-sky-700 px-2 py-0.5 text-[9px] font-bold text-white">POSIBLE REINCIDENCIA · {reincidencia.anteriores.length} antecedente{reincidencia.anteriores.length > 1 ? 's' : ''}</span>}
                               {g?.tipoIncorrecto && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-violet-600 text-white flex items-center gap-0.5"><ShieldAlert size={9} /> TIPO NORMAL</span>}
                               {g?.vencida && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-rose-600 text-white flex items-center gap-0.5"><ShieldAlert size={9} /> VENCIDA</span>}
                               {g && !g.tipoIncorrecto && !g.vencida && !g.sinDatosSerie && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-600 text-white flex items-center gap-0.5"><ShieldCheck size={9} /> VIGENTE</span>}

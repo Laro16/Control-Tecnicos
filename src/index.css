@@ -2,6 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --line-strong: #111827;
+  --line-divider: #334155;
+  --panel-surface: #ffffff;
+  --panel-hover: #f1f5f9;
+  --panel-text: #0f172a;
+  --panel-muted: #475569;
+}
+
 @layer base {
   body {
     @apply bg-slate-50 text-slate-800 font-sans;
@@ -32,10 +41,10 @@
 
   /* Cards */
   .card {
-    @apply bg-white rounded-2xl border-[1.5px] border-slate-300 shadow-[0_10px_30px_rgba(15,23,42,0.065)];
+    @apply bg-white rounded-2xl border-2 border-slate-900 shadow-[0_10px_30px_rgba(15,23,42,0.065)];
   }
   .card-section {
-    @apply bg-white rounded-2xl border-[1.5px] border-slate-300 shadow-[0_10px_30px_rgba(15,23,42,0.065)] overflow-hidden;
+    @apply bg-white rounded-2xl border-2 border-slate-900 shadow-[0_10px_30px_rgba(15,23,42,0.065)] overflow-hidden;
   }
 
   /* Buttons */
@@ -95,13 +104,116 @@
   @apply w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-xs font-semibold text-slate-700 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100;
 }
 
-/* Las divisiones deben seguir siendo visibles en fichas densas y tablas. */
-main .border-slate-100 { border-color: #e2e8f0; }
-main .border-slate-200 { border-color: #cbd5e1; }
+/* Contornos casi negros; divisiones interiores de alto contraste, sin
+   modificar el grosor de las franjas que identifican estados. */
+main :is(.border-slate-100, .border-slate-200, .border-slate-300, .control-field, .btn-ghost, .pill-inactive) {
+  border-color: var(--line-divider);
+}
+main :is(.divide-slate-100, .divide-slate-200, .divide-slate-300) > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--line-divider);
+}
+main :is(.ring-1, .ring-2).ring-inset { --tw-ring-color: var(--line-strong); }
+main .gap-px { background-color: var(--line-divider) !important; }
+main .alert-card {
+  border-top: 2px solid var(--line-strong);
+  border-right: 2px solid var(--line-strong);
+  border-bottom: 2px solid var(--line-strong);
+}
+main .alert-card > .border-b { border-bottom-color: var(--line-divider); }
+.alert-anchor { scroll-margin-top: 9rem; }
+.alert-anchor:focus { outline: 3px solid #0284c7; outline-offset: 3px; }
+
+/* Campana global: incidencias actuales, no notificaciones externas. */
+.notification-bell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  color: #cbd5e1;
+  transition: background-color 150ms;
+}
+.notification-bell:hover { background: rgba(255, 255, 255, 0.1); }
+.notification-bell--active { color: #fbbf24; }
+.notification-count {
+  position: absolute;
+  top: 0;
+  right: -1px;
+  min-width: 20px;
+  padding: 1px 4px;
+  border: 2px solid #020617;
+  border-radius: 999px;
+  background: #e11d48;
+  color: #fff;
+  font-size: 9px;
+  line-height: 14px;
+  font-weight: 900;
+}
+.notification-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 12px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  width: min(420px, calc(100vw - 24px));
+  max-height: calc(100dvh - 145px);
+  overflow: hidden;
+  border: 2px solid var(--line-strong);
+  border-radius: 16px;
+  background: var(--panel-surface);
+  color: var(--panel-text);
+  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.25);
+}
+.notification-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line-divider);
+}
+.notification-panel-heading h2 { font-size: 15px; font-weight: 900; }
+.notification-panel-heading p { margin-top: 2px; color: var(--panel-muted); font-size: 11px; }
+.notification-close { display: grid; place-items: center; flex-shrink: 0; width: 40px; height: 40px; border-radius: 8px; }
+.notification-close:hover { background: var(--panel-hover); }
+.notification-list { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.notification-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 16px;
+  text-align: left;
+}
+.notification-item + .notification-item { border-top: 1px solid var(--line-divider); }
+.notification-item:hover, .notification-item:focus-visible { background: var(--panel-hover); }
+.notification-item-content { display: grid; gap: 4px; min-width: 0; flex: 1; }
+.notification-item-content strong { font-size: 12px; font-weight: 800; line-height: 1.4; }
+.notification-item-content > span { font-size: 11px; color: var(--panel-muted); line-height: 1.45; }
+.notification-examples { display: grid; gap: 3px; padding-top: 3px; }
+.notification-examples > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.notification-category { display: grid; justify-items: center; gap: 4px; flex-shrink: 0; min-width: 36px; padding: 7px 5px; border-radius: 8px; font-size: 12px; font-weight: 900; }
+.notification-category--rose { color: #be123c; background: #ffe4e6; }
+.notification-category--violet { color: #6d28d9; background: #ede9fe; }
+.notification-category--amber { color: #92400e; background: #fef3c7; }
+.notification-category--orange { color: #9a3412; background: #ffedd5; }
+.notification-category--sky { color: #075985; background: #e0f2fe; }
+.notification-empty { display: grid; justify-items: center; gap: 12px; padding: 28px 22px; text-align: center; color: var(--panel-muted); font-size: 12px; }
+.notification-empty svg { color: #059669; }
+.notification-catalog-status { margin: 12px; padding: 12px; border: 1px solid var(--line-divider); border-radius: 8px; color: var(--panel-text); background: var(--panel-hover); font-size: 11px; line-height: 1.5; }
+.notification-footer { flex-shrink: 0; padding: 12px 16px; border-top: 1px solid var(--line-divider); color: var(--panel-muted); font-size: 10px; line-height: 1.5; }
 
 /* ── Dark mode ── */
 html.dark {
   color-scheme: dark;
+  --line-strong: #cbd5e1;
+  --line-divider: #94a3b8;
+  --panel-surface: #0f172a;
+  --panel-hover: #1e293b;
+  --panel-text: #f1f5f9;
+  --panel-muted: #cbd5e1;
 }
 
 html.dark body {
@@ -119,7 +231,7 @@ html.dark .app-shell {
 html.dark .card,
 html.dark .card-section {
   background-color: #0f172a;
-  border-color: #475569;
+  border-color: var(--line-strong);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
 }
 
@@ -160,15 +272,15 @@ html.dark main .text-green-600 { color: #86efac !important; }
 
 html.dark main .border-slate-100,
 html.dark main .border-slate-200,
-html.dark main .border-slate-300 { border-color: #475569 !important; }
+html.dark main .border-slate-300 { border-color: var(--line-divider) !important; }
 html.dark main .divide-slate-200 > :not([hidden]) ~ :not([hidden]),
-html.dark main .divide-slate-300 > :not([hidden]) ~ :not([hidden]) { border-color: #475569 !important; }
+html.dark main .divide-slate-300 > :not([hidden]) ~ :not([hidden]) { border-color: var(--line-divider) !important; }
 
 html.dark main input,
 html.dark main select,
 html.dark main textarea {
   background-color: #111c2f !important;
-  border-color: #475569 !important;
+  border-color: var(--line-divider) !important;
   color: #e2e8f0 !important;
 }
 html.dark main input::placeholder,
@@ -242,6 +354,20 @@ table td, table th {
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
+/* Incluye el registro de Vacaciones y las tablas de Reportes. */
+main table :is(td, th) { border-color: var(--line-divider) !important; }
+main table :is(thead, tfoot) :is(td, th) { border-color: #94a3b8 !important; }
+
+/* Los acentos conservan su color aun con contornos reforzados. */
+main .border-l-rose-500, html.dark main .border-l-rose-500 { border-left-color: #f43f5e !important; }
+main .border-l-amber-400, html.dark main .border-l-amber-400 { border-left-color: #fbbf24 !important; }
+main .border-l-violet-400, html.dark main .border-l-violet-400 { border-left-color: #a78bfa !important; }
+main .border-l-violet-500, html.dark main .border-l-violet-500 { border-left-color: #8b5cf6 !important; }
+main .border-l-sky-400, html.dark main .border-l-sky-400 { border-left-color: #38bdf8 !important; }
+main .border-t-rose-500, html.dark main .border-t-rose-500 { border-top-color: #f43f5e; }
+main .border-t-amber-400, html.dark main .border-t-amber-400 { border-top-color: #fbbf24; }
+main .border-t-sky-500, html.dark main .border-t-sky-500 { border-top-color: #0ea5e9; }
+main .border-t-emerald-500, html.dark main .border-t-emerald-500 { border-top-color: #10b981; }
 
 /* ── Textarea in tables ── */
 textarea {
@@ -255,6 +381,6 @@ textarea::-webkit-scrollbar {
 @media print {
   header { display: none !important; }
   main { padding: 0 !important; max-width: 100% !important; }
-  .card, .card-section { box-shadow: none !important; border: 1px solid #e2e8f0 !important; }
+  .card, .card-section { box-shadow: none !important; border: 2px solid #111827 !important; }
   .btn-primary, .btn-ghost, .btn-danger, .btn-success, .pill { display: none !important; }
 }

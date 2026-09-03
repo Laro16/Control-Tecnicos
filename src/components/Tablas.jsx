@@ -1,5 +1,6 @@
-import { useState, useRef, useMemo } from 'react'
-import { Calendar, BarChart2, Copy, X } from 'lucide-react'
+import { useState, useRef } from 'react'
+import { Calendar, BarChart2, Copy, X, Download, Loader2 } from 'lucide-react'
+import { filtrarCierresAvance, prepararPaginasAvance, descargarAvanceImagen } from '../utils/avanceImagen'
 
 function fechaLocalISO(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -17,6 +18,7 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
   const [fechaFin, setFechaFin] = useState('')
   const [toast, setToast] = useState(null)
   const [modalDetalles, setModalDetalles] = useState(null)
+  const [descargandoAvance, setDescargandoAvance] = useState(false)
 
   const tablaFinalizadasRef = useRef()
   const tablaEnvejecimientoRef = useRef()
@@ -44,13 +46,7 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
   }
 
   // ── TABLA 1: FINALIZADAS ──
-  const ticketsFinalizados = allTickets.filter(t => {
-    if (!t.ESTADO_LIMPIO.includes('FINALIZADA')) return false
-    if (!t.FECHA_OBJ || !fechaInicio || !fechaFin) return true
-    const start = new Date(fechaInicio + 'T00:00:00')
-    const end = new Date(fechaFin + 'T23:59:59')
-    return new Date(t.FECHA_OBJ) >= start && new Date(t.FECHA_OBJ) <= end
-  })
+  const ticketsFinalizados = filtrarCierresAvance(allTickets, fechaInicio, fechaFin)
 
   const columnasFechas = Array.from(new Set(ticketsFinalizados.map(t => t.FECHA_TEXTO)))
     .sort((a, b) => {
@@ -88,6 +84,31 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
     totalesFecha[f] = listaTecnicosFinalizados.reduce((sum, tec) => sum + (matrizFinalizadas[tec][f].count || 0), 0)
     granTotalFinalizadas += totalesFecha[f]
   })
+
+  async function descargarAvances() {
+    if (descargandoAvance) return
+    setDescargandoAvance(true)
+    try {
+      const paginas = prepararPaginasAvance(columnasFechas, listaTecnicosFinalizados, matrizFinalizadas)
+      const mostrarFecha = fecha => fecha.split('-').reverse().join('/')
+      const periodo = fechaInicio && fechaFin
+        ? (fechaInicio === fechaFin ? `Cierres del ${mostrarFecha(fechaInicio)}` : `Cierres: ${mostrarFecha(fechaInicio)} al ${mostrarFecha(fechaFin)}`)
+        : fechaInicio ? `Cierres desde ${mostrarFecha(fechaInicio)}`
+          : fechaFin ? `Cierres hasta ${mostrarFecha(fechaFin)}`
+            : 'Todos los cierres cargados'
+      const cantidad = await descargarAvanceImagen(paginas, {
+        periodo,
+        generado: new Date().toLocaleString('es-GT'),
+        nombre: fechaInicio && fechaFin ? `${fechaInicio}_${fechaFin}` : fechaLocalISO(new Date()),
+      })
+      setToast(cantidad === 1 ? '✅ Avance descargado en PNG' : `✅ ${cantidad} imágenes descargadas en un ZIP`)
+    } catch (error) {
+      setToast(`❌ ${error.message || 'No se pudo descargar el avance'}`)
+    } finally {
+      setDescargandoAvance(false)
+      setTimeout(() => setToast(null), 5000)
+    }
+  }
 
   // ── TABLA 2: ENVEJECIMIENTO ──
   const ticketsActivos = allTickets.filter(t =>
@@ -295,7 +316,11 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
             </table>
           </div>
         </div>
-        <div className="flex justify-end mt-1.5">
+        <div className="flex flex-wrap justify-end gap-2 mt-2">
+          <button type="button" onClick={descargarAvances} disabled={descargandoAvance || granTotalFinalizadas === 0} className="btn-primary flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50">
+            {descargandoAvance ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+            {descargandoAvance ? 'Generando imagen…' : 'Descargar avance como imagen'}
+          </button>
           <button onClick={() => copiarTablaAlPortapapeles(tablaFinalizadasRef, 'Productividad')} className="flex items-center gap-1.5 text-[10px] px-3 py-1.5 text-slate-400 hover:text-slate-700 hover:bg-white font-semibold rounded-md transition">
             <Copy size={11} /> Copiar tabla
           </button>
