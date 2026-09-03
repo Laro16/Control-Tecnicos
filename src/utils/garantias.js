@@ -45,7 +45,7 @@ export function buscarClienteGarantia(clienteTexto, clientesGarantia = []) {
 
 export function extraerSerieDescripcion(descripcion) {
   if (descripcion === null || descripcion === undefined) return ''
-  // En DESCRIPCIÓN solo se aceptan secuencias de 7 a 12 dígitos que
+  // En DESCRIPCIÓN INICIAL solo se aceptan secuencias de 7 a 12 dígitos que
   // comiencen con 0, 1 o 2. Esto reduce falsos positivos con teléfonos.
   const coincidencia = String(descripcion).match(/(?:^|\D)([012]\d{6,11})(?!\d)/)
   return coincidencia?.[1] || ''
@@ -63,12 +63,17 @@ export function resolverSerie(serieDirecta, descripcion) {
   const serieDescripcion = extraerSerieDescripcion(descripcion)
   return {
     valor: serieDescripcion || '-',
-    origen: serieDescripcion ? 'DESCRIPCIÓN' : '',
+    origen: serieDescripcion ? 'DESCRIPCIÓN INICIAL' : '',
   }
 }
 
 export function obtenerSerieTicket(ticket) {
-  return resolverSerie(ticket?.SERIE, ticket?.DESCRIPCIÓN).valor
+  // Las cargas anteriores guardaban en SERIE lo extraído de DESCRIPCIÓN.
+  // Si conocemos ese origen, recalculamos desde la falla reportada correcta;
+  // nunca reemplazamos una serie capturada en la columna SERIE.
+  const origen = normalizarTextoGarantia(ticket?.SERIE_ORIGEN)
+  const fueExtraida = ['DESCRIPCION', 'DESCRIPCION INICIAL'].includes(origen)
+  return resolverSerie(fueExtraida ? '' : ticket?.SERIE, ticket?.['DESCRIPCIÓN INICIAL']).valor
 }
 
 export function parsearFechaSerie(serie) {
@@ -101,27 +106,23 @@ export function verificarGarantiaTicket(ticket, clientesGarantia = []) {
     ? ''
     : String(ticket.TIPO).trim()
 
-  // El cliente sí pertenece al catálogo de Garantias.xlsx, pero el archivo
-  // diario lo clasificó como Normal. Se devuelve una alerta específica para
-  // no contarlo por error como garantía vigente, vencida o sin serie.
-  if (normalizarTextoGarantia(tipoActual) === 'NORMAL') {
-    return {
-      esClienteGarantia: true,
-      tipoIncorrecto: true,
-      tipoActual: tipoActual || 'Normal',
-      tipoEsperado: 'Garantia',
-      clienteNombre: clienteGarantia.nombre,
-      aniosGarantia: clienteGarantia.anios,
-    }
+  // Normal siempre requiere revisión para estos clientes, incluso si la
+  // serie está dentro del plazo. Calculamos el plazo sin autorizar atención
+  // ni modificar la clasificación emitida por el sistema de origen.
+  const base = {
+    esClienteGarantia: true,
+    tipoIncorrecto: normalizarTextoGarantia(tipoActual) === 'NORMAL',
+    tipoActual,
+    tipoEsperado: 'Garantia',
+    clienteNombre: clienteGarantia.nombre,
+    aniosGarantia: clienteGarantia.anios,
   }
 
   const fechaFabricacion = parsearFechaSerie(obtenerSerieTicket(ticket))
   if (!fechaFabricacion) {
     return {
-      esClienteGarantia: true,
+      ...base,
       sinDatosSerie: true,
-      clienteNombre: clienteGarantia.nombre,
-      aniosGarantia: clienteGarantia.anios,
     }
   }
 
@@ -133,14 +134,12 @@ export function verificarGarantiaTicket(ticket, clientesGarantia = []) {
   const formatear = fecha => `${String(fecha.getDate()).padStart(2, '0')}/${String(fecha.getMonth() + 1).padStart(2, '0')}/${fecha.getFullYear()}`
 
   return {
-    esClienteGarantia: true,
+    ...base,
     sinDatosSerie: false,
     vencida,
     diasRestantes,
     fechaFabricacion,
     fechaVencimiento,
-    clienteNombre: clienteGarantia.nombre,
-    aniosGarantia: clienteGarantia.anios,
     fabDisplay: formatear(fechaFabricacion),
     vencDisplay: formatear(fechaVencimiento),
   }

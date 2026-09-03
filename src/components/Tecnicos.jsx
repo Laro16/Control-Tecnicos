@@ -246,7 +246,8 @@ export default function ModuloTecnicos({
           let fechaRaw = fila['FECHA REALIZADA'] || fila['FECHA REALIZACION'] || fila['FECHA'] || ''
           const fechaEstructura = normalizarFechaExcel(fechaRaw)
           const descripcion = fila['DESCRIPCIÓN'] || fila['DESCRIPCION'] || fila['COMENTARIO'] || '-'
-          const serie = resolverSerie(fila['SERIE'] || fila['NO SERIE'], descripcion)
+          const descripcionInicial = fila['DESCRIPCIÓN INICIAL'] || fila['DESCRIPCION INICIAL'] || '-'
+          const serie = resolverSerie(fila['SERIE'] || fila['NO SERIE'], descripcionInicial)
           
           listaTemporal.push({
             tecnico,
@@ -268,7 +269,7 @@ export default function ModuloTecnicos({
             'TIEMPO_TRANSCURRIDO': fila['TIEMPO TRANSCURRIDO'] || fila['TIEMPO'] || '0',
             'FECHA_TEXTO': fechaEstructura ? fechaEstructura.display : (fechaRaw || '-'),
             'FECHA_OBJ': fechaEstructura ? fechaEstructura.dateObj : null,
-            'DESCRIPCIÓN INICIAL': fila['DESCRIPCIÓN INICIAL'] || fila['DESCRIPCION INICIAL'] || '-',
+            'DESCRIPCIÓN INICIAL': descripcionInicial,
             'DESCRIPCIÓN': descripcion,
             'GEOLOCALIZACIÓN': fila['GEOLOCALIZACION'] || fila['GEOLOCALIZACIÓN'] || fila['GEOLOCALIZACIÓ'] || fila['GEO'] || '-'
           })
@@ -630,8 +631,8 @@ export default function ModuloTecnicos({
                   <span className="font-bold text-slate-600 text-[10px] uppercase tracking-wider">Alertas de Garantía</span>
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5">
-                  {alertasTipoIncorrecto.length > 0 && <span className="text-[9px] font-bold bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded">{alertasTipoIncorrecto.length} tipo incorrecto</span>}
                   {alertasVencidas.length > 0 && <span className="text-[9px] font-bold bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded">{alertasVencidas.length} vencida{alertasVencidas.length !== 1 ? 's' : ''}</span>}
+                  {alertasTipoIncorrecto.length > 0 && <span className="text-[9px] font-bold bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded">{alertasTipoIncorrecto.length} Normal por revisar</span>}
                   {alertasSinSerie.length > 0 && <span className="text-[9px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">{alertasSinSerie.length} sin serie</span>}
                   {alertasVigentes.length > 0 && <span className="text-[9px] font-bold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">{alertasVigentes.length} vigente{alertasVigentes.length !== 1 ? 's' : ''}</span>}
                   <ChevronDown size={13} className={`text-slate-400 transition-transform ${garantiaAbierta ? 'rotate-180' : ''}`} />
@@ -640,34 +641,8 @@ export default function ModuloTecnicos({
 
               {garantiaAbierta && (
                 <div className="slide-up">
-                  {alertasTipoIncorrecto.length > 0 && (
-                    <div id="alertas-tipo-incorrecto" tabIndex={-1} className="alert-anchor space-y-2.5 border-t border-slate-200 p-3">
-                      <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-violet-700">
-                        <span className="h-1.5 w-1.5 rounded-full bg-violet-500"></span>
-                        Cliente de garantía clasificado como Normal
-                      </p>
-                      {alertasTipoIncorrecto.map((a, i) => (
-                        <div key={i} className="alert-card space-y-2 rounded-lg border border-violet-300 border-l-[4px] border-l-violet-600 bg-violet-50 px-3 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded bg-violet-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-violet-800">#{a.ticket['N° REFERENCIA'] || '-'}</span>
-                            <span className="text-[10px] font-semibold text-slate-500">{a.ticket.tecnico}</span>
-                            <span className="ml-auto rounded-md border border-violet-300 bg-white px-2 py-1 text-[9px] font-black text-violet-800">
-                              TIPO: {a.garantia.tipoActual} → {a.garantia.tipoEsperado}
-                            </span>
-                          </div>
-                          <p className="text-[11px] font-bold text-slate-800">{a.ticket['NEGOCIO'] || '-'}</p>
-                          <WarrantyClient ticket={a.ticket} tone="violet" />
-                          <p className="text-[10px] font-semibold leading-relaxed text-violet-800">
-                            Este cliente aparece en Garantias.xlsx, pero el Excel diario tiene TIPO "Normal". Debe decir "Garantia" para evaluarlo como garantía.
-                          </p>
-                          <p className="text-[9px] font-medium text-slate-500">📍 {a.ticket['DIRECCIÓN'] || '-'}</p>
-                          <TicketActions ticket={a.ticket} onCopy={copiarTicket} compact />
-                        </div>
-                      ))}
-                    </div>
-                  )}
                   {alertasVencidas.length > 0 && (
-                    <div id="alertas-vencidas" tabIndex={-1} className={`alert-anchor p-3 space-y-2.5 border-t ${alertasTipoIncorrecto.length ? 'border-slate-300' : 'border-slate-200'}`}>
+                    <div id="alertas-vencidas" tabIndex={-1} className="alert-anchor p-3 space-y-2.5 border-t border-slate-200">
                       <p className="text-[10px] font-bold text-rose-600 uppercase flex items-center gap-1.5 mb-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
                         Garantía vencida — No atender bajo garantía
@@ -676,6 +651,7 @@ export default function ModuloTecnicos({
                         <div key={i} className="alert-card bg-rose-50 border border-rose-200 border-l-[4px] border-l-rose-500 rounded-lg px-3 py-2.5 space-y-1.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-mono text-[10px] font-bold text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded">#{a.ticket['N° REFERENCIA']}</span>
+                            {a.garantia.tipoIncorrecto && <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold text-violet-800">TIPO NORMAL · NO ATENDER SIN GARANTÍA</span>}
                             <span className="text-[10px] font-semibold text-slate-500">{a.ticket.tecnico}</span>
                             <span className="text-[9px] font-semibold text-rose-600 ml-auto shrink-0">Fab: {a.garantia.fabDisplay} · Venció: {a.garantia.vencDisplay} · {a.garantia.aniosGarantia}a</span>
                           </div>
@@ -686,6 +662,38 @@ export default function ModuloTecnicos({
                             <p>📍 {a.ticket['DIRECCIÓN'] || '-'}</p>
                             <p className="shrink-0">🧊 Serie: <span className="font-bold text-slate-700">{obtenerSerieTicket(a.ticket)}</span></p>
                           </div>
+                          <TicketActions ticket={a.ticket} onCopy={copiarTicket} compact />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {alertasTipoIncorrecto.length > 0 && (
+                    <div id="alertas-tipo-incorrecto" tabIndex={-1} className="alert-anchor space-y-2.5 border-t border-slate-200 p-3">
+                      <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-violet-700">
+                        <span className="h-1.5 w-1.5 rounded-full bg-violet-500"></span>
+                        TIPO Normal — Revisar cobertura antes de atender
+                      </p>
+                      {alertasTipoIncorrecto.map((a, i) => (
+                        <div key={i} className="alert-card space-y-2 rounded-lg border border-violet-300 border-l-[4px] border-l-violet-600 bg-violet-50 px-3 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded bg-violet-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-violet-800">#{a.ticket['N° REFERENCIA'] || '-'}</span>
+                            <span className="text-[10px] font-semibold text-slate-500">{a.ticket.tecnico}</span>
+                            <span className="ml-auto rounded-md border border-violet-300 bg-white px-2 py-1 text-[9px] font-black text-violet-800">
+                              TIPO: {a.garantia.tipoActual} · REVISAR
+                            </span>
+                          </div>
+                          <p className="text-[11px] font-bold text-slate-800">{a.ticket['NEGOCIO'] || '-'}</p>
+                          <WarrantyClient ticket={a.ticket} tone="violet" />
+                          <p className="text-[10px] font-semibold leading-relaxed text-violet-800">
+                            Este cliente sólo puede atenderse con garantía. El sistema de origen generó TIPO "Normal": revisar el motivo antes de atender; no basta con cambiar el tipo.
+                          </p>
+                          <p className="text-[10px] font-semibold text-violet-800">
+                            {a.garantia.sinDatosSerie
+                              ? 'No se pudo verificar el plazo con SERIE ni con DESCRIPCIÓN INICIAL.'
+                              : `La serie está dentro del plazo calculado (hasta ${a.garantia.vencDisplay}), pero esto no elimina la alerta Normal ni confirma la cobertura.`}
+                          </p>
+                          <p className="text-[9px] font-medium text-slate-500">Serie: {obtenerSerieTicket(a.ticket)}</p>
+                          <p className="text-[9px] font-medium text-slate-500">📍 {a.ticket['DIRECCIÓN'] || '-'}</p>
                           <TicketActions ticket={a.ticket} onCopy={copiarTicket} compact />
                         </div>
                       ))}
@@ -849,13 +857,13 @@ export default function ModuloTecnicos({
                         const reincidencia = reincidenciasPorTicket.get(claveAtencion({ serie: normalizarSerieHistorial(obtenerSerieTicket(t)), referencia: normalizarTexto(t['N° REFERENCIA']) }))
                         const esProceso = t['ESTADO_LIMPIO'].includes('PROCESO')
                         const esAgencia = t['ESTADO_LIMPIO'].includes('AGENCIA')
-                        const borderColor = g?.tipoIncorrecto ? 'border-l-violet-500'
-                          : g?.vencida ? 'border-l-rose-500' 
+                        const borderColor = g?.vencida ? 'border-l-rose-500'
+                          : g?.tipoIncorrecto ? 'border-l-violet-500'
                           : esProceso ? 'border-l-amber-400' 
                           : esAgencia ? 'border-l-violet-400' 
                           : 'border-l-sky-400'
-                        const headerBg = g?.tipoIncorrecto ? 'bg-violet-50'
-                          : g?.vencida ? 'bg-rose-50' 
+                        const headerBg = g?.vencida ? 'bg-rose-50'
+                          : g?.tipoIncorrecto ? 'bg-violet-50'
                           : esProceso ? 'bg-amber-50/60' 
                           : esAgencia ? 'bg-violet-50/60' 
                           : 'bg-slate-50'
@@ -911,7 +919,7 @@ export default function ModuloTecnicos({
                             {g?.tipoIncorrecto && (
                               <div className="mx-3 mb-2 rounded-md border-l-[3px] border-violet-500 bg-violet-100 px-3 py-1.5 text-[10px] text-violet-800">
                                 <span className="font-bold">⚠️ TIPO INCORRECTO — </span>
-                                Cliente de garantía con TIPO "{g.tipoActual}"; debe decir "{g.tipoEsperado}".
+                                El sistema de origen marcó TIPO "{g.tipoActual}". Este cliente no puede atenderse sin garantía: revisar el motivo, aunque la serie esté dentro del plazo.
                               </div>
                             )}
                             {g?.vencida && (

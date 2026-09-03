@@ -24,8 +24,10 @@ export function obtenerControlAlertas(tickets = [], clientesGarantia = [], histo
     .map(ticket => ({ ticket, garantia: verificarGarantiaTicket(ticket, clientesGarantia) }))
     .filter(alerta => alerta.garantia)
 
-  const tipoIncorrecto = garantias.filter(a => a.garantia.tipoIncorrecto === true)
-  const vencidas = garantias.filter(a => !a.garantia.tipoIncorrecto && a.garantia.vencida === true)
+  // Una alerta por ticket: Normal con plazo vencido aparece primero entre
+  // vencidas; los demás Normal siguen alertando, nunca pasan a vigentes.
+  const tipoIncorrecto = garantias.filter(a => a.garantia.tipoIncorrecto === true && !a.garantia.vencida)
+  const vencidas = garantias.filter(a => a.garantia.vencida === true)
   const sinSerie = garantias.filter(a => !a.garantia.tipoIncorrecto && a.garantia.sinDatosSerie === true)
   const vigentes = garantias.filter(a => !a.garantia.tipoIncorrecto && a.garantia.vencida === false && !a.garantia.sinDatosSerie)
   const duplicados = obtenerTicketsDuplicados(tickets)

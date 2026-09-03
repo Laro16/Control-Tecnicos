@@ -61,10 +61,15 @@ test('ignora referencias y series vacías o marcadores inválidos', () => {
   }
 })
 
-test('usa SERIE primero y recupera DESCRIPCIÓN con las reglas existentes', () => {
-  assert.equal(extraerAtencionesFinalizadas([ticket({ DESCRIPCIÓN: 'Otra serie 2301019876' })])[0].serie, '2408104963')
-  assert.equal(extraerAtencionesFinalizadas([ticket({ SERIE: '', DESCRIPCIÓN: 'Teléfono 48771534; equipo 2408104963.' })])[0].serie, '2408104963')
-  assert.equal(extraerAtencionesFinalizadas([ticket({ SERIE: '', DESCRIPCIÓN: 'Teléfono 48771534' })]).length, 0)
+test('usa SERIE primero y recupera DESCRIPCIÓN INICIAL con las reglas existentes', () => {
+  assert.equal(extraerAtencionesFinalizadas([ticket({ 'DESCRIPCIÓN INICIAL': 'Otra serie 2301019876' })])[0].serie, '2408104963')
+  assert.equal(extraerAtencionesFinalizadas([ticket({ SERIE: '', 'DESCRIPCIÓN INICIAL': 'Teléfono 48771534; equipo 2408104963.' })])[0].serie, '2408104963')
+  assert.equal(extraerAtencionesFinalizadas([ticket({ SERIE: '', 'DESCRIPCIÓN INICIAL': 'Teléfono 48771534' })]).length, 0)
+})
+
+test('recalcula cargas antiguas cuyo origen decía DESCRIPCIÓN usando DESCRIPCIÓN INICIAL', () => {
+  const antiguo = ticket({ SERIE: '1001011234', SERIE_ORIGEN: 'DESCRIPCIÓN', DESCRIPCIÓN: '1001011234', 'DESCRIPCIÓN INICIAL': '2408104963' })
+  assert.equal(extraerAtencionesFinalizadas([antiguo])[0].serie, '2408104963')
 })
 
 test('conserva ceros iniciales y normaliza formato sin convertir a número', () => {

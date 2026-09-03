@@ -43,7 +43,7 @@ export default function Notificaciones({ control, estadoCatalogo, estadoHistoria
 
   const grupos = [
     { id: 'vencidas', titulo: 'Garantías vencidas', descripcion: 'La serie indica que el plazo de garantía terminó.', items: control.vencidas, tono: 'rose' },
-    { id: 'tipo-incorrecto', titulo: 'Garantías marcadas como Normal', descripcion: 'Revisar TIPO: debe decir Garantia.', items: control.tipoIncorrecto, tono: 'violet' },
+    { id: 'tipo-incorrecto', titulo: 'TIPO Normal — Revisar garantía', descripcion: 'No atender sin garantía, aunque la serie esté dentro del plazo. Los Normal vencidos aparecen en Garantías vencidas.', items: control.tipoIncorrecto, tono: 'violet' },
     { id: 'sin-serie', titulo: 'Series por verificar', descripcion: 'Falta una serie válida para comprobar la garantía.', items: control.sinSerie, tono: 'amber' },
     { id: 'duplicados', titulo: 'Referencias duplicadas', descripcion: 'Una incidencia por cada N° REFERENCIA repetido.', items: control.duplicados, tono: 'orange' },
     { id: 'reincidencias', titulo: 'Posibles reincidencias', descripcion: 'Equipo con una atención finalizada en otro ticket.', items: control.reincidencias, tono: 'sky' },
