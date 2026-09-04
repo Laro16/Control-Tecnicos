@@ -10,6 +10,8 @@ import {
 import { obtenerSerieTicket, resolverSerie, verificarGarantiaTicket } from '../utils/garantias'
 import { claveAtencion, normalizarSerieHistorial } from '../utils/historialSeries'
 import HistorialSeries from './HistorialSeries'
+import { crearLibroTecnicos, descargarArchivo, fechaArchivo, prepararInformeTecnicos } from '../utils/exportacionesTecnicos'
+import { crearPDFGarantias } from '../utils/pdfGarantias'
 
 const TODAY = () => {
   const d = new Date()
@@ -35,6 +37,11 @@ function limpiarReferencia(valor) {
 
 function normalizarFechaExcel(fechaTexto) {
   if (!fechaTexto) return null
+  if (typeof fechaTexto === 'number') {
+    const fecha = XLSX.SSF.parse_date_code(fechaTexto)
+    if (!fecha) return null
+    fechaTexto = `${fecha.d}/${fecha.m}/${fecha.y}`
+  }
   let limpio = String(fechaTexto).trim().replace(/-/g, '/')
   const partes = limpio.split('/')
   if (partes.length === 3) {
@@ -168,7 +175,7 @@ export default function ModuloTecnicos({
   allTickets, setAllTickets, nombreArchivo, setNombreArchivo, 
   fechaSubidaExcel, setFechaSubidaExcel,
   rutasTecnicos, setRutasTecnicos, rutasAutomaticas, valorRutaTecnico, baseMunicipios,
-  clientesGarantia = [], controlAlertas, solicitudAlerta, historialSeries
+  clientesGarantia = [], estadoCatalogoGarantias, controlAlertas, solicitudAlerta, historialSeries
 }) {
   const [dragging, setDragging] = useState(false)
   const [expandido, setExpandido] = useState({})
@@ -177,6 +184,7 @@ export default function ModuloTecnicos({
   const [garantiaAbierta, setGarantiaAbierta] = useState(false)
   const [duplicadosAbierta, setDuplicadosAbierta] = useState(false)
   const [toast, setToast] = useState('')
+  const [exportando, setExportando] = useState('')
   const fileRef = useRef()
   const ultimaAlertaEnfocada = useRef(null)
 
@@ -217,7 +225,10 @@ export default function ModuloTecnicos({
     const reader = new FileReader()
     reader.onload = (e) => {
       const wb = XLSX.read(e.target.result, { type: 'array' })
-      const ws = wb.Sheets[wb.SheetNames[0]]
+      // Nuestro informe abre en Resumen, pero al volver a cargarlo la fuente
+      // es Base completa, nunca las vistas de garantías o duplicados.
+      const hojaBase = wb.SheetNames.find(nombre => normalizarTexto(nombre) === 'BASE COMPLETA') || wb.SheetNames[0]
+      const ws = wb.Sheets[hojaBase]
       const rawMatrix = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
       
       let headerRowIndex = -1, headerKeys = []
@@ -247,7 +258,8 @@ export default function ModuloTecnicos({
           const fechaEstructura = normalizarFechaExcel(fechaRaw)
           const descripcion = fila['DESCRIPCIÓN'] || fila['DESCRIPCION'] || fila['COMENTARIO'] || '-'
           const descripcionInicial = fila['DESCRIPCIÓN INICIAL'] || fila['DESCRIPCION INICIAL'] || '-'
-          const serie = resolverSerie(fila['SERIE'] || fila['NO SERIE'], descripcionInicial)
+          const serieEnDescripcion = ['DESCRIPCION', 'DESCRIPCION INICIAL'].includes(normalizarTexto(fila['ORIGEN DE SERIE']))
+          const serie = resolverSerie(serieEnDescripcion ? '' : fila['SERIE'] || fila['NO SERIE'], descripcionInicial)
           
           listaTemporal.push({
             tecnico,
@@ -324,18 +336,36 @@ export default function ModuloTecnicos({
   }
   function onDrop(e) { e.preventDefault(); setDragging(false); if (e.dataTransfer.files[0]) procesarExcel(e.dataTransfer.files[0]) }
 
-  function descargarExcelCompleto() {
-    if (allTickets.length === 0) return
-    const data = allTickets.map(t => ({
-      'TÉCNICO': t.tecnico, 'N° REFERENCIA': t['N° REFERENCIA'], 'NEGOCIO': t['NEGOCIO'],
-      'DIRECCIÓN': t['DIRECCIÓN'], 'TELÉFONO': t['TELÉFONO'], 'CLIENTE': t['CLIENTE'],
-      'TIPO': t['TIPO'], 'SERIE': obtenerSerieTicket(t), 'MODELO': t['MODELO'], 'ESTADO': t['ESTADO'], 'FECHA': t['FECHA_TEXTO'],
-      'DESCRIPCIÓN INICIAL': t['DESCRIPCIÓN INICIAL'], 'DESCRIPCIÓN': t['DESCRIPCIÓN']
-    }))
-    const ws = XLSX.utils.json_to_sheet(data)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, "Base Completa")
-    XLSX.writeFile(wb, `Reporte_General_Tickets.xlsx`)
+  function comprobarCatalogoExportacion() {
+    if (estadoCatalogoGarantias !== 'listo' || !clientesGarantia.length) {
+      alert('El catálogo de garantías no está disponible o está vacío. Recarga la página y comprueba Garantias.xlsx antes de exportar el informe.')
+      return false
+    }
+    return true
+  }
+
+  async function descargarExcelCompleto() {
+    if (!allTickets.length || exportando || !comprobarCatalogoExportacion()) return
+    setExportando('excel')
+    try {
+      const informe = prepararInformeTecnicos({ tickets: allTickets, control: controlAlertas, nombreArchivo, fechaSubidaExcel, estadoHistorial: historialSeries.estado })
+      const libro = await crearLibroTecnicos(informe)
+      const buffer = await libro.xlsx.writeBuffer()
+      descargarArchivo(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `Control_Tecnicos_${fechaArchivo(informe.generado)}.xlsx`)
+      setToast('Excel organizado descargado: 8 pestañas')
+      setTimeout(() => setToast(''), 4500)
+    } catch (error) {
+      console.error('Error al exportar el informe:', error)
+      alert('No se pudo generar el Excel organizado. Intenta nuevamente.')
+    } finally { setExportando('') }
+  }
+
+  function descargarPDFGarantias() {
+    if (exportando || !comprobarCatalogoExportacion()) return
+    try {
+      const generado = new Date()
+      crearPDFGarantias(controlAlertas.garantias, { nombreArchivo, generado }).save(`Garantias_${fechaArchivo(generado)}.pdf`)
+    } catch (error) { alert(error.message || 'No se pudo generar el PDF de garantías.') }
   }
 
   function generarExcelTecnico(tecnico, tickets) {
@@ -527,8 +557,11 @@ export default function ModuloTecnicos({
               <button onClick={generarPDFGlobalEnProceso} className="flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 text-[10px] font-extrabold text-white transition hover:bg-white/15">
                 <FileText size={13} /> En proceso
               </button>
-              <button onClick={descargarExcelCompleto} className="flex items-center gap-1.5 rounded-xl bg-white px-3.5 py-2.5 text-[10px] font-extrabold text-slate-900 shadow-lg transition hover:bg-sky-50">
-                <DownloadCloud size={13} /> Base completa
+              <button type="button" onClick={descargarPDFGarantias} disabled={Boolean(exportando) || estadoCatalogoGarantias === 'cargando'} title="Descargar garantías pendientes con diagnóstico de series y TIPO Normal" className="flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 text-[10px] font-extrabold text-white transition hover:bg-white/15 disabled:opacity-50">
+                <ShieldAlert size={13} /> PDF Garantías
+              </button>
+              <button onClick={descargarExcelCompleto} disabled={Boolean(exportando) || estadoCatalogoGarantias === 'cargando'} title="Resumen, garantías, pendientes, en proceso, finalizados, duplicados, reincidencias y base completa" className="flex items-center gap-1.5 rounded-xl bg-white px-3.5 py-2.5 text-[10px] font-extrabold text-slate-900 shadow-lg transition hover:bg-sky-50 disabled:opacity-50">
+                <DownloadCloud size={13} /> {exportando === 'excel' ? 'Generando Excel…' : 'Excel organizado'}
               </button>
             </div>
           )}
@@ -560,8 +593,8 @@ export default function ModuloTecnicos({
           )}
         </div>
         {allTickets.length > 0 && (
-          <button onClick={(e) => { e.stopPropagation(); descargarExcelCompleto() }} className="btn-success hidden items-center gap-1.5 shrink-0 text-[10px] sm:flex">
-            <DownloadCloud size={12} /> Descargar
+          <button disabled={Boolean(exportando) || estadoCatalogoGarantias === 'cargando'} onClick={(e) => { e.stopPropagation(); descargarExcelCompleto() }} className="btn-success hidden items-center gap-1.5 shrink-0 text-[10px] sm:flex disabled:opacity-50">
+            <DownloadCloud size={12} /> {exportando === 'excel' ? 'Generando…' : 'Excel organizado'}
           </button>
         )}
         <input ref={fileRef} type="file" className="hidden" onChange={onFileChange} />

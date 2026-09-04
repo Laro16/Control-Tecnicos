@@ -392,6 +392,7 @@ export default function App() {
             valorRutaTecnico={valorRutaTecnico}
             baseMunicipios={baseMunicipios}
             clientesGarantia={clientesGarantia}
+            estadoCatalogoGarantias={estadoCatalogoGarantias}
             controlAlertas={controlAlertas}
             solicitudAlerta={solicitudAlerta}
             historialSeries={historialSeries}
