@@ -12,6 +12,7 @@ import { claveAtencion, normalizarSerieHistorial } from '../utils/historialSerie
 import HistorialSeries from './HistorialSeries'
 import { crearLibroTecnicos, descargarArchivo, fechaArchivo, prepararInformeTecnicos } from '../utils/exportacionesTecnicos'
 import { crearPDFGarantias } from '../utils/pdfGarantias'
+import EstadoParticulares from './EstadoParticulares'
 
 const TODAY = () => {
   const d = new Date()
@@ -175,7 +176,7 @@ export default function ModuloTecnicos({
   allTickets, setAllTickets, nombreArchivo, setNombreArchivo, 
   fechaSubidaExcel, setFechaSubidaExcel,
   rutasTecnicos, setRutasTecnicos, rutasAutomaticas, valorRutaTecnico, baseMunicipios,
-  clientesGarantia = [], estadoCatalogoGarantias, controlAlertas, solicitudAlerta, historialSeries
+  clientesGarantia = [], estadoCatalogoGarantias, controlAlertas, solicitudAlerta, historialSeries, importacionParticulares
 }) {
   const [dragging, setDragging] = useState(false)
   const [expandido, setExpandido] = useState({})
@@ -186,6 +187,8 @@ export default function ModuloTecnicos({
   const [toast, setToast] = useState('')
   const [exportando, setExportando] = useState('')
   const fileRef = useRef()
+  const leyendoExcel = useRef(false)
+  const [procesandoExcel, setProcesandoExcel] = useState(false)
   const ultimaAlertaEnfocada = useRef(null)
 
   useEffect(() => {
@@ -221,103 +224,126 @@ export default function ModuloTecnicos({
 
   function procesarExcel(file) {
     if (!file) return
-    setNombreArchivo(file.name)
+    if (leyendoExcel.current || importacionParticulares?.estado === 'importando') {
+      alert('Espera a que termine la carga actual antes de subir otro Excel.')
+      return
+    }
+    leyendoExcel.current = true
+    setProcesandoExcel(true)
     const reader = new FileReader()
-    reader.onload = (e) => {
-      const wb = XLSX.read(e.target.result, { type: 'array' })
-      // Nuestro informe abre en Resumen, pero al volver a cargarlo la fuente
-      // es Base completa, nunca las vistas de garantías o duplicados.
-      const hojaBase = wb.SheetNames.find(nombre => normalizarTexto(nombre) === 'BASE COMPLETA') || wb.SheetNames[0]
-      const ws = wb.Sheets[hojaBase]
-      const rawMatrix = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
-      
-      let headerRowIndex = -1, headerKeys = []
-      for (let i = 0; i < rawMatrix.length; i++) {
-        const upperRow = rawMatrix[i].map(cell => normalizarTexto(cell))
-        if (upperRow.includes('ESTADO')) { headerRowIndex = i; headerKeys = upperRow; break }
-      }
-      if (headerRowIndex === -1) { alert("⚠️ No encontré columna 'ESTADO'."); return }
-
-      const listaTemporal = []
-      for (let i = headerRowIndex + 1; i < rawMatrix.length; i++) {
-        const row = rawMatrix[i]
-        const fila = {}
-        headerKeys.forEach((key, index) => { if (key) fila[key] = row[index] })
-        let estadoOriginal = String(fila['ESTADO'] || '').trim()
-        let estadoLimpio = normalizarTexto(estadoOriginal)
-        const esAsignadoTecnico = estadoLimpio.includes('ASIGNAD') && estadoLimpio.includes('TECNICO')
-        const esEnProceso = estadoLimpio.includes('PROCESO')
-        const esAsignadoAgencia = estadoLimpio.includes('ASIGNAD') && estadoLimpio.includes('AGENCIA')
-        const esFinalizada = estadoLimpio.includes('FINALIZADA')
-
-        if (esAsignadoTecnico || esEnProceso || esAsignadoAgencia || esFinalizada) {
-          let tecnico = String(fila['TÉCNICO'] || fila['TECNICO'] || fila['TÉCNICOS'] || fila['TECNICOS'] || '').trim()
-          if (!tecnico || tecnico === '') tecnico = 'SIN TÉCNICO'
-          let clienteOriginal = String(fila['CLIENTE'] || '-').trim()
-          let fechaRaw = fila['FECHA REALIZADA'] || fila['FECHA REALIZACION'] || fila['FECHA'] || ''
-          const fechaEstructura = normalizarFechaExcel(fechaRaw)
-          const descripcion = fila['DESCRIPCIÓN'] || fila['DESCRIPCION'] || fila['COMENTARIO'] || '-'
-          const descripcionInicial = fila['DESCRIPCIÓN INICIAL'] || fila['DESCRIPCION INICIAL'] || '-'
-          const serieEnDescripcion = ['DESCRIPCION', 'DESCRIPCION INICIAL'].includes(normalizarTexto(fila['ORIGEN DE SERIE']))
-          const serie = resolverSerie(serieEnDescripcion ? '' : fila['SERIE'] || fila['NO SERIE'], descripcionInicial)
-          
-          listaTemporal.push({
-            tecnico,
-            // La referencia vacía se conserva vacía. Usar "-" aquí hacía que
-            // todas las celdas sin dato aparecieran como un falso duplicado.
-            'N° REFERENCIA': limpiarReferencia(fila['N° REFERENCIA'] ?? fila['NO REFERENCIA'] ?? fila['REFERENCIA'] ?? fila['TICKET']),
-            'NEGOCIO': fila['NEGOCIO'] || fila['NOMBRE NEGOCIO'] || fila['SUCURSAL'] || '-',
-            'DIRECCIÓN': fila['DIRECCIÓN'] || fila['DIRECCION'] || '-',
-            'TELÉFONO': fila['TELÉFONO'] || fila['TELEFONO'] || fila['TEL'] || '-',
-            // Se conserva exactamente el dato del encabezado CLIENTE para que
-            // la alerta identifique al cliente real sin abreviarlo ni inferirlo.
-            'CLIENTE': clienteOriginal || '-',
-            'TIPO': fila['TIPO'] || '-',
-            'SERIE': serie.valor,
-            'SERIE_ORIGEN': serie.origen,
-            'MODELO': fila['MODELO'] || '-',
-            'ESTADO': estadoOriginal,
-            'ESTADO_LIMPIO': estadoLimpio,
-            'TIEMPO_TRANSCURRIDO': fila['TIEMPO TRANSCURRIDO'] || fila['TIEMPO'] || '0',
-            'FECHA_TEXTO': fechaEstructura ? fechaEstructura.display : (fechaRaw || '-'),
-            'FECHA_OBJ': fechaEstructura ? fechaEstructura.dateObj : null,
-            'DESCRIPCIÓN INICIAL': descripcionInicial,
-            'DESCRIPCIÓN': descripcion,
-            'GEOLOCALIZACIÓN': fila['GEOLOCALIZACION'] || fila['GEOLOCALIZACIÓN'] || fila['GEOLOCALIZACIÓ'] || fila['GEO'] || '-'
-          })
+    reader.onload = async (e) => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'array' })
+        // Nuestro informe abre en Resumen, pero al volver a cargarlo la fuente
+        // es Base completa, nunca las vistas de garantías o duplicados.
+        const hojaBase = wb.SheetNames.find(nombre => normalizarTexto(nombre) === 'BASE COMPLETA') || wb.SheetNames[0]
+        const ws = wb.Sheets[hojaBase]
+        const rawMatrix = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
+        
+        let headerRowIndex = -1, headerKeys = []
+        for (let i = 0; i < rawMatrix.length; i++) {
+          const upperRow = rawMatrix[i].map(cell => normalizarTexto(cell))
+          if (upperRow.includes('ESTADO')) { headerRowIndex = i; headerKeys = upperRow; break }
         }
-      }
+        if (headerRowIndex === -1) { alert("⚠️ No encontré columna 'ESTADO'."); return }
 
-      if (listaTemporal.length === 0) {
-        alert("⚠️ No detecté tickets con estados válidos.")
-      } else {
-        setAllTickets(listaTemporal)
-        setFiltroTecnico('Todos')
-        // Recalcular rutas al subir Excel nuevo
-        const ticketsActivosParaRuta = listaTemporal.filter(esEstadoActivoRuta)
-        const nuevasRutas = {}
-        const ticketsPorTecnico = {}
-        ticketsActivosParaRuta.forEach(t => {
-          if(!ticketsPorTecnico[t.tecnico]) ticketsPorTecnico[t.tecnico] = []
-          ticketsPorTecnico[t.tecnico].push(t)
-        })
-        Object.keys(ticketsPorTecnico).forEach(tec => {
-          let encontrados = new Set()
-          ticketsPorTecnico[tec].forEach(t => {
-            const textoBuscar = normalizarTexto(t['DIRECCIÓN'])
-            baseMunicipios.forEach(muniOriginal => {
-              const muniLimpio = normalizarTexto(muniOriginal)
-              const escaped = muniLimpio.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-              const regex = new RegExp(`\\b${escaped}\\b`, 'i')
-              if (regex.test(textoBuscar)) encontrados.add(muniOriginal.toUpperCase())
+        const listaTemporal = []
+        const filasParticulares = []
+        for (let i = headerRowIndex + 1; i < rawMatrix.length; i++) {
+          const row = rawMatrix[i]
+          const fila = {}
+          headerKeys.forEach((key, index) => { if (key) fila[key] = row[index] })
+          // Particulares se revisa antes de filtrar estados. También se crean
+          // fichas de órdenes finalizadas: su pago y documentos son manuales.
+          if (normalizarTexto(fila.CLIENTE) === 'PARTICULAR') filasParticulares.push(fila)
+          let estadoOriginal = String(fila['ESTADO'] || '').trim()
+          let estadoLimpio = normalizarTexto(estadoOriginal)
+          const esAsignadoTecnico = estadoLimpio.includes('ASIGNAD') && estadoLimpio.includes('TECNICO')
+          const esEnProceso = estadoLimpio.includes('PROCESO')
+          const esAsignadoAgencia = estadoLimpio.includes('ASIGNAD') && estadoLimpio.includes('AGENCIA')
+          const esFinalizada = estadoLimpio.includes('FINALIZADA')
+
+          if (esAsignadoTecnico || esEnProceso || esAsignadoAgencia || esFinalizada) {
+            let tecnico = String(fila['TÉCNICO'] || fila['TECNICO'] || fila['TÉCNICOS'] || fila['TECNICOS'] || '').trim()
+            if (!tecnico || tecnico === '') tecnico = 'SIN TÉCNICO'
+            let clienteOriginal = String(fila['CLIENTE'] || '-').trim()
+            let fechaRaw = fila['FECHA REALIZADA'] || fila['FECHA REALIZACION'] || fila['FECHA'] || ''
+            const fechaEstructura = normalizarFechaExcel(fechaRaw)
+            const descripcion = fila['DESCRIPCIÓN'] || fila['DESCRIPCION'] || fila['COMENTARIO'] || '-'
+            const descripcionInicial = fila['DESCRIPCIÓN INICIAL'] || fila['DESCRIPCION INICIAL'] || '-'
+            const serieEnDescripcion = ['DESCRIPCION', 'DESCRIPCION INICIAL'].includes(normalizarTexto(fila['ORIGEN DE SERIE']))
+            const serie = resolverSerie(serieEnDescripcion ? '' : fila['SERIE'] || fila['NO SERIE'], descripcionInicial)
+            
+            listaTemporal.push({
+              tecnico,
+              // La referencia vacía se conserva vacía. Usar "-" aquí hacía que
+              // todas las celdas sin dato aparecieran como un falso duplicado.
+              'N° REFERENCIA': limpiarReferencia(fila['N° REFERENCIA'] ?? fila['NO REFERENCIA'] ?? fila['REFERENCIA'] ?? fila['TICKET']),
+              'NEGOCIO': fila['NEGOCIO'] || fila['NOMBRE NEGOCIO'] || fila['SUCURSAL'] || '-',
+              'DIRECCIÓN': fila['DIRECCIÓN'] || fila['DIRECCION'] || '-',
+              'TELÉFONO': fila['TELÉFONO'] || fila['TELEFONO'] || fila['TEL'] || '-',
+              // Se conserva exactamente el dato del encabezado CLIENTE para que
+              // la alerta identifique al cliente real sin abreviarlo ni inferirlo.
+              'CLIENTE': clienteOriginal || '-',
+              'TIPO': fila['TIPO'] || '-',
+              'SERIE': serie.valor,
+              'SERIE_ORIGEN': serie.origen,
+              'MODELO': fila['MODELO'] || '-',
+              'ESTADO': estadoOriginal,
+              'ESTADO_LIMPIO': estadoLimpio,
+              'TIEMPO_TRANSCURRIDO': fila['TIEMPO TRANSCURRIDO'] || fila['TIEMPO'] || '0',
+              'FECHA_TEXTO': fechaEstructura ? fechaEstructura.display : (fechaRaw || '-'),
+              'FECHA_OBJ': fechaEstructura ? fechaEstructura.dateObj : null,
+              'DESCRIPCIÓN INICIAL': descripcionInicial,
+              'DESCRIPCIÓN': descripcion,
+              'GEOLOCALIZACIÓN': fila['GEOLOCALIZACION'] || fila['GEOLOCALIZACIÓN'] || fila['GEOLOCALIZACIÓ'] || fila['GEO'] || '-'
             })
+          }
+        }
+
+        if (listaTemporal.length === 0) {
+          if (!filasParticulares.length) alert("⚠️ No detecté tickets con estados válidos.")
+        } else {
+          setNombreArchivo(file.name)
+          setAllTickets(listaTemporal)
+          setFiltroTecnico('Todos')
+          // Recalcular rutas al subir Excel nuevo
+          const ticketsActivosParaRuta = listaTemporal.filter(esEstadoActivoRuta)
+          const nuevasRutas = {}
+          const ticketsPorTecnico = {}
+          ticketsActivosParaRuta.forEach(t => {
+            if(!ticketsPorTecnico[t.tecnico]) ticketsPorTecnico[t.tecnico] = []
+            ticketsPorTecnico[t.tecnico].push(t)
           })
-          nuevasRutas[tec] = Array.from(encontrados).slice(0, 10).join(' - ')
-        })
-        setRutasTecnicos(nuevasRutas)
-        const ahora = new Date()
-        setFechaSubidaExcel(`${ahora.toLocaleDateString()} a las ${ahora.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`)
+          Object.keys(ticketsPorTecnico).forEach(tec => {
+            let encontrados = new Set()
+            ticketsPorTecnico[tec].forEach(t => {
+              const textoBuscar = normalizarTexto(t['DIRECCIÓN'])
+              baseMunicipios.forEach(muniOriginal => {
+                const muniLimpio = normalizarTexto(muniOriginal)
+                const escaped = muniLimpio.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+                const regex = new RegExp(`\\b${escaped}\\b`, 'i')
+                if (regex.test(textoBuscar)) encontrados.add(muniOriginal.toUpperCase())
+              })
+            })
+            nuevasRutas[tec] = Array.from(encontrados).slice(0, 10).join(' - ')
+          })
+          setRutasTecnicos(nuevasRutas)
+          const ahora = new Date()
+          setFechaSubidaExcel(`${ahora.toLocaleDateString()} a las ${ahora.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`)
+        }
+        await importacionParticulares?.importar(filasParticulares, file.name)
+      } catch {
+        alert('No se pudo leer el Excel. Comprueba el archivo y vuelve a intentar.')
+      } finally {
+        leyendoExcel.current = false
+        setProcesandoExcel(false)
       }
+    }
+    reader.onerror = () => {
+      leyendoExcel.current = false
+      setProcesandoExcel(false)
+      alert('No se pudo abrir el archivo. Vuelve a seleccionarlo.')
     }
     reader.readAsArrayBuffer(file)
   }
@@ -333,6 +359,7 @@ export default function ModuloTecnicos({
       return
     }
     procesarExcel(archivo)
+    e.target.value = ''
   }
   function onDrop(e) { e.preventDefault(); setDragging(false); if (e.dataTransfer.files[0]) procesarExcel(e.dataTransfer.files[0]) }
 
@@ -597,8 +624,11 @@ export default function ModuloTecnicos({
             <DownloadCloud size={12} /> {exportando === 'excel' ? 'Generando…' : 'Excel organizado'}
           </button>
         )}
-        <input ref={fileRef} type="file" className="hidden" onChange={onFileChange} />
+        <input ref={fileRef} type="file" className="hidden" onChange={onFileChange} disabled={procesandoExcel || importacionParticulares?.estado === 'importando'} />
       </div>
+
+      {procesandoExcel && importacionParticulares?.estado !== 'importando' && <p className="text-sm text-slate-600" role="status">Leyendo el archivo…</p>}
+      <EstadoParticulares importacion={importacionParticulares} />
 
       {allTickets.length === 0 && <HistorialSeries datos={historialSeries} reincidencias={controlAlertas.reincidencias} solicitudAlerta={solicitudAlerta} />}
       {allTickets.length > 0 && (

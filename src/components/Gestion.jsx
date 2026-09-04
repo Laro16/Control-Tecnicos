@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import JSZip from 'jszip'
 import { supabase } from '../supabase.jsx'
+import { claveReferenciaParticular, idParticularReferencia, leerParticularesExistentes } from '../utils/particulares.js'
+import EstadoParticulares from './EstadoParticulares'
 import {
   Plus, Pencil, Trash2, CheckCircle, X, ClipboardList, RotateCcw, 
   Paperclip, DownloadCloud, Download, CalendarClock, Briefcase,
@@ -28,7 +30,7 @@ function estBadge(e) {
   return 'bg-slate-50 text-slate-400 border-slate-200'
 }
 
-export default function ModuloPendientes() {
+export default function ModuloPendientes({ importacionParticulares }) {
   const [items, setItems] = useState([])
   const [cargando, setCargando] = useState(true)
   const [modal, setModal] = useState(false)
@@ -44,15 +46,28 @@ export default function ModuloPendientes() {
   const [subiendoFiles, setSubiendoFiles] = useState(false)
   const [imgPreview, setImgPreview] = useState(null)
 
-  useEffect(() => { cargar() }, [])
+  const cargaActual = useRef(0)
 
-  async function cargar() {
+  const cargar = useCallback(async () => {
+    const solicitud = ++cargaActual.current
     setCargando(true)
-    const { data, error } = await supabase.from('pendientes').select('*').order('created_at', { ascending: false })
-    if (error) setError('Error en conexión con tabla de Supabase.')
-    else setItems(data || [])
-    setCargando(false)
-  }
+    try {
+      const registros = []
+      for (let desde = 0; ; desde += 500) {
+        const { data, error } = await supabase.from('pendientes').select('*').order('created_at', { ascending: false }).order('id').range(desde, desde + 499)
+        if (error || !Array.isArray(data)) throw new Error('No se pudieron cargar los registros.')
+        registros.push(...data)
+        if (data.length < 500) break
+      }
+      if (solicitud === cargaActual.current) setItems(registros)
+    } catch {
+      if (solicitud === cargaActual.current) setError('Error en conexión con tabla de Supabase.')
+    } finally {
+      if (solicitud === cargaActual.current) setCargando(false)
+    }
+  }, [])
+
+  useEffect(() => { cargar() }, [cargar, importacionParticulares?.revision])
 
   function obtenerFechaHoy() {
     const d = new Date()
@@ -112,6 +127,16 @@ export default function ModuloPendientes() {
     setError('')
     setSubiendoFiles(true)
     try {
+      let idNuevaParticular = null
+      const referencia = claveReferenciaParticular(form.correlativo)
+      if (form.tipo === 'Particular' && referencia) {
+        const particulares = await leerParticularesExistentes(supabase)
+        const idReferencia = await idParticularReferencia(referencia)
+        if (particulares.some(p => p.id !== editId && (claveReferenciaParticular(p.correlativo) === referencia || p.id === idReferencia))) {
+          throw new Error('Ya existe una particular con ese N° REFERENCIA / correlativo. Edita la ficha existente.')
+        }
+        if (!editId) idNuevaParticular = idReferencia
+      }
       let archivosFinales = form.archivos ? [...form.archivos] : []
       
       if (form.tipo === 'Tarea' && archivosSubir.length > 0) {
@@ -130,6 +155,7 @@ export default function ModuloPendientes() {
 
       const payload = { ...form, archivos: archivosFinales }
       delete payload.id; delete payload.created_at
+      if (idNuevaParticular) payload.id = idNuevaParticular
 
       if (editId) {
         const { error } = await supabase.from('pendientes').update(payload).eq('id', editId)
@@ -141,7 +167,7 @@ export default function ModuloPendientes() {
       setModal(false)
       cargar()
     } catch (e) {
-      setError(`Error al guardar: ${e.message}`)
+      setError(e.code === '23505' && form.tipo === 'Particular' ? 'Esta particular ya fue creada desde otra carga. Recarga la lista y edita la ficha existente.' : `Error al guardar: ${e.message}`)
     }
     setSubiendoFiles(false)
   }
@@ -247,6 +273,11 @@ export default function ModuloPendientes() {
         </div>
       </section>
 
+      {vistaActual === 'Particular' && <>
+        <div className="card p-4 text-sm text-slate-600">Al cargar la base en Técnicos, los tickets con CLIENTE «PARTICULAR» crean su ficha una sola vez por N° REFERENCIA. Las nuevas quedan en Pendiente de pago; completa sus documentos desde Editar.</div>
+        <EstadoParticulares importacion={importacionParticulares} />
+      </>}
+
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <SummaryCard label="Pendientes" value={pendientesCount} tone="amber" />
         <SummaryCard label="En proceso" value={procesoCount} tone="sky" />
@@ -291,7 +322,7 @@ export default function ModuloPendientes() {
                       <span className="text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-400">{item.tipo === 'Particular' ? 'Servicio particular' : 'Pendiente'}</span>
                       {isOverdue && <span className="rounded-md bg-rose-500 px-1.5 py-0.5 text-[8px] font-black text-white">VENCIDO</span>}
                     </div>
-                    <h2 className={`truncate text-sm font-extrabold text-slate-900 ${isDone ? 'line-through text-slate-400' : ''}`}>{item.titulo}</h2>
+                    <h2 className={`${item.tipo === 'Particular' ? 'break-words' : 'truncate'} text-sm font-extrabold text-slate-900 ${isDone ? 'line-through text-slate-400' : ''}`}>{item.titulo}</h2>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
                     <button onClick={() => abrirEditar(item)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-400 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-600" title="Editar"><Pencil size={13} /></button>
@@ -323,7 +354,7 @@ export default function ModuloPendientes() {
                           <span className="font-mono font-bold text-slate-700">{item.orden || '-'}</span>
                         </div>
                         <div className="flex gap-1.5">
-                          <span className="text-slate-400 shrink-0 w-16 font-semibold">CORR</span>
+                          <span className="text-slate-400 shrink-0 w-16 font-semibold">REF.</span>
                           <span className="font-mono font-bold text-slate-700">{item.correlativo || '-'}</span>
                         </div>
                         <div className="flex gap-1.5 col-span-2">
@@ -344,7 +375,7 @@ export default function ModuloPendientes() {
                   
                   {item.descripcion && (
                     <div className="rounded-xl bg-sky-50 px-3 py-2.5 text-[11px] text-slate-600 ring-1 ring-inset ring-sky-100">
-                      <span className="font-medium leading-relaxed">{item.descripcion}</span>
+                      <span className={`font-medium leading-relaxed ${item.tipo === 'Particular' ? 'whitespace-pre-line break-words' : ''}`}>{item.descripcion}</span>
                     </div>
                   )}
                   
@@ -405,7 +436,7 @@ export default function ModuloPendientes() {
               {form.tipo === 'Particular' && (
                 <div className="grid grid-cols-2 gap-3 bg-sky-50 p-4 rounded-lg border border-sky-100">
                   <div><label className="block text-[10px] font-semibold text-sky-800 mb-0.5">Orden N°</label><input type="text" value={form.orden || ''} onChange={e => setForm(p => ({ ...p, orden: e.target.value }))} className="w-full border border-sky-200 rounded-md px-2.5 py-1.5 text-xs outline-none font-semibold bg-white" /></div>
-                  <div><label className="block text-[10px] font-semibold text-sky-800 mb-0.5">Correlativo</label><input type="text" value={form.correlativo || ''} onChange={e => setForm(p => ({ ...p, correlativo: e.target.value }))} className="w-full border border-sky-200 rounded-md px-2.5 py-1.5 text-xs outline-none font-semibold bg-white" /></div>
+                  <div><label className="block text-[10px] font-semibold text-sky-800 mb-0.5">N° Referencia / Correlativo</label><input type="text" value={form.correlativo || ''} onChange={e => setForm(p => ({ ...p, correlativo: e.target.value }))} placeholder="Ej.: P1-7682" className="w-full border border-sky-200 rounded-md px-2.5 py-1.5 text-xs outline-none font-semibold bg-white" /></div>
                   <div className="col-span-2"><label className="block text-[10px] font-semibold text-sky-800 mb-0.5">Negocio / Empresa</label><input type="text" value={form.negocio || ''} onChange={e => setForm(p => ({ ...p, negocio: e.target.value }))} className="w-full border border-sky-200 rounded-md px-2.5 py-1.5 text-xs outline-none font-semibold bg-white" /></div>
                   <div><label className="block text-[10px] font-semibold text-sky-800 mb-0.5">NIT</label><input type="text" value={form.nit || ''} onChange={e => setForm(p => ({ ...p, nit: e.target.value }))} className="w-full border border-sky-200 rounded-md px-2.5 py-1.5 text-xs outline-none font-semibold bg-white" /></div>
                   <div className="col-span-2"><label className="block text-[10px] font-semibold text-sky-800 mb-0.5">Dirección</label><input type="text" value={form.direccion || ''} onChange={e => setForm(p => ({ ...p, direccion: e.target.value }))} className="w-full border border-sky-200 rounded-md px-2.5 py-1.5 text-xs outline-none font-semibold bg-white" /></div>
@@ -484,8 +515,8 @@ export default function ModuloPendientes() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Fecha</label>
-                  <input type="date" value={form.fecha} onChange={e => setForm(p => ({ ...p, fecha: e.target.value }))} className="control-field" />
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">{form.tipo === 'Particular' ? 'Fecha de seguimiento (opcional)' : 'Fecha'}</label>
+                  <input type="date" value={form.fecha || ''} onChange={e => setForm(p => ({ ...p, fecha: form.tipo === 'Particular' ? e.target.value || null : e.target.value }))} className="control-field" />
                 </div>
                 <div>
                   <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Estado</label>

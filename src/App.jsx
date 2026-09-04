@@ -9,6 +9,7 @@ import Vacaciones from './components/Vacaciones'
 import Notificaciones from './components/Notificaciones'
 import { obtenerControlAlertas } from './utils/alertas'
 import useHistorialSeries from './hooks/useHistorialSeries'
+import useImportacionParticulares from './hooks/useImportacionParticulares'
 import garantiasUrl from './Garantias.xlsx?url'
 import { Wrench, ClipboardList, BarChart3, Cloud, CloudOff, Loader2, LayoutDashboard, CalendarDays, Moon, Sun } from 'lucide-react'
 
@@ -87,6 +88,7 @@ export default function App() {
   const [clientesGarantia, setClientesGarantia] = useState([])
   const [estadoCatalogoGarantias, setEstadoCatalogoGarantias] = useState('cargando')
   const historialSeries = useHistorialSeries(allTickets)
+  const importacionParticulares = useImportacionParticulares()
   const controlAlertas = useMemo(
     () => obtenerControlAlertas(allTickets, clientesGarantia, historialSeries.historial),
     [allTickets, clientesGarantia, diaAlertas, historialSeries.historial]
@@ -375,7 +377,10 @@ export default function App() {
             nombreArchivo={nombreArchivo}
             fechaSubidaExcel={fechaSubidaExcel}
             onNavigate={setTab}
-            clientesGarantia={clientesGarantia}
+            controlAlertas={controlAlertas}
+            estadoCatalogoGarantias={estadoCatalogoGarantias}
+            estadoHistorial={historialSeries.estado}
+            onVerAlertas={verAlertas}
           />
         </div>
         <div className={tab === 'tecnicos' ? 'block fade-in' : 'hidden'}>
@@ -396,6 +401,7 @@ export default function App() {
             controlAlertas={controlAlertas}
             solicitudAlerta={solicitudAlerta}
             historialSeries={historialSeries}
+            importacionParticulares={importacionParticulares}
           />
         </div>
         <div className={tab === 'tablas' ? 'block fade-in' : 'hidden'}>
@@ -408,7 +414,7 @@ export default function App() {
           />
         </div>
         <div className={tab === 'pendientes' ? 'block fade-in' : 'hidden'}>
-          <ModuloPendientes />
+          <ModuloPendientes importacionParticulares={importacionParticulares} />
         </div>
         <div className={tab === 'vacaciones' ? 'block fade-in' : 'hidden'}>
           {vacacionesMontado && <Vacaciones />}
