@@ -11,7 +11,7 @@ import { obtenerControlAlertas } from './utils/alertas'
 import useHistorialSeries from './hooks/useHistorialSeries'
 import useImportacionParticulares from './hooks/useImportacionParticulares'
 import garantiasUrl from './Garantias.xlsx?url'
-import { Wrench, ClipboardList, BarChart3, Cloud, CloudOff, Loader2, LayoutDashboard, CalendarDays, Menu, Moon, Sun, X } from 'lucide-react'
+import { Wrench, ClipboardList, BarChart3, Cloud, CloudOff, Loader2, LayoutDashboard, CalendarDays, Menu, Moon, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Sun, X } from 'lucide-react'
 
 function normalizarTexto(texto) {
   if (!texto) return ''
@@ -31,7 +31,8 @@ function esEstadoActivoRuta(ticket) {
 export default function App() {
   const [tab, setTab] = useState('dashboard')
   const [menuMovilAbierto, setMenuMovilAbierto] = useState(false)
-  const [esVistaMovil, setEsVistaMovil] = useState(() => window.matchMedia('(max-width: 767px)').matches)
+  const [esVistaMovil, setEsVistaMovil] = useState(() => window.matchMedia('(max-width: 1023px)').matches)
+  const [barraLateralOculta, setBarraLateralOculta] = useState(() => localStorage.getItem('ticketmanager_sidebar_hidden') === 'true')
   const [syncStatus, setSyncStatus] = useState('cargando')
   const [solicitudAlerta, setSolicitudAlerta] = useState(null)
   const [diaAlertas, setDiaAlertas] = useState(() => new Date().toDateString())
@@ -308,7 +309,7 @@ export default function App() {
   const botonCerrarMenuRef = useRef(null)
 
   useEffect(() => {
-    const media = window.matchMedia('(max-width: 767px)')
+    const media = window.matchMedia('(max-width: 1023px)')
     const actualizarVista = (event) => {
       setEsVistaMovil(event.matches)
       if (!event.matches) setMenuMovilAbierto(false)
@@ -316,6 +317,10 @@ export default function App() {
     media.addEventListener('change', actualizarVista)
     return () => media.removeEventListener('change', actualizarVista)
   }, [])
+
+  useEffect(() => {
+    localStorage.setItem('ticketmanager_sidebar_hidden', String(barraLateralOculta))
+  }, [barraLateralOculta])
 
   useEffect(() => {
     if (!menuMovilAbierto) return undefined
@@ -340,9 +345,22 @@ export default function App() {
     setMenuMovilAbierto(false)
   }
 
+  const menuExpandido = esVistaMovil ? menuMovilAbierto : !barraLateralOculta
+  const etiquetaBotonMenu = esVistaMovil
+    ? (menuMovilAbierto ? 'Cerrar menú' : 'Abrir menú')
+    : (barraLateralOculta ? 'Mostrar panel lateral' : 'Ocultar panel lateral')
+
+  const alternarMenu = () => {
+    if (esVistaMovil) {
+      setMenuMovilAbierto(actual => !actual)
+      return
+    }
+    setBarraLateralOculta(actual => !actual)
+  }
+
   return (
     <div className="app-shell min-h-screen font-sans">
-      <div className="app-layout">
+      <div className={`app-layout ${barraLateralOculta ? 'is-sidebar-hidden' : ''}`}>
         {menuMovilAbierto && (
           <button
             type="button"
@@ -354,17 +372,17 @@ export default function App() {
 
         <aside
           id="menu-principal"
-          className={`app-sidebar ${menuMovilAbierto ? 'is-open' : ''}`}
+          className={`app-sidebar ${menuMovilAbierto ? 'is-open' : ''} ${barraLateralOculta ? 'is-desktop-hidden' : ''}`}
           aria-label="Navegación principal"
-          aria-hidden={esVistaMovil && !menuMovilAbierto ? true : undefined}
-          inert={esVistaMovil && !menuMovilAbierto ? '' : undefined}
+          aria-hidden={(esVistaMovil && !menuMovilAbierto) || (!esVistaMovil && barraLateralOculta) ? true : undefined}
+          inert={(esVistaMovil && !menuMovilAbierto) || (!esVistaMovil && barraLateralOculta) ? '' : undefined}
         >
           <div className="app-sidebar-brand">
             <div className="app-brand-mark" aria-hidden="true">
               <Wrench size={18} strokeWidth={2.5} />
             </div>
             <div className="app-brand-copy">
-              <p>TicketManager <span>Pro</span></p>
+              <p>TicketManager</p>
               <small>Control de operación</small>
             </div>
             <button ref={botonCerrarMenuRef} type="button" className="app-sidebar-close" aria-label="Cerrar menú" onClick={() => setMenuMovilAbierto(false)}>
@@ -395,19 +413,24 @@ export default function App() {
           </nav>
         </aside>
 
-        <section className="app-workspace">
+        <section className="app-workspace" inert={menuMovilAbierto ? '' : undefined}>
           <header className="app-topbar">
             <div className="app-topbar-title">
               <button
                 ref={botonMenuRef}
                 type="button"
                 className="app-menu-button"
-                aria-label="Abrir menú"
+                aria-label={etiquetaBotonMenu}
+                title={etiquetaBotonMenu}
                 aria-controls="menu-principal"
-                aria-expanded={menuMovilAbierto}
-                onClick={() => setMenuMovilAbierto(true)}
+                aria-expanded={menuExpandido}
+                onClick={alternarMenu}
               >
-                <Menu size={21} />
+                {esVistaMovil
+                  ? <Menu size={21} />
+                  : barraLateralOculta
+                    ? <PanelLeftOpen size={20} />
+                    : <PanelLeftClose size={20} />}
               </button>
               <div>
                 <span>Vista actual</span>
@@ -417,6 +440,11 @@ export default function App() {
 
             <div className="app-topbar-actions">
             <Notificaciones control={controlAlertas} estadoCatalogo={estadoCatalogoGarantias} estadoHistorial={historialSeries.estado} onVerAlertas={verAlertas} />
+            <details className="app-options" open={!esVistaMovil || undefined}
+              onBlur={event => { if (esVistaMovil && event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false }}
+              onKeyDown={event => { if (esVistaMovil && event.key === 'Escape') { event.currentTarget.open = false; event.currentTarget.querySelector('summary')?.focus() } }}>
+              <summary className="app-topbar-icon-button" aria-label="Opciones de apariencia y sincronización" title="Más opciones"><MoreHorizontal size={21} /></summary>
+              <div className="app-options-content">
             <button
               type="button"
               onClick={() => setTema(actual => actual === 'oscuro' ? 'claro' : 'oscuro')}
@@ -425,6 +453,7 @@ export default function App() {
               aria-label={tema === 'oscuro' ? 'Usar modo claro' : 'Usar modo oscuro'}
             >
               {tema === 'oscuro' ? <Sun size={17} /> : <Moon size={17} />}
+              <span className="theme-label">{tema === 'oscuro' ? 'Modo claro' : 'Modo oscuro'}</span>
             </button>
 
             <button
@@ -444,6 +473,8 @@ export default function App() {
                 {syncStatus === 'sincronizado' ? 'Al día' : syncStatus === 'error' ? 'Sin conexión' : 'Sincronizando'}
               </span>
             </button>
+              </div>
+            </details>
           </div>
           </header>
 

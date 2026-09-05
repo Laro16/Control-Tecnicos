@@ -46,13 +46,13 @@ export default function HistorialSeries({ datos, reincidencias, solicitudAlerta 
     <section ref={seccionRef} id="alertas-reincidencias" tabIndex={-1} className="alert-anchor card-section">
       <button type="button" onClick={() => setAbierto(v => !v)} aria-expanded={abierto} className="flex w-full flex-wrap items-center justify-between gap-2 bg-slate-50 px-4 py-3 text-left">
         <span className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wide text-slate-700"><History size={16} /> Historial de series</span>
-        <span className="flex items-center gap-2 text-[10px] font-bold text-slate-500">
+        <span className="flex flex-wrap items-center gap-2 text-[10px] font-bold text-slate-500">
           {grupos.length} series · {historial.length} atenciones
           {reincidencias.length > 0 && <span className="rounded bg-sky-100 px-2 py-1 text-sky-800">{reincidencias.length} posibles reincidencias</span>}
           <ChevronDown size={14} className={abierto ? 'rotate-180' : ''} />
         </span>
       </button>
-      <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-4 py-2">
+      <div className="history-status flex items-center justify-between gap-3 border-t border-slate-200 px-4 py-2">
         <p role="status" className={`text-[10px] font-semibold leading-relaxed ${aviso ? 'text-amber-700' : 'text-emerald-700'}`}>
           {aviso || 'Historial guardado en Supabase. Las cargas siguientes no reemplazan las atenciones anteriores.'}
         </p>

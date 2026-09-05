@@ -504,7 +504,7 @@ export default function ModuloTecnicos({
       margin: { left: 14, right: 14 },
       didDrawPage: (data) => {
         doc.setFontSize(7).setTextColor(150)
-        doc.text(`TicketManager Pro — ${tecnico}`, 14, doc.internal.pageSize.height - 8)
+        doc.text(`TicketManager — ${tecnico}`, 14, doc.internal.pageSize.height - 8)
         doc.text(`Pág. ${doc.internal.getCurrentPageInfo().pageNumber}`, doc.internal.pageSize.width - 25, doc.internal.pageSize.height - 8)
       }
     })
@@ -597,7 +597,7 @@ export default function ModuloTecnicos({
 
       {/* ── Upload zone ── */}
       <div
-        className={`card group flex cursor-pointer items-center gap-4 border-2 border-dashed px-4 py-4 transition-all ${dragging ? 'border-sky-400 bg-sky-50' : 'border-slate-200 hover:border-sky-300 hover:bg-sky-50/40'}`}
+        className={`upload-zone card group flex cursor-pointer items-center gap-4 border-2 border-dashed px-4 py-4 transition-all ${dragging ? 'border-sky-400 bg-sky-50' : 'border-slate-200 hover:border-sky-300 hover:bg-sky-50/40'}`}
         onClick={() => fileRef.current.click()}
         onDragOver={e => { e.preventDefault(); setDragging(true) }}
         onDragLeave={() => setDragging(false)}
@@ -887,7 +887,7 @@ export default function ModuloTecnicos({
                 <div key={tecnico} className="card-section fade-in transition hover:border-sky-200">
                   {/* Header del técnico */}
                   <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 via-white to-sky-50/40 px-4 py-3.5">
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="technician-heading flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2.5">
                         <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-900 text-white shadow-sm"><Users size={15} /></span>
                         <div>
@@ -958,7 +958,7 @@ export default function ModuloTecnicos({
 
                             {/* Datos del ticket - grid estructurado */}
                             <div className="mx-3 mb-3 bg-slate-50 rounded-md p-2.5 space-y-1">
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
+                              <div className="record-fields text-[11px]">
                                 <div className="flex gap-1.5">
                                   <span className="text-slate-400 shrink-0 w-12 font-semibold">DIR</span>
                                   <span className="text-slate-700 font-medium">{t['DIRECCIÓN'] || '-'}</span>

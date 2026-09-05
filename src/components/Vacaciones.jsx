@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import Dialogo from './Dialogo';
 import { supabase } from '../supabase';
 import {
   CalendarDays, Plus, Trash2, Users, Download, X, Pencil,
@@ -407,7 +408,7 @@ export default function Vacaciones() {
       </section>
 
       {!!empleados.length && (
-        <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <section className="summary-grid">
           <VacationStat value={empleados.length} label="Personas" tone="sky" />
           <VacationStat value={goces.length} label="Períodos registrados" tone="slate" />
           <VacationStat value={goces.reduce((s, g) => s + (g.dias_habiles || 0), 0)} label="Días históricos" tone="emerald" />
@@ -457,7 +458,7 @@ export default function Vacaciones() {
           {pestana === 'registro' ? (
             <>
               {/* Filtros */}
-              <div className="card flex items-center gap-2 flex-wrap p-3">
+              <div className="vacation-filters card gap-3 p-3">
                 <div className="relative flex-1 min-w-[140px]">
                   <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
@@ -489,14 +490,14 @@ export default function Vacaciones() {
               </div>
 
               {/* Tabla de goces */}
-              <div className="card-section">
+              <div className="records-container card-section">
                 {gocesFiltrados.length === 0 ? (
                   <p className="text-[11px] text-slate-400 text-center py-8">
                     No hay registros con estos filtros.
                   </p>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-[11px] border-separate border-spacing-0">
+                    <table className="responsive-records w-full text-[11px] border-separate border-spacing-0">
                       <thead className="bg-slate-950">
                         <tr className="text-left text-[9px] uppercase tracking-[0.12em] text-slate-300">
                           <th className="border-b border-r border-slate-300 px-3 py-2.5 font-bold">Código</th>
@@ -514,24 +515,24 @@ export default function Vacaciones() {
                             key={g.id}
                             className={`transition-colors hover:bg-sky-50/70 ${i % 2 ? 'bg-slate-50/60' : 'bg-white'}`}
                           >
-                            <td className="border-b border-r border-slate-300 px-3 py-2.5 font-mono text-[10px] font-semibold text-slate-500 whitespace-nowrap">
+                            <td data-label="Código" className="border-b border-r border-slate-300 px-3 py-2.5 font-mono text-[10px] font-semibold text-slate-500 whitespace-nowrap">
                               {g.vac_empleados?.codigo || '—'}
                             </td>
-                            <td className="border-b border-r border-slate-300 px-3 py-2.5">
+                            <td data-label="Compañero" className="record-title border-b border-r border-slate-300 px-3 py-2.5">
                               <span className="font-bold text-slate-700">{g.vac_empleados?.nombre || '—'}</span>
                               {g.vac_empleados?.puesto && (
                                 <span className="block mt-0.5 text-[9px] font-medium uppercase tracking-wide text-slate-400">{g.vac_empleados.puesto}</span>
                               )}
                             </td>
-                            <td className="border-b border-r border-slate-300 px-3 py-2.5 text-slate-600 whitespace-nowrap">{mostrar(g.fecha_inicio)}</td>
-                            <td className="border-b border-r border-slate-300 px-3 py-2.5 text-slate-600 whitespace-nowrap">{mostrar(g.fecha_fin)}</td>
-                            <td className="border-b border-r border-slate-300 px-3 py-2.5 text-center">
+                            <td data-label="Desde" className="border-b border-r border-slate-300 px-3 py-2.5 text-slate-600 whitespace-nowrap">{mostrar(g.fecha_inicio)}</td>
+                            <td data-label="Hasta" className="border-b border-r border-slate-300 px-3 py-2.5 text-slate-600 whitespace-nowrap">{mostrar(g.fecha_fin)}</td>
+                            <td data-label="Días hábiles" className="border-b border-r border-slate-300 px-3 py-2.5 text-center">
                               <span className="inline-flex min-w-[30px] items-center justify-center rounded-full border border-slate-200 bg-slate-100 px-2 py-1 font-bold text-slate-700">
                                 {g.dias_habiles}
                               </span>
                             </td>
-                            <td className="border-b border-r border-slate-300 px-3 py-2.5 text-slate-500">{g.observaciones || '—'}</td>
-                            <td className="border-b border-slate-300 px-2 py-2.5 text-center">
+                            <td data-label="Observaciones" className="record-wide border-b border-r border-slate-300 px-3 py-2.5 text-slate-500">{g.observaciones || '—'}</td>
+                            <td className="record-delete border-b border-slate-300 px-2 py-2.5 text-center">
                               <button
                                 onClick={() => borrarGoce(g.id)}
                                 className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-300 transition-colors hover:bg-red-50 hover:text-red-500"
@@ -566,11 +567,11 @@ export default function Vacaciones() {
                 </span>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="person-grid">
                 {resumen.map((r) => (
                   <div
                     key={r.id}
-                    className="group overflow-hidden rounded-2xl border-[1.5px] border-slate-300 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.065)] transition-all hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-lg"
+                    className="person-card"
                   >
                     <div className="flex items-start justify-between gap-2 border-b border-slate-300 bg-gradient-to-r from-sky-50/70 to-white p-4">
                       <div className="min-w-0">
@@ -724,7 +725,7 @@ function ModalGoce({ empleados, setAsuetos, guardando, setGuardando, onCerrar, o
         </select>
       </Campo>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="form-fields gap-2">
         <Campo etiqueta="Desde">
           <input type="date" value={inicio} onChange={(e) => setInicio(e.target.value)}
             className="w-full text-xs border border-slate-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-slate-400" />
@@ -757,7 +758,7 @@ function ModalGoce({ empleados, setAsuetos, guardando, setGuardando, onCerrar, o
         />
       </Campo>
 
-      <div className="flex gap-2 pt-1">
+      <div className="form-actions flex gap-2 pt-1">
         <button onClick={onCerrar} className="flex-1 text-xs font-semibold py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">
           Cancelar
         </button>
@@ -813,7 +814,7 @@ function ModalEmpleado({ empleado, guardando, setGuardando, onCerrar, onGuardado
 
   return (
     <Marco titulo={empleado ? 'Editar compañero' : 'Agregar compañero'} onCerrar={onCerrar}>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="form-fields gap-2">
         <Campo etiqueta="Código">
           <input
             value={codigo}
@@ -831,7 +832,7 @@ function ModalEmpleado({ empleado, guardando, setGuardando, onCerrar, onGuardado
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="form-fields gap-2">
         <Campo etiqueta="Puesto">
           <input value={puesto} onChange={(e) => setPuesto(e.target.value)} placeholder="Ej. Técnico"
             className="w-full text-xs border border-slate-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-slate-400" />
@@ -855,7 +856,7 @@ function ModalEmpleado({ empleado, guardando, setGuardando, onCerrar, onGuardado
         </div>
       </Campo>
 
-      <div className="flex gap-2 pt-1">
+      <div className="form-actions flex gap-2 pt-1">
         <button onClick={onCerrar} className="flex-1 text-xs font-semibold py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">
           Cancelar
         </button>
@@ -875,25 +876,15 @@ function ModalEmpleado({ empleado, guardando, setGuardando, onCerrar, onGuardado
 /* ------------------------- piezas compartidas --------------------- */
 function Marco({ titulo, onCerrar, children }) {
   return (
-    <div
-      className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-[2px] overflow-y-auto overscroll-contain"
-      onClick={onCerrar}
-    >
-      {/* min-h-full + items-center: centrado cuando cabe, y cuando no cabe el
-          overlay entero hace scroll sin que se coma el encabezado. */}
-      <div className="flex min-h-full items-center justify-center p-4">
-        <div
-          className="bg-white rounded-xl shadow-xl w-full max-w-md"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100">
+    <Dialogo titulo={titulo} onCerrar={onCerrar} cerrarFuera>
+        <div className="app-dialog-panel">
+          <div className="app-dialog-header">
             <h3 className="text-xs font-bold text-slate-800">{titulo}</h3>
-            <button onClick={onCerrar} className="text-slate-400 hover:text-slate-600"><X size={15} /></button>
+            <button aria-label="Cerrar formulario" onClick={onCerrar} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
           </div>
-          <div className="p-4 space-y-2.5">{children}</div>
+          <div className="app-dialog-body space-y-4">{children}</div>
         </div>
-      </div>
-    </div>
+    </Dialogo>
   );
 }
 

@@ -115,7 +115,7 @@ export function dibujarPaginaAvance(canvas, pagina, { periodo, generado }) {
   ctx.font = 'bold 11px Arial'
   ctx.fillText(`Total del período: ${pagina.totalGeneral} finalizados`, margen, y + 62)
   ctx.font = '10px Arial'
-  ctx.fillText(pagina.cantidad > 1 ? 'Informe dividido en páginas para mantener la lectura.' : 'TicketManager Pro · Control de productividad', margen, y + 82)
+  ctx.fillText(pagina.cantidad > 1 ? 'Informe dividido en páginas para mantener la lectura.' : 'TicketManager · Control de productividad', margen, y + 82)
   return canvas
 }
 

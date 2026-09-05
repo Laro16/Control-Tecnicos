@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react'
+import Dialogo from './Dialogo'
 import { Calendar, BarChart2, Copy, X, Download, Loader2 } from 'lucide-react'
 import { filtrarCierresAvance, prepararPaginasAvance, descargarAvanceImagen } from '../utils/avanceImagen'
 
@@ -173,11 +174,13 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
 
   // Helper: celda clickeable del envejecimiento
   const EnvCell = ({ data, tec, label, colorText, colorBg, colorHover }) => (
-    <td
-      onClick={() => { if (data.count > 0) setModalDetalles({ tec, fecha: label, detalles: data.detalles }) }}
+    <td data-label={label === 'Todos' ? 'Total' : label}
       className={`px-3 py-2 text-center text-xs font-black whitespace-nowrap border-r-2 border-r-black ${colorText} ${colorBg} ${data.count > 0 ? `${colorHover} cursor-pointer` : ''}`}
     >
-      {data.count === 0 ? '-' : data.count}
+      <button type="button" disabled={data.count === 0} aria-label={`${tec}: ${data.count} tickets, ${label}`}
+        onClick={() => { if (data.count > 0) setModalDetalles({ tec, fecha: label, detalles: data.detalles }) }}>
+        {data.count === 0 ? '-' : data.count}
+      </button>
     </td>
   )
 
@@ -193,21 +196,21 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
 
       {/* Modal de detalles */}
       {modalDetalles && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-12 overflow-y-auto" onClick={() => setModalDetalles(null)}>
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden slide-up" onClick={e => e.stopPropagation()}>
-            <div className="bg-slate-800 px-4 py-2.5 flex justify-between items-center">
-              <h3 className="text-white font-bold text-xs uppercase tracking-wider">
+        <Dialogo titulo={`Detalle de tickets de ${modalDetalles.tec}`} onCerrar={() => setModalDetalles(null)} cerrarFuera>
+          <div className="app-dialog-panel">
+            <div className="app-dialog-header">
+              <h3 className="font-bold">
                 {modalDetalles.tec} <span className="text-slate-400 font-normal">· {modalDetalles.fecha}</span>
                 <span className="text-sky-400 font-normal ml-2">({modalDetalles.detalles.length})</span>
               </h3>
-              <button onClick={() => setModalDetalles(null)} className="text-slate-400 hover:text-white transition p-1 rounded-md hover:bg-slate-700"><X size={14}/></button>
+              <button aria-label="Cerrar detalles" onClick={() => setModalDetalles(null)} className="text-slate-400 transition p-1 rounded-md"><X size={20}/></button>
             </div>
-            <div className="p-2.5 max-h-[75vh] overflow-y-auto space-y-1.5 bg-slate-50">
+            <div className="app-dialog-body space-y-3 bg-slate-50">
               {modalDetalles.detalles.map((det, idx) => {
-                const dirCorta = det.direccion.length > 75 ? det.direccion.substring(0, 75) + '...' : det.direccion
+                const dirCorta = det.direccion
                 return (
                   <div key={idx} className="bg-white border border-slate-100 px-3 py-2 rounded-lg space-y-0.5 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       {det.referencia && det.referencia !== '-' && (
                         <span className="font-mono text-[10px] font-bold text-sky-600 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-100">#{det.referencia}</span>
                       )}
@@ -225,12 +228,12 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
               })}
             </div>
           </div>
-        </div>
+        </Dialogo>
       )}
 
       {/* ── Controles de fecha ── */}
       <div className="card overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-2 bg-slate-800">
+        <div className="date-presets flex items-center justify-between px-4 py-2 bg-slate-800">
           <div className="text-[10px] font-bold text-white uppercase tracking-wider flex items-center gap-2">
             <Calendar size={12} /> Rango de Cierre — Finalizadas
           </div>
@@ -247,10 +250,9 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
             <button onClick={() => { setFechaInicio(''); setFechaFin('') }} className="text-[9px] font-semibold text-slate-400 hover:text-white px-2 py-0.5 rounded hover:bg-slate-700 transition">Todo</button>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 bg-white">
-          <input type="date" value={fechaInicio} onChange={e => setFechaInicio(e.target.value)} className="min-w-0 border border-slate-300 rounded-md px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-slate-50 outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-100 transition" />
-          <span className="text-slate-300 font-bold text-xs">→</span>
-          <input type="date" value={fechaFin} onChange={e => setFechaFin(e.target.value)} className="min-w-0 border border-slate-300 rounded-md px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-slate-50 outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-100 transition" />
+        <div className="date-inputs flex flex-wrap items-end gap-3 px-4 py-3 bg-white">
+          <label>Desde<input type="date" value={fechaInicio} onChange={e => setFechaInicio(e.target.value)} className="control-field" /></label>
+          <label>Hasta<input type="date" value={fechaFin} onChange={e => setFechaFin(e.target.value)} className="control-field" /></label>
           {(fechaInicio || fechaFin) && (
             <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
               {granTotalFinalizadas} resultado{granTotalFinalizadas !== 1 ? 's' : ''}
@@ -269,9 +271,9 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
               <span className="text-slate-400 font-normal ml-1">({granTotalFinalizadas})</span>
             </div>
           </div>
-          <div className="overflow-x-auto bg-white">
+          <div className="table-scroll bg-white" role="region" aria-label="Productividad por fecha; desplaza para ver más días" tabIndex={0}>
             <table
-              className={`${productividadCompacta ? 'w-[520px]' : 'w-full'} border-collapse`}
+              className={`productivity-table ${productividadCompacta ? 'productivity-table--day w-[520px]' : 'w-full'} border-collapse`}
               style={{ tableLayout: columnasFechas.length <= 3 ? 'fixed' : 'auto' }}
             >
               {columnasFechas.length <= 3 && (
@@ -297,9 +299,8 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
                       const colorNum = d.count === 0 ? 'text-slate-300' : d.count <= 3 ? 'text-rose-600' : d.count === 4 ? 'text-amber-500' : 'text-emerald-600'
                       return (
                         <td key={f}
-                          onClick={() => { if (d.count > 0) setModalDetalles({ tec, fecha: f, detalles: d.detalles }) }}
                           className={`px-3 py-2 text-center text-xs font-black border-r-2 border-r-black whitespace-nowrap ${colorNum} ${d.count > 0 ? 'hover:bg-sky-100 cursor-pointer' : ''}`}
-                        >{d.count === 0 ? '-' : d.count}</td>
+                        ><button type="button" disabled={d.count === 0} aria-label={`${tec}: ${d.count} finalizadas el ${f}`} onClick={() => { if (d.count > 0) setModalDetalles({ tec, fecha: f, detalles: d.detalles }) }}>{d.count === 0 ? '-' : d.count}</button></td>
                       )
                     })}
                     <td className={`px-3 py-2 text-center text-xs font-black bg-slate-100/60 whitespace-nowrap ${matrizFinalizadas[tec].totales <= 3 ? 'text-rose-600' : matrizFinalizadas[tec].totales === 4 ? 'text-amber-500' : 'text-emerald-600'}`}>{matrizFinalizadas[tec].totales}</td>
@@ -329,7 +330,7 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
 
       {/* ── TABLA 2: RUTAS DE TÉCNICOS ── */}
       <div>
-        <div ref={tablaEnvejecimientoRef} className="card-section">
+        <div ref={tablaEnvejecimientoRef} className="records-container card-section">
           <div className="px-4 py-2.5 bg-slate-800">
             <div className="text-[11px] font-bold text-white uppercase tracking-wider flex items-center gap-2">
               <div className="w-1.5 h-1.5 rounded-full bg-amber-400"></div>
@@ -338,7 +339,7 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
             </div>
           </div>
           <div className="overflow-x-auto bg-white">
-            <table className="w-full border-collapse min-w-[700px]">
+            <table className="route-table responsive-records w-full border-collapse min-w-[700px]">
               <thead>
                 <tr className="text-white text-[10px] font-bold uppercase tracking-wider">
                   <th className="px-3 py-2.5 text-left bg-slate-700 border-r border-slate-600 w-40">Técnico</th>
@@ -355,9 +356,10 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
                   const vr = valorRutaTecnico(tec)
                   return (
                     <tr key={tec} className={`border-b-[3px] border-black ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/80'} hover:bg-slate-100/60 transition-colors`}>
-                      <td className="px-3 py-2 text-[11px] uppercase font-black text-slate-800 border-r-2 border-r-black whitespace-nowrap">{tec}</td>
-                      <td className="p-0 align-top border-r-2 border-r-black">
+                      <td data-label="Técnico" className="record-title px-3 py-2 text-[11px] uppercase font-black text-slate-800 border-r-2 border-r-black whitespace-nowrap">{tec}</td>
+                      <td data-label="Ruta de trabajo" className="record-wide p-0 align-top border-r-2 border-r-black">
                         <textarea
+                          aria-label={`Ruta de ${tec}`}
                           rows="2"
                           value={vr}
                           onChange={e => handleRutaChange(tec, e.target.value)}
@@ -377,11 +379,11 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
               <tfoot>
                 <tr className="bg-slate-800 text-white text-[11px] font-black">
                   <td className="px-3 py-2.5 uppercase text-right border-r border-slate-700" colSpan="2">Total Operativo</td>
-                  <td className="px-3 py-2.5 text-center text-emerald-400 font-black border-r border-slate-700">{totalesEnv.menos24}</td>
-                  <td className="px-3 py-2.5 text-center text-amber-400 font-black border-r border-slate-700">{totalesEnv.mas24}</td>
-                  <td className="px-3 py-2.5 text-center text-red-400 font-black border-r border-slate-700">{totalesEnv.mas72}</td>
-                  <td className="px-3 py-2.5 text-center text-red-300 font-black border-r border-slate-700">{totalesEnv.mas100}</td>
-                  <td className="px-3 py-2.5 text-center text-white font-black text-sm">{totalesEnv.total}</td>
+                  <td data-label="-24h" className="px-3 py-2.5 text-center text-emerald-400 font-black border-r border-slate-700">{totalesEnv.menos24}</td>
+                  <td data-label="+24h" className="px-3 py-2.5 text-center text-amber-400 font-black border-r border-slate-700">{totalesEnv.mas24}</td>
+                  <td data-label="+72h" className="px-3 py-2.5 text-center text-red-400 font-black border-r border-slate-700">{totalesEnv.mas72}</td>
+                  <td data-label="+100h" className="px-3 py-2.5 text-center text-red-300 font-black border-r border-slate-700">{totalesEnv.mas100}</td>
+                  <td data-label="Total" className="px-3 py-2.5 text-center text-white font-black text-sm">{totalesEnv.total}</td>
                 </tr>
               </tfoot>
             </table>

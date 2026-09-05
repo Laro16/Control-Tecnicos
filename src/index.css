@@ -85,13 +85,16 @@
   display: grid;
   grid-template-columns: 16.5rem minmax(0, 1fr);
   min-height: 100dvh;
+  transition: grid-template-columns 220ms ease;
 }
+.app-layout.is-sidebar-hidden { grid-template-columns: 0 minmax(0, 1fr); }
 
 .app-sidebar {
   position: sticky;
   top: 0;
   z-index: 45;
   display: flex;
+  width: 16.5rem;
   height: 100dvh;
   min-width: 0;
   flex-direction: column;
@@ -102,6 +105,7 @@
     #07101f;
   color: #e2e8f0;
   box-shadow: 12px 0 34px rgba(15, 23, 42, 0.10);
+  transition: transform 220ms ease, opacity 180ms ease;
 }
 
 .app-sidebar-brand {
@@ -134,7 +138,6 @@
   line-height: 1.15;
   letter-spacing: -0.025em;
 }
-.app-brand-copy p span { color: #38bdf8; }
 .app-brand-copy small {
   display: block;
   margin-top: 0.25rem;
@@ -286,7 +289,7 @@
   color: #334155;
   transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
 }
-.app-menu-button { display: none; }
+.app-menu-button { display: grid; }
 .app-topbar-icon-button:hover,
 .app-menu-button:hover { border-color: #94a3b8; background: #f1f5f9; color: #0f172a; }
 .app-topbar-actions {
@@ -666,8 +669,9 @@ textarea::-webkit-scrollbar {
   .btn-primary, .btn-ghost, .btn-danger, .btn-success, .pill { display: none !important; }
 }
 
-@media (max-width: 767px) {
-  .app-layout { display: block; }
+@media (max-width: 1023px) {
+  .app-layout,
+  .app-layout.is-sidebar-hidden { display: block; }
   .app-sidebar {
     position: fixed;
     left: 0;
@@ -701,7 +705,6 @@ textarea::-webkit-scrollbar {
     transition: opacity 220ms ease;
   }
   .app-sidebar-backdrop.is-visible { pointer-events: auto; opacity: 1; }
-  .app-menu-button { display: grid; }
   .app-topbar {
     min-height: 4.25rem;
     padding: 0.65rem 0.75rem;
@@ -725,6 +728,15 @@ textarea::-webkit-scrollbar {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .app-layout,
   .app-sidebar,
   .app-sidebar-nav button { transition: none; }
+}
+
+@media (min-width: 1024px) {
+  .app-sidebar.is-desktop-hidden {
+    transform: translateX(-100%);
+    opacity: 0;
+    pointer-events: none;
+  }
 }

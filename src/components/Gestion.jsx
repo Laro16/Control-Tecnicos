@@ -3,6 +3,7 @@ import JSZip from 'jszip'
 import { supabase } from '../supabase.jsx'
 import { claveReferenciaParticular, idParticularReferencia, leerParticularesExistentes } from '../utils/particulares.js'
 import EstadoParticulares from './EstadoParticulares'
+import Dialogo from './Dialogo'
 import {
   Plus, Pencil, Trash2, CheckCircle, X, ClipboardList, RotateCcw, 
   Paperclip, DownloadCloud, Download, CalendarClock, Briefcase,
@@ -278,7 +279,7 @@ export default function ModuloPendientes({ importacionParticulares }) {
         <EstadoParticulares importacion={importacionParticulares} />
       </>}
 
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <section className="summary-grid">
         <SummaryCard label="Pendientes" value={pendientesCount} tone="amber" />
         <SummaryCard label="En proceso" value={procesoCount} tone="sky" />
         <SummaryCard label="Completados" value={completadosCount} tone="emerald" />
@@ -307,7 +308,7 @@ export default function ModuloPendientes({ importacionParticulares }) {
       ) : filtrados.length === 0 ? (
         <div className="text-center py-16 text-slate-400 card"><ClipboardList size={40} className="mx-auto mb-3 text-slate-300" /><p className="text-sm font-semibold text-slate-500">No hay registros</p></div>
       ) : (
-        <div className="grid items-start gap-4 xl:grid-cols-2">
+        <div className="operation-grid">
           {filtrados.map(item => {
             const isDone = item.estado === 'Realizado' || item.estado === 'Completada' || item.estado === 'Pagado'
             const isCancelled = item.estado === 'Cancelado'
@@ -315,8 +316,8 @@ export default function ModuloPendientes({ importacionParticulares }) {
             const isOverdue = item.fecha && item.fecha < obtenerFechaHoy() && !isDone && !isCancelled
             const accent = isOverdue ? 'border-t-rose-500' : isPending ? 'border-t-amber-400' : item.estado.toLowerCase().includes('proceso') ? 'border-t-sky-500' : 'border-t-emerald-500'
             return (
-              <article key={item.id} className={`card-section border-t-4 ${accent} transition-all hover:-translate-y-0.5 hover:shadow-lg ${isDone || isCancelled ? 'opacity-60' : ''}`}>
-                <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-4 py-3.5">
+              <article key={item.id} className={`operation-record card-section border-t-4 ${accent} transition-all ${isDone || isCancelled ? 'opacity-60' : ''}`}>
+                <div className="record-heading flex items-start justify-between gap-3 border-b border-slate-100 px-4 py-3.5">
                   <div className="min-w-0 flex-1">
                     <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
                       <span className="text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-400">{item.tipo === 'Particular' ? 'Servicio particular' : 'Pendiente'}</span>
@@ -333,7 +334,7 @@ export default function ModuloPendientes({ importacionParticulares }) {
                 </div>
 
                 <div className="space-y-3 p-4">
-                  <div className="flex items-center justify-between flex-wrap gap-1.5">
+                  <div className="record-status flex items-center justify-between flex-wrap gap-1.5">
                     <div className="flex items-center gap-1.5">
                       <button onClick={() => cambiarEstado(item.id, item.estado, item.tipo)} title="Cambiar al siguiente estado" className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-extrabold transition hover:shadow-sm ${estBadge(item.estado)}`}>{item.estado}<ArrowUpRight size={10} /></button>
                       <span className={`rounded-lg border px-2.5 py-1.5 text-[10px] font-extrabold ${prioBadge(item.prioridad)}`}>{item.prioridad}</span>
@@ -348,7 +349,7 @@ export default function ModuloPendientes({ importacionParticulares }) {
                   {/* Datos Particular */}
                   {item.tipo === 'Particular' && (
                     <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 space-y-1">
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
+                      <div className="record-fields text-[11px]">
                         <div className="flex gap-1.5">
                           <span className="text-slate-400 shrink-0 w-16 font-semibold">ORDEN</span>
                           <span className="font-mono font-bold text-slate-700">{item.orden || '-'}</span>
@@ -415,17 +416,17 @@ export default function ModuloPendientes({ importacionParticulares }) {
 
       {/* ── Modal ── */}
       {modal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl slide-up max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-5 py-4 sticky top-0 bg-slate-950 z-10 rounded-t-2xl">
+        <Dialogo titulo={`${editId ? 'Editar' : 'Nuevo'} ${form.tipo === 'Particular' ? 'servicio particular' : 'pendiente'}`} onCerrar={() => { if (!subiendoFiles) setModal(false) }}>
+          <div className="app-dialog-panel">
+            <div className="app-dialog-header">
               <div>
                 <p className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-sky-400">Gestión</p>
                 <h3 className="mt-1 font-extrabold text-white text-sm">{editId ? 'Editar' : 'Nuevo'} {form.tipo === 'Particular' ? 'servicio particular' : 'pendiente'}</h3>
               </div>
-              <button onClick={() => setModal(false)} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition"><X size={15} /></button>
+              <button aria-label="Cerrar formulario" onClick={() => setModal(false)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition"><X size={20} /></button>
             </div>
             
-            <div className="px-5 py-4 space-y-4">
+            <div className="app-dialog-body space-y-4">
               {error && <p className="text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200 px-3 py-2 rounded-lg">{error}</p>}
 
               <div>
@@ -434,7 +435,7 @@ export default function ModuloPendientes({ importacionParticulares }) {
               </div>
 
               {form.tipo === 'Particular' && (
-                <div className="grid grid-cols-2 gap-3 bg-sky-50 p-4 rounded-lg border border-sky-100">
+                <div className="form-fields gap-3 bg-sky-50 p-4 rounded-lg border border-sky-100">
                   <div><label className="block text-[10px] font-semibold text-sky-800 mb-0.5">Orden N°</label><input type="text" value={form.orden || ''} onChange={e => setForm(p => ({ ...p, orden: e.target.value }))} className="w-full border border-sky-200 rounded-md px-2.5 py-1.5 text-xs outline-none font-semibold bg-white" /></div>
                   <div><label className="block text-[10px] font-semibold text-sky-800 mb-0.5">N° Referencia / Correlativo</label><input type="text" value={form.correlativo || ''} onChange={e => setForm(p => ({ ...p, correlativo: e.target.value }))} placeholder="Ej.: P1-7682" className="w-full border border-sky-200 rounded-md px-2.5 py-1.5 text-xs outline-none font-semibold bg-white" /></div>
                   <div className="col-span-2"><label className="block text-[10px] font-semibold text-sky-800 mb-0.5">Negocio / Empresa</label><input type="text" value={form.negocio || ''} onChange={e => setForm(p => ({ ...p, negocio: e.target.value }))} className="w-full border border-sky-200 rounded-md px-2.5 py-1.5 text-xs outline-none font-semibold bg-white" /></div>
@@ -513,7 +514,7 @@ export default function ModuloPendientes({ importacionParticulares }) {
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="form-fields gap-3">
                 <div>
                   <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">{form.tipo === 'Particular' ? 'Fecha de seguimiento (opcional)' : 'Fecha'}</label>
                   <input type="date" value={form.fecha || ''} onChange={e => setForm(p => ({ ...p, fecha: form.tipo === 'Particular' ? e.target.value || null : e.target.value }))} className="control-field" />
@@ -527,7 +528,7 @@ export default function ModuloPendientes({ importacionParticulares }) {
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 px-5 py-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl">
+            <div className="app-dialog-footer">
               <button onClick={() => setModal(false)} disabled={subiendoFiles} className="btn-ghost">Cancelar</button>
               <button onClick={guardar} disabled={subiendoFiles} className="btn-primary flex items-center gap-1.5">
                 {subiendoFiles ? <RotateCcw size={13} className="animate-spin" /> : <CheckCircle size={13} />} 
@@ -535,15 +536,15 @@ export default function ModuloPendientes({ importacionParticulares }) {
               </button>
             </div>
           </div>
-        </div>
+        </Dialogo>
       )}
 
       {/* Preview imagen */}
       {imgPreview && (
-        <div className="fixed inset-0 bg-black/90 z-[60] flex items-center justify-center p-4 backdrop-blur-md" onClick={() => setImgPreview(null)}>
-          <button onClick={() => setImgPreview(null)} className="absolute top-4 right-4 text-white bg-white/10 p-2 rounded-lg hover:bg-white/20 transition"><X size={20} /></button>
+        <Dialogo titulo="Vista previa del archivo" onCerrar={() => setImgPreview(null)} cerrarFuera>
+          <button aria-label="Cerrar vista previa" onClick={() => setImgPreview(null)} className="absolute top-4 right-4 text-white bg-white/10 p-2 rounded-lg hover:bg-white/20 transition"><X size={20} /></button>
           <img src={imgPreview} alt="Vista previa" className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" onClick={e => e.stopPropagation()} />
-        </div>
+        </Dialogo>
       )}
     </div>
   )
