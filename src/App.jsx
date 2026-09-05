@@ -11,7 +11,7 @@ import { obtenerControlAlertas } from './utils/alertas'
 import useHistorialSeries from './hooks/useHistorialSeries'
 import useImportacionParticulares from './hooks/useImportacionParticulares'
 import garantiasUrl from './Garantias.xlsx?url'
-import { Wrench, ClipboardList, BarChart3, Cloud, CloudOff, Loader2, LayoutDashboard, CalendarDays, Moon, Sun } from 'lucide-react'
+import { Wrench, ClipboardList, BarChart3, Cloud, CloudOff, Loader2, LayoutDashboard, CalendarDays, Menu, Moon, Sun, X } from 'lucide-react'
 
 function normalizarTexto(texto) {
   if (!texto) return ''
@@ -30,6 +30,8 @@ function esEstadoActivoRuta(ticket) {
 
 export default function App() {
   const [tab, setTab] = useState('dashboard')
+  const [menuMovilAbierto, setMenuMovilAbierto] = useState(false)
+  const [esVistaMovil, setEsVistaMovil] = useState(() => window.matchMedia('(max-width: 767px)').matches)
   const [syncStatus, setSyncStatus] = useState('cargando')
   const [solicitudAlerta, setSolicitudAlerta] = useState(null)
   const [diaAlertas, setDiaAlertas] = useState(() => new Date().toDateString())
@@ -301,76 +303,152 @@ export default function App() {
 
   const hoy = new Date()
   const fechaHoy = hoy.toLocaleDateString('es-GT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  const tabActiva = tabs.find(item => item.id === tab) || tabs[0]
+  const botonMenuRef = useRef(null)
+  const botonCerrarMenuRef = useRef(null)
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 767px)')
+    const actualizarVista = (event) => {
+      setEsVistaMovil(event.matches)
+      if (!event.matches) setMenuMovilAbierto(false)
+    }
+    media.addEventListener('change', actualizarVista)
+    return () => media.removeEventListener('change', actualizarVista)
+  }, [])
+
+  useEffect(() => {
+    if (!menuMovilAbierto) return undefined
+
+    const overflowAnterior = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    botonCerrarMenuRef.current?.focus()
+    const cerrarConEscape = (event) => {
+      if (event.key === 'Escape') setMenuMovilAbierto(false)
+    }
+    document.addEventListener('keydown', cerrarConEscape)
+
+    return () => {
+      document.body.style.overflow = overflowAnterior
+      document.removeEventListener('keydown', cerrarConEscape)
+      botonMenuRef.current?.focus()
+    }
+  }, [menuMovilAbierto])
+
+  const seleccionarTab = (id) => {
+    setTab(id)
+    setMenuMovilAbierto(false)
+  }
 
   return (
     <div className="app-shell min-h-screen font-sans">
-      {/* ── HEADER ── */}
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-slate-950/95 shadow-[0_12px_30px_rgba(15,23,42,0.16)] backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-3 sm:px-5 py-2.5 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 sm:gap-3">
-          {/* Logo + fecha */}
-          <div className="flex items-center gap-2.5 shrink-0">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-400 via-sky-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-sky-500/25 ring-1 ring-white/20">
-              <Wrench size={16} strokeWidth={2.5} />
+      <div className="app-layout">
+        {menuMovilAbierto && (
+          <button
+            type="button"
+            className="app-sidebar-backdrop is-visible"
+            aria-label="Cerrar menú"
+            onClick={() => setMenuMovilAbierto(false)}
+          />
+        )}
+
+        <aside
+          id="menu-principal"
+          className={`app-sidebar ${menuMovilAbierto ? 'is-open' : ''}`}
+          aria-label="Navegación principal"
+          aria-hidden={esVistaMovil && !menuMovilAbierto ? true : undefined}
+          inert={esVistaMovil && !menuMovilAbierto ? '' : undefined}
+        >
+          <div className="app-sidebar-brand">
+            <div className="app-brand-mark" aria-hidden="true">
+              <Wrench size={18} strokeWidth={2.5} />
             </div>
-            <div className="hidden sm:block">
-              <p className="font-extrabold text-white text-sm leading-none tracking-tight">TicketManager <span className="text-sky-400">Pro</span></p>
-              <p className="text-[9px] font-medium text-slate-400 leading-none mt-1 capitalize">{fechaHoy}</p>
+            <div className="app-brand-copy">
+              <p>TicketManager <span>Pro</span></p>
+              <small>Control de operación</small>
             </div>
+            <button ref={botonCerrarMenuRef} type="button" className="app-sidebar-close" aria-label="Cerrar menú" onClick={() => setMenuMovilAbierto(false)}>
+              <X size={20} />
+            </button>
           </div>
 
-          {/* Nav */}
-          <nav aria-label="Secciones principales" className="order-3 flex w-full justify-between bg-white/[0.07] p-1 rounded-xl ring-1 ring-white/10 sm:order-none sm:w-auto">
-            {tabs.map(t => (
+          <div className="app-sidebar-date">
+            <span>Jornada actual</span>
+            <time dateTime={hoy.toISOString().slice(0, 10)}>{fechaHoy}</time>
+          </div>
+
+          <nav aria-label="Secciones principales" className="app-sidebar-nav">
+            <p>Espacios de trabajo</p>
+            {tabs.map(item => (
               <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                aria-current={tab === t.id ? 'page' : undefined}
-                className={`flex flex-1 flex-col sm:flex-none sm:flex-row items-center gap-1 sm:gap-1.5 text-[10px] sm:text-[11px] px-1 sm:px-3 py-2 rounded-lg font-bold transition-all ${
-                  tab === t.id 
-                    ? 'bg-white text-slate-900 shadow-md shadow-black/10' 
-                    : 'text-slate-400 hover:text-white hover:bg-white/[0.06]'
-                }`}
+                key={item.id}
+                type="button"
+                onClick={() => seleccionarTab(item.id)}
+                aria-current={tab === item.id ? 'page' : undefined}
+                className={tab === item.id ? 'is-active' : ''}
               >
-                <t.icon size={12} />
-                <span>{t.label}</span>
+                <span className="app-sidebar-nav-icon" aria-hidden="true"><item.icon size={18} /></span>
+                <span>{item.label}</span>
+                <span className="app-sidebar-active-mark" aria-hidden="true" />
               </button>
             ))}
           </nav>
+        </aside>
 
-          <div className="flex shrink-0 items-center gap-0.5">
+        <section className="app-workspace">
+          <header className="app-topbar">
+            <div className="app-topbar-title">
+              <button
+                ref={botonMenuRef}
+                type="button"
+                className="app-menu-button"
+                aria-label="Abrir menú"
+                aria-controls="menu-principal"
+                aria-expanded={menuMovilAbierto}
+                onClick={() => setMenuMovilAbierto(true)}
+              >
+                <Menu size={21} />
+              </button>
+              <div>
+                <span>Vista actual</span>
+                <h1>{tabActiva.label}</h1>
+              </div>
+            </div>
+
+            <div className="app-topbar-actions">
             <Notificaciones control={controlAlertas} estadoCatalogo={estadoCatalogoGarantias} estadoHistorial={historialSeries.estado} onVerAlertas={verAlertas} />
             <button
               type="button"
               onClick={() => setTema(actual => actual === 'oscuro' ? 'claro' : 'oscuro')}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/[0.08] hover:text-white"
+              className="app-topbar-icon-button"
               title={tema === 'oscuro' ? 'Usar modo claro' : 'Usar modo oscuro'}
               aria-label={tema === 'oscuro' ? 'Usar modo claro' : 'Usar modo oscuro'}
             >
-              {tema === 'oscuro' ? <Sun size={13} /> : <Moon size={13} />}
+              {tema === 'oscuro' ? <Sun size={17} /> : <Moon size={17} />}
             </button>
 
-            {/* Sync */}
             <button
+              type="button"
               onClick={() => { if (nubeCargada.current) cargarDesdeNube(true) }}
-              className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-white/[0.06] transition-colors"
-              title={syncStatus === 'sincronizado' ? 'Sincronizado · Tap para refrescar' : syncStatus === 'error' ? 'Sin conexión · Tap para reintentar' : 'Sincronizando...'}
+              className={`app-sync-button app-sync-button--${syncStatus}`}
+              title={syncStatus === 'sincronizado' ? 'Sincronizado · Toca para actualizar' : syncStatus === 'error' ? 'Sin conexión · Toca para reintentar' : 'Sincronizando…'}
+              aria-label={syncStatus === 'sincronizado' ? 'Sincronizado. Actualizar datos' : syncStatus === 'error' ? 'Sin conexión. Reintentar sincronización' : 'Sincronizando datos'}
             >
               {syncStatus === 'cargando' 
-                ? <Loader2 size={11} className="text-slate-400 animate-spin" />
+                ? <Loader2 size={15} className="animate-spin" />
                 : syncStatus === 'error'
-                  ? <CloudOff size={11} className="text-rose-400" />
-                  : <Cloud size={11} className="text-emerald-400" />
+                  ? <CloudOff size={15} />
+                  : <Cloud size={15} />
               }
-              <span className={`text-[9px] font-medium hidden sm:inline ${syncStatus === 'sincronizado' ? 'text-emerald-500' : syncStatus === 'error' ? 'text-rose-400' : 'text-slate-500'}`}>
-                {syncStatus === 'sincronizado' ? 'Sync OK' : syncStatus === 'error' ? 'Offline' : 'Sync...'}
+              <span>
+                {syncStatus === 'sincronizado' ? 'Al día' : syncStatus === 'error' ? 'Sin conexión' : 'Sincronizando'}
               </span>
             </button>
           </div>
-        </div>
-      </header>
+          </header>
 
-      {/* ── CONTENT ── */}
-      <main className="max-w-7xl mx-auto px-3 sm:px-5 py-5 sm:py-7">
+          {/* ── CONTENT ── */}
+          <main className="app-main">
         <div className={tab === 'dashboard' ? 'block fade-in' : 'hidden'}>
           <Dashboard 
             allTickets={allTickets}
@@ -419,7 +497,9 @@ export default function App() {
         <div className={tab === 'vacaciones' ? 'block fade-in' : 'hidden'}>
           {vacacionesMontado && <Vacaciones />}
         </div>
-      </main>
+          </main>
+        </section>
+      </div>
     </div>
   )
 }
