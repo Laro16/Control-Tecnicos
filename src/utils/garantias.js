@@ -1,3 +1,5 @@
+import { claveSerieGarantia, fechaGarantiaManual } from './vencimientosGarantia.js'
+
 export function normalizarTextoGarantia(texto) {
   if (texto === null || texto === undefined) return ''
   return String(texto)
@@ -98,7 +100,7 @@ export function parsearFechaSerie(serie) {
   return fecha
 }
 
-export function verificarGarantiaTicket(ticket, clientesGarantia = []) {
+export function verificarGarantiaTicket(ticket, clientesGarantia = [], vencimientos = {}) {
   const clienteGarantia = buscarClienteGarantia(ticket?.CLIENTE, clientesGarantia)
   if (!clienteGarantia) return null
 
@@ -119,15 +121,17 @@ export function verificarGarantiaTicket(ticket, clientesGarantia = []) {
   }
 
   const fechaFabricacion = parsearFechaSerie(obtenerSerieTicket(ticket))
-  if (!fechaFabricacion) {
+  const confirmado = vencimientos[claveSerieGarantia(obtenerSerieTicket(ticket))]
+  const fechaConfirmada = fechaGarantiaManual(confirmado?.fecha_vencimiento)
+  if (!fechaFabricacion && !fechaConfirmada) {
     return {
       ...base,
       sinDatosSerie: true,
     }
   }
 
-  const fechaVencimiento = new Date(fechaFabricacion)
-  fechaVencimiento.setFullYear(fechaVencimiento.getFullYear() + clienteGarantia.anios)
+  const fechaVencimiento = fechaConfirmada || new Date(fechaFabricacion)
+  if (!fechaConfirmada) fechaVencimiento.setFullYear(fechaVencimiento.getFullYear() + clienteGarantia.anios)
   const hoy = new Date(); hoy.setHours(0, 0, 0, 0)
   const vencida = hoy > fechaVencimiento
   const diasRestantes = Math.ceil((fechaVencimiento - hoy) / (1000 * 60 * 60 * 24))
@@ -140,7 +144,9 @@ export function verificarGarantiaTicket(ticket, clientesGarantia = []) {
     diasRestantes,
     fechaFabricacion,
     fechaVencimiento,
-    fabDisplay: formatear(fechaFabricacion),
+    fechaVerificada: Boolean(fechaConfirmada),
+    origenVencimiento: fechaConfirmada ? 'Confirmado en web de empresa' : 'Calculado por fabricación',
+    fabDisplay: fechaFabricacion ? formatear(fechaFabricacion) : 'No verificable',
     vencDisplay: formatear(fechaVencimiento),
   }
 }

@@ -9,6 +9,7 @@ import Vacaciones from './components/Vacaciones'
 import Notificaciones from './components/Notificaciones'
 import { obtenerControlAlertas } from './utils/alertas'
 import useHistorialSeries from './hooks/useHistorialSeries'
+import useVencimientosGarantia from './hooks/useVencimientosGarantia'
 import useImportacionParticulares from './hooks/useImportacionParticulares'
 import garantiasUrl from './Garantias.xlsx?url'
 import { Wrench, ClipboardList, BarChart3, Cloud, CloudOff, Loader2, LayoutDashboard, CalendarDays, Menu, Moon, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Sun, X } from 'lucide-react'
@@ -91,10 +92,11 @@ export default function App() {
   const [clientesGarantia, setClientesGarantia] = useState([])
   const [estadoCatalogoGarantias, setEstadoCatalogoGarantias] = useState('cargando')
   const historialSeries = useHistorialSeries(allTickets)
+  const vencimientosGarantia = useVencimientosGarantia()
   const importacionParticulares = useImportacionParticulares()
   const controlAlertas = useMemo(
-    () => obtenerControlAlertas(allTickets, clientesGarantia, historialSeries.historial),
-    [allTickets, clientesGarantia, diaAlertas, historialSeries.historial]
+    () => obtenerControlAlertas(allTickets, clientesGarantia, historialSeries.historial, vencimientosGarantia.porSerie),
+    [allTickets, clientesGarantia, diaAlertas, historialSeries.historial, vencimientosGarantia.porSerie]
   )
 
   function verAlertas(tipo) {
@@ -480,6 +482,13 @@ export default function App() {
 
           {/* ── CONTENT ── */}
           <main className="app-main">
+          {vencimientosGarantia.estado !== 'listo' && (
+            <div className="card mb-4 p-3 text-sm" role="status">
+              <strong>Vencimientos confirmados: </strong>
+              {vencimientosGarantia.estado === 'cargando' ? 'Consultando fechas guardadas…' : vencimientosGarantia.estado === 'sin-configurar' ? 'Falta activar la tabla garantias_vencimientos en Supabase. Por ahora se usa el cálculo por serie.' : 'No se pudieron actualizar las fechas confirmadas. Las garantías y exportaciones pueden estar incompletas.'}
+              <button type="button" className="btn-ghost ml-2" disabled={vencimientosGarantia.estado === 'cargando' || vencimientosGarantia.guardando} onClick={vencimientosGarantia.reintentar}>Reintentar consulta</button>
+            </div>
+          )}
         <div className={tab === 'dashboard' ? 'block fade-in' : 'hidden'}>
           <Dashboard 
             allTickets={allTickets}
@@ -508,6 +517,7 @@ export default function App() {
             clientesGarantia={clientesGarantia}
             estadoCatalogoGarantias={estadoCatalogoGarantias}
             controlAlertas={controlAlertas}
+            vencimientosGarantia={vencimientosGarantia}
             solicitudAlerta={solicitudAlerta}
             historialSeries={historialSeries}
             importacionParticulares={importacionParticulares}

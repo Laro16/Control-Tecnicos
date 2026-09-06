@@ -46,6 +46,13 @@ export default function ModuloPendientes({ importacionParticulares }) {
   
   const [subiendoFiles, setSubiendoFiles] = useState(false)
   const [imgPreview, setImgPreview] = useState(null)
+  const [documentoEnfocado, setDocumentoEnfocado] = useState(null)
+  useEffect(() => {
+    if (!modal || documentoEnfocado === null) return
+    const seccion = document.getElementById(`documento-particular-${documentoEnfocado}`)
+    seccion?.scrollIntoView({ block: 'center' })
+    seccion?.focus({ preventScroll: true })
+  }, [modal, documentoEnfocado])
 
   const cargaActual = useRef(0)
 
@@ -76,6 +83,7 @@ export default function ModuloPendientes({ importacionParticulares }) {
   }
 
   function abrirNuevo() {
+    setDocumentoEnfocado(null)
     const hoy = obtenerFechaHoy()
     setForm(vistaActual === 'Tarea' ? { ...VACIO_TAREA, fecha: hoy } : { ...VACIO_PARTICULAR, fecha: hoy })
     setEditId(null)
@@ -85,7 +93,8 @@ export default function ModuloPendientes({ importacionParticulares }) {
     setModal(true)
   }
 
-  function abrirEditar(item) {
+  function abrirEditar(item, documento = null) {
+    setDocumentoEnfocado(documento)
     setForm({ ...item })
     setEditId(item.id)
     setArchivosSubir([])
@@ -316,14 +325,14 @@ export default function ModuloPendientes({ importacionParticulares }) {
             const isOverdue = item.fecha && item.fecha < obtenerFechaHoy() && !isDone && !isCancelled
             const accent = isOverdue ? 'border-t-rose-500' : isPending ? 'border-t-amber-400' : item.estado.toLowerCase().includes('proceso') ? 'border-t-sky-500' : 'border-t-emerald-500'
             return (
-              <article key={item.id} className={`operation-record card-section border-t-4 ${accent} transition-all ${isDone || isCancelled ? 'opacity-60' : ''}`}>
+              <article key={item.id} className={`operation-record card-section border-t-4 ${accent} transition-all ${item.tipo === 'Tarea' && (isDone || isCancelled) ? 'opacity-60' : ''}`}>
                 <div className="record-heading flex items-start justify-between gap-3 border-b border-slate-100 px-4 py-3.5">
                   <div className="min-w-0 flex-1">
                     <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
                       <span className="text-[9px] font-extrabold uppercase tracking-[0.12em] text-slate-400">{item.tipo === 'Particular' ? 'Servicio particular' : 'Pendiente'}</span>
                       {isOverdue && <span className="rounded-md bg-rose-500 px-1.5 py-0.5 text-[8px] font-black text-white">VENCIDO</span>}
                     </div>
-                    <h2 className={`${item.tipo === 'Particular' ? 'break-words' : 'truncate'} text-sm font-extrabold text-slate-900 ${isDone ? 'line-through text-slate-400' : ''}`}>{item.titulo}</h2>
+                    <h2 className={`${item.tipo === 'Particular' ? 'break-words' : 'truncate'} text-sm font-extrabold text-slate-900 ${item.tipo === 'Tarea' && isDone ? 'line-through text-slate-400' : ''}`}>{item.titulo}</h2>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
                     <button onClick={() => abrirEditar(item)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-400 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-600" title="Editar"><Pencil size={13} /></button>
@@ -381,6 +390,19 @@ export default function ModuloPendientes({ importacionParticulares }) {
                   )}
                   
                   {/* Archivos */}
+                  {item.tipo === 'Particular' && (
+                    <div className="space-y-2 border-t border-slate-200 pt-3">
+                      <p className="text-sm font-bold text-slate-700">Documentos del servicio</p>
+                      <div className="record-fields">
+                        {DOCS_PARTICULAR.map((doc, indice) => (
+                          <button key={doc} type="button" onClick={() => abrirEditar(item, indice)} className="btn-ghost flex items-center justify-start gap-2 text-left" aria-label={`Subir o revisar ${doc} de ${item.correlativo || item.titulo}`}>
+                            <Paperclip size={15} className="shrink-0" /><span>Subir / revisar · {doc}</span>
+                          </button>
+                        ))}
+                      </div>
+                      {!item.archivos?.length && <p className="text-sm text-slate-500">Sin archivos cargados. Selecciona un documento para subirlo.</p>}
+                    </div>
+                  )}
                   {item.archivos && item.archivos.length > 0 && (
                     <div className="pt-2 border-t border-slate-100">
                       <div className="flex items-center justify-between mb-1.5">
@@ -396,9 +418,9 @@ export default function ModuloPendientes({ importacionParticulares }) {
                             <div key={idx} className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-[9px] hover:border-sky-200 transition">
                               {item.tipo === 'Particular' && <span className="bg-sky-100 text-sky-700 font-bold px-1 py-0.5 rounded text-[8px]">{tipoDoc}</span>}
                               {isImage ? (
-                                <button onClick={() => setImgPreview(url)} className="text-sky-600 hover:text-sky-800 font-semibold truncate max-w-[120px]">{nombre}</button>
+                                <button onClick={() => setImgPreview(url)} className={`text-sky-600 hover:text-sky-800 font-semibold ${item.tipo === 'Particular' ? 'break-all text-left' : 'truncate max-w-[120px]'}`}>{nombre}</button>
                               ) : (
-                                <a href={url} target="_blank" rel="noopener noreferrer" className="text-slate-600 hover:text-slate-800 font-semibold truncate max-w-[120px]">{nombre}</a>
+                                <a href={url} target="_blank" rel="noopener noreferrer" className={`text-slate-600 hover:text-slate-800 font-semibold ${item.tipo === 'Particular' ? 'break-all' : 'truncate max-w-[120px]'}`}>{nombre}</a>
                               )}
                               <a href={url} target="_blank" rel="noopener noreferrer" download={nombre} className="text-sky-500 hover:text-sky-700"><Download size={10} /></a>
                             </div>
@@ -476,11 +498,11 @@ export default function ModuloPendientes({ importacionParticulares }) {
                           return obj.tipoDoc === doc || obj.nombre.includes(doc)
                         })
                         return (
-                          <div key={doc} className="space-y-1">
+                          <div key={doc} id={`documento-particular-${DOCS_PARTICULAR.indexOf(doc)}`} tabIndex={-1} className="space-y-1 scroll-mt-4">
                             <span className="text-[10px] font-bold text-sky-800">{doc}</span>
                             {existente !== undefined && existente !== -1 ? (
                               <div className="flex items-center justify-between bg-white border border-emerald-200 rounded-md px-2.5 py-1.5">
-                                <span className="text-[10px] text-emerald-600 font-semibold">✅ Guardado</span>
+                                <span className="text-sm text-emerald-600 font-semibold break-all">✓ {typeof form.archivos[existente] === 'string' ? JSON.parse(form.archivos[existente]).nombre : form.archivos[existente].nombre}</span>
                                 <button type="button" onClick={() => eliminarArchivoExistente(existente)} className="text-rose-500 hover:text-rose-700 p-0.5"><Trash2 size={12}/></button>
                               </div>
                             ) : archivosParticular[doc] ? (

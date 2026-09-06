@@ -12,7 +12,7 @@ export function crearPDFGarantias(alertas, { nombreArchivo = '', generado = new 
     ['VENCIDA', 'Garantías vencidas - No atender sin garantía', [190, 18, 60]],
     ['NORMAL - REVISAR', 'TIPO Normal - Revisar cobertura antes de atender', [109, 40, 217]],
     ['VERIFICAR SERIE', 'Series por verificar', [146, 64, 14]],
-    ['VIGENTE', 'Garantías vigentes según el plazo calculado', [4, 120, 87]],
+    ['VIGENTE', 'Garantías vigentes según plazo calculado o confirmado', [4, 120, 87]],
   ]
   let y = 43
   for (const [estado, titulo, color] of grupos) {
@@ -26,7 +26,7 @@ export function crearPDFGarantias(alertas, { nombreArchivo = '', generado = new 
         textoPdf(`${r.ticket['N° REFERENCIA'] || '-'}\n${r.ticket.tecnico || '-'}`),
         textoPdf(`${r.ticket.CLIENTE || '-'}\n${r.ticket.NEGOCIO || '-'}`),
         textoPdf(`${r.serie}\nTIPO: ${r.ticket.TIPO || '-'}\nOrigen: ${r.origen}`),
-        textoPdf(r.garantia.sinDatosSerie ? `${r.garantia.aniosGarantia} años\nFechas no verificables` : `Fab: ${r.garantia.fabDisplay}\nVence: ${r.garantia.vencDisplay}\n${r.garantia.aniosGarantia} años | ${r.garantia.diasRestantes < 0 ? `${Math.abs(r.garantia.diasRestantes)} días vencida` : `${r.garantia.diasRestantes} días restantes`}`),
+        textoPdf(r.garantia.sinDatosSerie ? `${r.garantia.aniosGarantia} años\nFechas no verificables` : `${r.garantia.fechaVerificada ? 'Vencimiento real confirmado' : `Fab: ${r.garantia.fabDisplay}`}\nVence: ${r.garantia.vencDisplay}\n${r.garantia.diasRestantes < 0 ? `${Math.abs(r.garantia.diasRestantes)} días vencida` : `${r.garantia.diasRestantes} días restantes`}`),
         textoPdf(`${r.accion}\nDirección: ${r.ticket['DIRECCIÓN'] || '-'}\nFalla reportada: ${r.ticket['DESCRIPCIÓN INICIAL'] || '-'}`),
       ]),
       styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.5, overflow: 'linebreak', valign: 'top', lineColor: [51, 65, 85], lineWidth: 0.25, textColor: [15, 23, 42] },

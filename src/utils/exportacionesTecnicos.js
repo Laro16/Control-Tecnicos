@@ -25,7 +25,11 @@ export function clasificarGarantiaExportada(garantia) {
 }
 
 export function prepararGarantiasExportacion(alertas = []) {
-  return alertas.map(({ ticket, garantia }) => ({ ticket, garantia, ...clasificarGarantiaExportada(garantia), serie: obtenerSerieTicket(ticket), origen: origenSerieExportada(ticket) }))
+  return alertas.map(({ ticket, garantia }) => {
+    const diagnostico = clasificarGarantiaExportada(garantia)
+    if (garantia.fechaVerificada) diagnostico.accion = `Vencimiento real confirmado en web de empresa: ${garantia.vencDisplay}. ${garantia.vencida ? 'Plazo confirmado vencido.' : garantia.tipoIncorrecto ? 'Cobertura vigente confirmada; revisar el TIPO Normal original del Excel.' : 'Cobertura vigente según fecha confirmada.'}`
+    return { ticket, garantia, ...diagnostico, serie: obtenerSerieTicket(ticket), origen: origenSerieExportada(ticket) }
+  })
     .sort((a, b) => a.prioridad - b.prioridad || (a.garantia.diasRestantes ?? Infinity) - (b.garantia.diasRestantes ?? Infinity) || texto(a.ticket.CLIENTE).localeCompare(texto(b.ticket.CLIENTE), 'es'))
 }
 

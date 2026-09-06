@@ -18,10 +18,10 @@ export function obtenerTicketsDuplicados(tickets = []) {
 
 // Una sola fuente para la campana y el panel de Técnicos: los contadores
 // mantienen los mismos estados, clientes y reglas de duplicados.
-export function obtenerControlAlertas(tickets = [], clientesGarantia = [], historialSeries = []) {
+export function obtenerControlAlertas(tickets = [], clientesGarantia = [], historialSeries = [], vencimientos = {}) {
   const garantias = tickets
     .filter(ticket => !normalizarTextoGarantia(ticket.ESTADO_LIMPIO || ticket.ESTADO).includes('FINALIZADA'))
-    .map(ticket => ({ ticket, garantia: verificarGarantiaTicket(ticket, clientesGarantia) }))
+    .map(ticket => ({ ticket, garantia: verificarGarantiaTicket(ticket, clientesGarantia, vencimientos) }))
     .filter(alerta => alerta.garantia)
 
   // Una alerta por ticket: Normal con plazo vencido aparece primero entre

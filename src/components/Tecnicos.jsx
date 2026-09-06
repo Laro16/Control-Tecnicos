@@ -10,6 +10,7 @@ import {
 import { obtenerSerieTicket, resolverSerie, verificarGarantiaTicket } from '../utils/garantias'
 import { claveAtencion, normalizarSerieHistorial } from '../utils/historialSeries'
 import HistorialSeries from './HistorialSeries'
+import EditorVencimientoGarantia, { ControlVencimiento } from './VencimientoGarantia'
 import { crearLibroTecnicos, descargarArchivo, fechaArchivo, prepararInformeTecnicos } from '../utils/exportacionesTecnicos'
 import { crearPDFGarantias } from '../utils/pdfGarantias'
 import EstadoParticulares from './EstadoParticulares'
@@ -176,13 +177,14 @@ export default function ModuloTecnicos({
   allTickets, setAllTickets, nombreArchivo, setNombreArchivo, 
   fechaSubidaExcel, setFechaSubidaExcel,
   rutasTecnicos, setRutasTecnicos, rutasAutomaticas, valorRutaTecnico, baseMunicipios,
-  clientesGarantia = [], estadoCatalogoGarantias, controlAlertas, solicitudAlerta, historialSeries, importacionParticulares
+  clientesGarantia = [], estadoCatalogoGarantias, controlAlertas, solicitudAlerta, historialSeries, importacionParticulares, vencimientosGarantia
 }) {
   const [dragging, setDragging] = useState(false)
   const [expandido, setExpandido] = useState({})
   const [filtroTecnico, setFiltroTecnico] = useState('Todos')
   const [filtroEstadoGlobal, setFiltroEstadoGlobal] = useState('Todos')
   const [garantiaAbierta, setGarantiaAbierta] = useState(false)
+  const [ticketVencimiento, setTicketVencimiento] = useState(null)
   const [duplicadosAbierta, setDuplicadosAbierta] = useState(false)
   const [toast, setToast] = useState('')
   const [exportando, setExportando] = useState('')
@@ -565,6 +567,7 @@ export default function ModuloTecnicos({
 
   return (
     <div className="space-y-5 fade-in">
+      {ticketVencimiento && vencimientosGarantia && <EditorVencimientoGarantia ticket={ticketVencimiento} datos={vencimientosGarantia} onCerrar={() => setTicketVencimiento(null)} />}
       {toast && (
         <div className="fixed left-1/2 top-16 z-50 flex -translate-x-1/2 items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-[11px] font-bold text-white shadow-2xl toast-enter">
           <Check size={13} className="text-emerald-400" /> {toast}
@@ -720,6 +723,7 @@ export default function ModuloTecnicos({
                           </div>
                           <p className="text-[11px] font-bold text-slate-800">{a.ticket['NEGOCIO'] || '-'}</p>
                           <WarrantyClient ticket={a.ticket} tone="rose" />
+                          <ControlVencimiento ticket={a.ticket} garantia={a.garantia} onEditar={setTicketVencimiento} />
                           {a.ticket['DESCRIPCIÓN INICIAL'] && <p className="text-[9px] text-slate-500 italic leading-snug">📋 {a.ticket['DESCRIPCIÓN INICIAL']}</p>}
                           <div className="flex flex-col sm:flex-row sm:gap-4 text-[9px] font-medium text-slate-500">
                             <p>📍 {a.ticket['DIRECCIÓN'] || '-'}</p>
@@ -737,7 +741,7 @@ export default function ModuloTecnicos({
                         TIPO Normal — Revisar cobertura antes de atender
                       </p>
                       {alertasTipoIncorrecto.map((a, i) => (
-                        <div key={i} className="alert-card space-y-2 rounded-lg border border-violet-300 border-l-[4px] border-l-violet-600 bg-violet-50 px-3 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+                        <div key={i} className={`alert-card space-y-2 rounded-lg border border-l-[4px] px-3 py-3 ${a.garantia.fechaVerificada ? 'border-emerald-300 border-l-emerald-600 bg-emerald-50' : 'border-violet-300 border-l-violet-600 bg-violet-50'}`}>
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="rounded bg-violet-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-violet-800">#{a.ticket['N° REFERENCIA'] || '-'}</span>
                             <span className="text-[10px] font-semibold text-slate-500">{a.ticket.tecnico}</span>
@@ -747,11 +751,12 @@ export default function ModuloTecnicos({
                           </div>
                           <p className="text-[11px] font-bold text-slate-800">{a.ticket['NEGOCIO'] || '-'}</p>
                           <WarrantyClient ticket={a.ticket} tone="violet" />
+                          <ControlVencimiento ticket={a.ticket} garantia={a.garantia} onEditar={setTicketVencimiento} />
                           <p className="text-[10px] font-semibold leading-relaxed text-violet-800">
                             Este cliente sólo puede atenderse con garantía. El sistema de origen generó TIPO "Normal": revisar el motivo antes de atender; no basta con cambiar el tipo.
                           </p>
                           <p className="text-[10px] font-semibold text-violet-800">
-                            {a.garantia.sinDatosSerie
+                            {a.garantia.fechaVerificada ? `Cobertura vigente hasta ${a.garantia.vencDisplay}, según la fecha confirmada en la web de la empresa. Se conserva el aviso del TIPO Normal original.` : a.garantia.sinDatosSerie
                               ? 'No se pudo verificar el plazo con SERIE ni con DESCRIPCIÓN INICIAL.'
                               : `La serie está dentro del plazo calculado (hasta ${a.garantia.vencDisplay}), pero esto no elimina la alerta Normal ni confirma la cobertura.`}
                           </p>
@@ -777,6 +782,7 @@ export default function ModuloTecnicos({
                           </div>
                           <p className="text-[11px] font-bold text-slate-800">{a.ticket['NEGOCIO'] || '-'}</p>
                           <WarrantyClient ticket={a.ticket} tone="amber" />
+                          <ControlVencimiento ticket={a.ticket} garantia={a.garantia} onEditar={setTicketVencimiento} />
                           {a.ticket['DESCRIPCIÓN INICIAL'] && <p className="text-[9px] text-slate-500 italic leading-snug">📋 {a.ticket['DESCRIPCIÓN INICIAL']}</p>}
                           <p className="text-[9px] font-medium text-slate-500">📍 {a.ticket['DIRECCIÓN'] || '-'}</p>
                           <TicketActions ticket={a.ticket} onCopy={copiarTicket} compact />
@@ -799,6 +805,7 @@ export default function ModuloTecnicos({
                           </div>
                           <p className="text-[11px] font-bold text-slate-800">{a.ticket['NEGOCIO'] || '-'}</p>
                           <WarrantyClient ticket={a.ticket} tone="emerald" />
+                          <ControlVencimiento ticket={a.ticket} garantia={a.garantia} onEditar={setTicketVencimiento} />
                           {a.ticket['DESCRIPCIÓN INICIAL'] && <p className="text-[9px] text-slate-500 italic leading-snug">📋 {a.ticket['DESCRIPCIÓN INICIAL']}</p>}
                           <div className="flex flex-col sm:flex-row sm:gap-4 text-[9px] font-medium text-slate-500">
                             <p>📍 {a.ticket['DIRECCIÓN'] || '-'}</p>
@@ -916,16 +923,19 @@ export default function ModuloTecnicos({
                   {expandido[tecnico] && (
                     <div className="p-3 sm:p-4 space-y-4 slide-up bg-slate-50/60">
                       {tickets.map((t, i) => {
-                        const g = verificarGarantiaTicket(t, clientesGarantia)
+                        const g = verificarGarantiaTicket(t, clientesGarantia, vencimientosGarantia?.porSerie)
+                        const verdeConfirmado = g?.fechaVerificada && !g.vencida
                         const reincidencia = reincidenciasPorTicket.get(claveAtencion({ serie: normalizarSerieHistorial(obtenerSerieTicket(t)), referencia: normalizarTexto(t['N° REFERENCIA']) }))
                         const esProceso = t['ESTADO_LIMPIO'].includes('PROCESO')
                         const esAgencia = t['ESTADO_LIMPIO'].includes('AGENCIA')
                         const borderColor = g?.vencida ? 'border-l-rose-500'
+                          : verdeConfirmado ? 'border-l-emerald-500'
                           : g?.tipoIncorrecto ? 'border-l-violet-500'
                           : esProceso ? 'border-l-amber-400' 
                           : esAgencia ? 'border-l-violet-400' 
                           : 'border-l-sky-400'
                         const headerBg = g?.vencida ? 'bg-rose-50'
+                          : verdeConfirmado ? 'bg-emerald-50'
                           : g?.tipoIncorrecto ? 'bg-violet-50'
                           : esProceso ? 'bg-amber-50/60' 
                           : esAgencia ? 'bg-violet-50/60' 
@@ -939,7 +949,7 @@ export default function ModuloTecnicos({
                               {reincidencia && <span className="rounded-md bg-sky-700 px-2 py-0.5 text-[9px] font-bold text-white">POSIBLE REINCIDENCIA · {reincidencia.anteriores.length} antecedente{reincidencia.anteriores.length > 1 ? 's' : ''}</span>}
                               {g?.tipoIncorrecto && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-violet-600 text-white flex items-center gap-0.5"><ShieldAlert size={9} /> TIPO NORMAL</span>}
                               {g?.vencida && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-rose-600 text-white flex items-center gap-0.5"><ShieldAlert size={9} /> VENCIDA</span>}
-                              {g && !g.tipoIncorrecto && !g.vencida && !g.sinDatosSerie && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-600 text-white flex items-center gap-0.5"><ShieldCheck size={9} /> VIGENTE</span>}
+                              {g && (verdeConfirmado || !g.tipoIncorrecto) && !g.vencida && !g.sinDatosSerie && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-600 text-white flex items-center gap-0.5"><ShieldCheck size={9} /> VIGENTE</span>}
                               {g?.sinDatosSerie && !g.tipoIncorrecto && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500 text-white flex items-center gap-0.5"><ShieldAlert size={9} /> VERIFICAR</span>}
                             </div>
                             
@@ -1010,6 +1020,7 @@ export default function ModuloTecnicos({
                                 <span className="font-semibold">{obtenerComentarioProceso(t)}</span>
                               </div>
                             )}
+                            {g && <div className="mx-3 mb-3"><ControlVencimiento ticket={t} garantia={g} onEditar={setTicketVencimiento} /></div>}
                             <TicketActions ticket={t} onCopy={copiarTicket} />
                           </div>
                         )
