@@ -98,6 +98,9 @@
   .records-container td { font-size: .875rem; }
   .records-container tr { border-bottom-width: 1px; }
   .records-container td, .productivity-table td { border-right-width: 1px; }
+  .route-table tbody td:first-child { white-space: normal; overflow-wrap: anywhere; }
+  .route-table th.bg-amber-500 { color: #0f172a; }
+  .route-table th.bg-emerald-600 { background-color: #047857; }
   .date-presets { flex-wrap: wrap; gap: .5rem; }
   .date-presets > div { flex-wrap: wrap; }
   .date-inputs { display: flex; flex-wrap: wrap; }
@@ -146,7 +149,7 @@
 }
 .app-dialog-panel { display: flex; flex-direction: column; width: 100%; max-width: 40rem; max-height: calc(100dvh - 3rem); min-height: 0; overflow: hidden; border: 1px solid var(--line-strong); border-radius: 16px; background: var(--panel-surface); box-shadow: 0 24px 80px #0005; }
 .app-dialog-header { flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.25rem; border-bottom: 1px solid var(--line-divider); background: var(--panel-surface); }
-.app-dialog-header h3 { margin: 0; color: var(--panel-text); font-size: 1.125rem; font-weight: 800; line-height: 1.35; overflow-wrap: anywhere; }
+.app-dialog-root .app-dialog-header h3 { margin: 0; color: var(--panel-text); font-size: 1.125rem; font-weight: 800; line-height: 1.35; overflow-wrap: anywhere; }
 .app-dialog-header > button { color: var(--panel-muted); flex-shrink: 0; }
 .app-dialog-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 1.25rem; }
 .app-dialog-footer { flex-shrink: 0; display: flex; justify-content: flex-end; gap: .75rem; padding: 1rem 1.25rem; border-top: 1px solid var(--line-divider); background: var(--panel-hover); }
@@ -167,6 +170,7 @@ html.dark .app-sync-button--error { color: #fda4af; }
 html.dark .app-sync-button--sincronizado { color: #6ee7b7; }
 html.dark .app-topbar .notification-bell--active { color: #fbbf24; }
 html.dark .app-dialog-root :is(.text-sky-600,.text-sky-700,.text-sky-800) { color: #7dd3fc; }
+html.dark .app-main .route-table .text-red-800 { color: #fca5a5; }
 
 @media (min-width: 1024px) {
   .app-topbar .app-options { display: contents; }
