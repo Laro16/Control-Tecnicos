@@ -11,6 +11,8 @@ import { obtenerSerieTicket, resolverSerie, verificarGarantiaTicket } from '../u
 import { claveAtencion, normalizarSerieHistorial } from '../utils/historialSeries'
 import HistorialSeries from './HistorialSeries'
 import EditorVencimientoGarantia, { ControlVencimiento } from './VencimientoGarantia'
+import { expedienteDeTicket } from '../utils/expedientesGarantia.js'
+import './garantiasExpedientes.css'
 import { crearLibroTecnicos, descargarArchivo, fechaArchivo, prepararInformeTecnicos } from '../utils/exportacionesTecnicos'
 import { crearPDFGarantias } from '../utils/pdfGarantias'
 import EstadoParticulares from './EstadoParticulares'
@@ -714,7 +716,7 @@ export default function ModuloTecnicos({
                         Garantía vencida — No atender bajo garantía
                       </p>
                       {alertasVencidas.map((a, i) => (
-                        <div key={i} className="alert-card bg-rose-50 border border-rose-200 border-l-[4px] border-l-rose-500 rounded-lg px-3 py-2.5 space-y-1.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+                        <div key={i} className={`alert-card bg-rose-50 border border-rose-200 border-l-[4px] border-l-rose-500 rounded-lg px-3 py-2.5 space-y-1.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] ${expedienteDeTicket(a.ticket, vencimientosGarantia?.expedientes?.porReferencia) ? 'garantia-con-expediente' : ''} `}>
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-mono text-[10px] font-bold text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded">#{a.ticket['N° REFERENCIA']}</span>
                             {a.garantia.tipoIncorrecto && <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold text-violet-800">TIPO NORMAL · NO ATENDER SIN GARANTÍA</span>}
@@ -723,7 +725,7 @@ export default function ModuloTecnicos({
                           </div>
                           <p className="text-[11px] font-bold text-slate-800">{a.ticket['NEGOCIO'] || '-'}</p>
                           <WarrantyClient ticket={a.ticket} tone="rose" />
-                          <ControlVencimiento ticket={a.ticket} garantia={a.garantia} onEditar={setTicketVencimiento} />
+                          <ControlVencimiento ticket={a.ticket} garantia={a.garantia} expediente={expedienteDeTicket(a.ticket, vencimientosGarantia?.expedientes?.porReferencia)} estadoExpedientes={vencimientosGarantia?.expedientes?.estado} onEditar={setTicketVencimiento} />
                           {a.ticket['DESCRIPCIÓN INICIAL'] && <p className="text-[9px] text-slate-500 italic leading-snug">📋 {a.ticket['DESCRIPCIÓN INICIAL']}</p>}
                           <div className="flex flex-col sm:flex-row sm:gap-4 text-[9px] font-medium text-slate-500">
                             <p>📍 {a.ticket['DIRECCIÓN'] || '-'}</p>
@@ -741,7 +743,7 @@ export default function ModuloTecnicos({
                         TIPO Normal — Revisar cobertura antes de atender
                       </p>
                       {alertasTipoIncorrecto.map((a, i) => (
-                        <div key={i} className={`alert-card space-y-2 rounded-lg border border-l-[4px] px-3 py-3 ${a.garantia.fechaVerificada ? 'border-emerald-300 border-l-emerald-600 bg-emerald-50' : 'border-violet-300 border-l-violet-600 bg-violet-50'}`}>
+                        <div key={i} className={`alert-card ${expedienteDeTicket(a.ticket, vencimientosGarantia?.expedientes?.porReferencia) ? 'garantia-con-expediente' : ''} space-y-2 rounded-lg border border-l-[4px] px-3 py-3 ${a.garantia.fechaVerificada ? 'border-emerald-300 border-l-emerald-600 bg-emerald-50' : 'border-violet-300 border-l-violet-600 bg-violet-50'}`}>
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="rounded bg-violet-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-violet-800">#{a.ticket['N° REFERENCIA'] || '-'}</span>
                             <span className="text-[10px] font-semibold text-slate-500">{a.ticket.tecnico}</span>
@@ -751,7 +753,7 @@ export default function ModuloTecnicos({
                           </div>
                           <p className="text-[11px] font-bold text-slate-800">{a.ticket['NEGOCIO'] || '-'}</p>
                           <WarrantyClient ticket={a.ticket} tone="violet" />
-                          <ControlVencimiento ticket={a.ticket} garantia={a.garantia} onEditar={setTicketVencimiento} />
+                          <ControlVencimiento ticket={a.ticket} garantia={a.garantia} expediente={expedienteDeTicket(a.ticket, vencimientosGarantia?.expedientes?.porReferencia)} estadoExpedientes={vencimientosGarantia?.expedientes?.estado} onEditar={setTicketVencimiento} />
                           <p className="text-[10px] font-semibold leading-relaxed text-violet-800">
                             Este cliente sólo puede atenderse con garantía. El sistema de origen generó TIPO "Normal": revisar el motivo antes de atender; no basta con cambiar el tipo.
                           </p>
@@ -774,7 +776,7 @@ export default function ModuloTecnicos({
                         Verificar serie manualmente
                       </p>
                       {alertasSinSerie.map((a, i) => (
-                        <div key={i} className="alert-card bg-amber-50 border border-amber-200 border-l-[4px] border-l-amber-500 rounded-lg px-3 py-2.5 space-y-1.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+                        <div key={i} className={`alert-card bg-amber-50 border border-amber-200 border-l-[4px] border-l-amber-500 rounded-lg px-3 py-2.5 space-y-1.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] ${expedienteDeTicket(a.ticket, vencimientosGarantia?.expedientes?.porReferencia) ? 'garantia-con-expediente' : ''} `}>
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-mono text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">#{a.ticket['N° REFERENCIA']}</span>
                             <span className="text-[10px] font-semibold text-slate-500">{a.ticket.tecnico}</span>
@@ -782,7 +784,7 @@ export default function ModuloTecnicos({
                           </div>
                           <p className="text-[11px] font-bold text-slate-800">{a.ticket['NEGOCIO'] || '-'}</p>
                           <WarrantyClient ticket={a.ticket} tone="amber" />
-                          <ControlVencimiento ticket={a.ticket} garantia={a.garantia} onEditar={setTicketVencimiento} />
+                          <ControlVencimiento ticket={a.ticket} garantia={a.garantia} expediente={expedienteDeTicket(a.ticket, vencimientosGarantia?.expedientes?.porReferencia)} estadoExpedientes={vencimientosGarantia?.expedientes?.estado} onEditar={setTicketVencimiento} />
                           {a.ticket['DESCRIPCIÓN INICIAL'] && <p className="text-[9px] text-slate-500 italic leading-snug">📋 {a.ticket['DESCRIPCIÓN INICIAL']}</p>}
                           <p className="text-[9px] font-medium text-slate-500">📍 {a.ticket['DIRECCIÓN'] || '-'}</p>
                           <TicketActions ticket={a.ticket} onCopy={copiarTicket} compact />
@@ -797,7 +799,7 @@ export default function ModuloTecnicos({
                         Garantía vigente
                       </p>
                       {alertasVigentes.map((a, i) => (
-                        <div key={i} className="alert-card bg-emerald-50 border border-emerald-200 border-l-[4px] border-l-emerald-500 rounded-lg px-3 py-2.5 space-y-1.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+                        <div key={i} className={`alert-card bg-emerald-50 border border-emerald-200 border-l-[4px] border-l-emerald-500 rounded-lg px-3 py-2.5 space-y-1.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] ${expedienteDeTicket(a.ticket, vencimientosGarantia?.expedientes?.porReferencia) ? 'garantia-con-expediente' : ''} `}>
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-mono text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">#{a.ticket['N° REFERENCIA']}</span>
                             <span className="text-[10px] font-semibold text-slate-500">{a.ticket.tecnico}</span>
@@ -805,7 +807,7 @@ export default function ModuloTecnicos({
                           </div>
                           <p className="text-[11px] font-bold text-slate-800">{a.ticket['NEGOCIO'] || '-'}</p>
                           <WarrantyClient ticket={a.ticket} tone="emerald" />
-                          <ControlVencimiento ticket={a.ticket} garantia={a.garantia} onEditar={setTicketVencimiento} />
+                          <ControlVencimiento ticket={a.ticket} garantia={a.garantia} expediente={expedienteDeTicket(a.ticket, vencimientosGarantia?.expedientes?.porReferencia)} estadoExpedientes={vencimientosGarantia?.expedientes?.estado} onEditar={setTicketVencimiento} />
                           {a.ticket['DESCRIPCIÓN INICIAL'] && <p className="text-[9px] text-slate-500 italic leading-snug">📋 {a.ticket['DESCRIPCIÓN INICIAL']}</p>}
                           <div className="flex flex-col sm:flex-row sm:gap-4 text-[9px] font-medium text-slate-500">
                             <p>📍 {a.ticket['DIRECCIÓN'] || '-'}</p>
@@ -941,7 +943,7 @@ export default function ModuloTecnicos({
                           : esAgencia ? 'bg-violet-50/60' 
                           : 'bg-slate-50'
                         return (
-                          <div key={i} className={`alert-card rounded-lg border-[1.5px] border-slate-300 border-l-[4px] ${borderColor} overflow-hidden bg-white shadow-[0_1px_4px_rgba(0,0,0,0.07)]`}>
+                          <div key={i} className={`alert-card ${g && expedienteDeTicket(t, vencimientosGarantia?.expedientes?.porReferencia) ? 'garantia-con-expediente' : ''} rounded-lg border-[1.5px] border-slate-300 border-l-[4px] ${borderColor} overflow-hidden bg-white shadow-[0_1px_4px_rgba(0,0,0,0.07)]`}>
                             {/* Badge row */}
                             <div className={`flex items-center gap-1.5 flex-wrap px-3 py-2.5 ${headerBg} border-b border-slate-100`}>
                               <span className="font-mono text-[10px] font-bold text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-100">#{t['N° REFERENCIA']}</span>
@@ -1020,7 +1022,7 @@ export default function ModuloTecnicos({
                                 <span className="font-semibold">{obtenerComentarioProceso(t)}</span>
                               </div>
                             )}
-                            {g && <div className="mx-3 mb-3"><ControlVencimiento ticket={t} garantia={g} onEditar={setTicketVencimiento} /></div>}
+                            {g && <div className="mx-3 mb-3"><ControlVencimiento ticket={t} garantia={g} expediente={expedienteDeTicket(t, vencimientosGarantia?.expedientes?.porReferencia)} estadoExpedientes={vencimientosGarantia?.expedientes?.estado} onEditar={setTicketVencimiento} /></div>}
                             <TicketActions ticket={t} onCopy={copiarTicket} />
                           </div>
                         )

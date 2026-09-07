@@ -4,6 +4,10 @@ import { obtenerSerieTicket } from './garantias.js'
 export const MOTIVOS = ['Despacho', 'Factura de venta', 'Reparación', 'Excepción']
 export const ESTADOS = ['Pendiente de respaldo', 'En revisión', 'Autorizado', 'Rechazado', 'Cerrado']
 export const referenciaExpediente = valor => String(valor ?? '').trim().toUpperCase()
+export function expedienteDeTicket(ticket, porReferencia = {}) {
+  const referencia = referenciaExpediente(ticket?.['N° REFERENCIA'])
+  return referencia ? porReferencia[referencia] || null : null
+}
 export function nuevoExpediente(ticket = {}) {
   return { referencia: referenciaExpediente(ticket['N° REFERENCIA']), serie: claveSerieGarantia(obtenerSerieTicket(ticket)), cliente: ticket.CLIENTE || '', motivo: 'Despacho', estado: 'Pendiente de respaldo', fecha_vencimiento: '', explicacion: '', autorizado_por: '', archivos: [] }
 }

@@ -1,6 +1,15 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { nuevoExpediente, validarExpediente, leerExpedientes } from '../src/utils/expedientesGarantia.js'
+import { nuevoExpediente, validarExpediente, leerExpedientes, expedienteDeTicket } from '../src/utils/expedientesGarantia.js'
+
+test('ficha creada coincide solo por referencia, nunca por serie ni referencia vacía', () => {
+  const ficha = { referencia: '00123', serie: '2401011234' }
+  const mapa = { '00123': ficha }
+  assert.equal(expedienteDeTicket({ 'N° REFERENCIA': ' 00123 ' }, mapa), ficha)
+  assert.equal(expedienteDeTicket({ 'N° REFERENCIA': '00124', SERIE: ficha.serie }, mapa), null)
+  assert.equal(expedienteDeTicket({ 'N° REFERENCIA': '123' }, mapa), null)
+  assert.equal(expedienteDeTicket({ 'N° REFERENCIA': '' }, { '': ficha }), null)
+})
 
 test('nueva atención conserva serie y referencia, nunca hereda autorización', () => {
   const form = nuevoExpediente({ 'N° REFERENCIA': ' ab123 ', CLIENTE: 'Cliente', 'DESCRIPCIÓN INICIAL': 'Equipo 2401011234 no enfría' })

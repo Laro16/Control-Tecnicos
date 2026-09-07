@@ -38,6 +38,7 @@ export function EditorExpediente({ inicial, registros, onCerrar, onGuardado }) {
       const { data, error: fallo } = await supabase.rpc('guardar_expediente_garantia', { p_datos: payload, p_revision: inicial.revision || 0 })
       if (fallo) throw fallo
       if (!data) throw new Error('No se confirmó el guardado. Recarga antes de reintentar.')
+      window.dispatchEvent(new Event('expediente-garantia-guardado'))
       onGuardado(); onCerrar()
     } catch (e) { setError(e.message) } finally { setOcupado(false) }
   }

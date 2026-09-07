@@ -1,0 +1,17 @@
+/* El naranja indica seguimiento documental, no una nueva cobertura. */
+.alert-card.garantia-con-expediente {
+  background-color: #fff7ed !important;
+  border-color: #ea580c !important;
+}
+.garantia-con-expediente [class*="bg-rose-"],
+.garantia-con-expediente [class*="bg-violet-"] {
+  background-color: #ffedd5 !important;
+  color: #9a3412 !important;
+}
+.garantia-con-expediente [class*="text-rose-"],
+.garantia-con-expediente [class*="text-violet-"] { color: #9a3412 !important; }
+.garantia-con-expediente [class*="border-rose-"],
+.garantia-con-expediente [class*="border-l-rose-"] { border-color: #ea580c !important; }
+.dark .alert-card.garantia-con-expediente { background-color: #431407 !important; border-color: #fb923c !important; }
+.dark .garantia-con-expediente [class*="text-rose-"],
+.dark .garantia-con-expediente [class*="text-violet-"] { color: #fdba74 !important; }
