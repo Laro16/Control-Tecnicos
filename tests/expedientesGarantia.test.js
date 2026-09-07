@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { nuevoExpediente, validarExpediente, leerExpedientes, expedienteDeTicket } from '../src/utils/expedientesGarantia.js'
+import { nuevoExpediente, validarExpediente, leerExpedientes, expedienteDeTicket, referenciaTicketGarantia } from '../src/utils/expedientesGarantia.js'
 
 test('ficha creada coincide solo por referencia, nunca por serie ni referencia vacía', () => {
   const ficha = { referencia: '00123', serie: '2401011234' }
@@ -9,6 +9,15 @@ test('ficha creada coincide solo por referencia, nunca por serie ni referencia v
   assert.equal(expedienteDeTicket({ 'N° REFERENCIA': '00124', SERIE: ficha.serie }, mapa), null)
   assert.equal(expedienteDeTicket({ 'N° REFERENCIA': '123' }, mapa), null)
   assert.equal(expedienteDeTicket({ 'N° REFERENCIA': '' }, { '': ficha }), null)
+})
+
+test('usa N° ORDEN únicamente cuando N° REFERENCIA está vacío', () => {
+  assert.equal(referenciaTicketGarantia({ 'N° REFERENCIA': ' REF-01 ', 'N° ORDEN': 'ORD-99' }), 'REF-01')
+  assert.equal(referenciaTicketGarantia({ 'N° REFERENCIA': '  ', 'N° ORDEN': ' ord-99 ' }), 'ORD-99')
+  assert.equal(nuevoExpediente({ 'N° ORDEN': '00045', SERIE: '2401011234' }).referencia, '00045')
+  const ficha = { referencia: 'ORD-99' }
+  assert.equal(expedienteDeTicket({ 'N° REFERENCIA': '', 'N° ORDEN': 'ord-99' }, { 'ORD-99': ficha }), ficha)
+  assert.equal(expedienteDeTicket({ 'N° REFERENCIA': 'REF-01', 'N° ORDEN': 'ORD-99' }, { 'ORD-99': ficha }), null)
 })
 
 test('nueva atención conserva serie y referencia, nunca hereda autorización', () => {

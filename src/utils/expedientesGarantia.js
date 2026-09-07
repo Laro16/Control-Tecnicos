@@ -4,12 +4,15 @@ import { obtenerSerieTicket } from './garantias.js'
 export const MOTIVOS = ['Despacho', 'Factura de venta', 'Reparación', 'Excepción']
 export const ESTADOS = ['Pendiente de respaldo', 'En revisión', 'Autorizado', 'Rechazado', 'Cerrado']
 export const referenciaExpediente = valor => String(valor ?? '').trim().toUpperCase()
+export function referenciaTicketGarantia(ticket = {}) {
+  return referenciaExpediente(ticket['N° REFERENCIA']) || referenciaExpediente(ticket['N° ORDEN'])
+}
 export function expedienteDeTicket(ticket, porReferencia = {}) {
-  const referencia = referenciaExpediente(ticket?.['N° REFERENCIA'])
+  const referencia = referenciaTicketGarantia(ticket)
   return referencia ? porReferencia[referencia] || null : null
 }
 export function nuevoExpediente(ticket = {}) {
-  return { referencia: referenciaExpediente(ticket['N° REFERENCIA']), serie: claveSerieGarantia(obtenerSerieTicket(ticket)), cliente: ticket.CLIENTE || '', motivo: 'Despacho', estado: 'Pendiente de respaldo', fecha_vencimiento: '', explicacion: '', autorizado_por: '', archivos: [] }
+  return { referencia: referenciaTicketGarantia(ticket), serie: claveSerieGarantia(obtenerSerieTicket(ticket)), cliente: ticket.CLIENTE || '', motivo: 'Despacho', estado: 'Pendiente de respaldo', fecha_vencimiento: '', explicacion: '', autorizado_por: '', archivos: [] }
 }
 export function validarExpediente(form) {
   if (!referenciaExpediente(form.referencia) || !claveSerieGarantia(form.serie)) throw new Error('Se necesitan la referencia y una serie válida.')
