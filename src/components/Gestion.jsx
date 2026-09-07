@@ -4,6 +4,7 @@ import { supabase } from '../supabase.jsx'
 import { claveReferenciaParticular, idParticularReferencia, leerParticularesExistentes } from '../utils/particulares.js'
 import EstadoParticulares from './EstadoParticulares'
 import Dialogo from './Dialogo'
+import ExpedientesGarantia from './ExpedientesGarantia'
 import {
   Plus, Pencil, Trash2, CheckCircle, X, ClipboardList, RotateCcw, 
   Paperclip, DownloadCloud, Download, CalendarClock, Briefcase,
@@ -31,7 +32,7 @@ function estBadge(e) {
   return 'bg-slate-50 text-slate-400 border-slate-200'
 }
 
-export default function ModuloPendientes({ importacionParticulares }) {
+export default function ModuloPendientes({ importacionParticulares, vencimientosGarantia, allTickets }) {
   const [items, setItems] = useState([])
   const [cargando, setCargando] = useState(true)
   const [modal, setModal] = useState(false)
@@ -250,6 +251,8 @@ export default function ModuloPendientes({ importacionParticulares }) {
   const procesoCount = itemsFiltrados.filter(i => i.estado === 'En proceso' || i.estado === 'En Proceso').length
   const completadosCount = itemsFiltrados.filter(i => ['Realizado', 'Completada', 'Pagado'].includes(i.estado)).length
 
+  if (vistaActual === 'Garantia') return <div className="space-y-4"><button className="btn-ghost" onClick={() => setVistaActual('Tarea')}>Volver a pendientes y particulares</button><ExpedientesGarantia datos={vencimientosGarantia} tickets={allTickets}/></div>
+
   return (
     <div className="space-y-5 fade-in">
       <section className="workspace-hero">
@@ -272,12 +275,12 @@ export default function ModuloPendientes({ importacionParticulares }) {
             <Plus size={15} /> Nuevo {vistaActual === 'Tarea' ? 'pendiente' : 'servicio'}
           </button>
         </div>
-        <div className="relative z-10 mt-5 flex w-full gap-1 rounded-xl bg-white/[0.08] p-1 ring-1 ring-white/10 sm:w-fit">
-          {['Tarea', 'Particular'].map(v => (
+        <div className="relative z-10 mt-5 flex w-full flex-wrap gap-1 rounded-xl bg-white/[0.08] p-1 ring-1 ring-white/10 sm:w-fit">
+          {['Tarea', 'Particular', 'Garantia'].map(v => (
             <button key={v} onClick={() => { setVistaActual(v); setFiltro('Todos') }}
               className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2 text-[10px] font-extrabold transition sm:flex-none ${vistaActual === v ? 'bg-white text-slate-900 shadow-md' : 'text-slate-300 hover:bg-white/[0.06] hover:text-white'}`}>
               {v === 'Tarea' ? <ClipboardList size={13} /> : <CircleDollarSign size={13} />}
-              {v === 'Tarea' ? 'Mis pendientes' : 'Servicios particulares'}
+              {v === 'Tarea' ? 'Mis pendientes' : v === 'Garantia' ? 'Expedientes de garantía' : 'Servicios particulares'}
             </button>
           ))}
         </div>

@@ -145,7 +145,7 @@ export function verificarGarantiaTicket(ticket, clientesGarantia = [], vencimien
     fechaFabricacion,
     fechaVencimiento,
     fechaVerificada: Boolean(fechaConfirmada),
-    origenVencimiento: fechaConfirmada ? 'Confirmado en web de empresa' : 'Calculado por fabricación',
+    origenVencimiento: fechaConfirmada ? 'Vencimiento confirmado manualmente' : 'Calculado por fabricación',
     fabDisplay: fechaFabricacion ? formatear(fechaFabricacion) : 'No verificable',
     vencDisplay: formatear(fechaVencimiento),
   }

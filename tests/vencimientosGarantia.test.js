@@ -58,7 +58,7 @@ test('el Excel usa la fecha real e identifica su origen sin alterar la base expo
   const control = obtenerControlAlertas([ticket],catalogo,[],manual('2099-01-01'))
   const informe = prepararInformeTecnicos({tickets:[ticket],control})
   assert.equal(informe.hojas[0].filas[0][10].toISOString(),'2099-01-01T00:00:00.000Z')
-  assert.match(informe.hojas[0].filas[0][13],/confirmado en web/)
+  assert.match(informe.hojas[0].filas[0][13],/confirmado manualmente/)
 })
 test('consulta todas las páginas y respeta la última revisión, incluso al volver al cálculo automático', async () => {
   const filas = [{id:1001,serie:ticket.SERIE,fecha_vencimiento:null},...Array.from({length:500},(_,i)=>({id:1000-i,serie:String(2000000+i),fecha_vencimiento:'2099-01-01'})),{id:1,serie:ticket.SERIE,fecha_vencimiento:'2099-01-01'}]
