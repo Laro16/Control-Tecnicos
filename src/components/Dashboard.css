@@ -111,6 +111,13 @@
 .dashboard-oldest-top > span { flex-shrink: 0; font-weight: 800; font-variant-numeric: tabular-nums; }
 .dashboard-oldest p { margin-top: .3rem; font-size: .875rem; line-height: 1.4; overflow-wrap: anywhere; }
 .dashboard-oldest li > span { display: block; margin-top: .25rem; color: var(--dash-muted); font-size: .75rem; overflow-wrap: anywhere; }
+.dashboard-clients { padding: .2rem 1.2rem; }
+.dashboard-clients li { display: grid; grid-template-columns: minmax(9rem, 1.5fr) minmax(5rem, 2fr) auto; align-items: center; gap: 1rem; padding: .8rem 0; }
+.dashboard-clients li + li { border-top: 1px solid var(--line-divider); }
+.dashboard-clients li > span { min-width: 0; overflow-wrap: anywhere; font-size: .875rem; font-weight: 750; }
+.dashboard-clients li > strong { min-width: 2.5rem; text-align: right; font-size: 1rem; font-variant-numeric: tabular-nums; }
+.dashboard-client-track { height: .5rem; overflow: hidden; border-radius: 999px; background: var(--panel-hover); }
+.dashboard-client-track span { display: block; height: 100%; border-radius: inherit; background: #0284c7; }
 .dashboard-hours-critical { color: #be123c; }
 .dashboard-panel-action { padding: .9rem 1.2rem; border-top: 1px solid var(--line-divider); }
 .dashboard-panel-action button { width: 100%; }
@@ -146,6 +153,8 @@ html.dark .operations-dashboard .dashboard-button--primary:hover { background: #
   .dashboard-panel-heading { flex-wrap: wrap; }
 }
 @media (max-width: 520px) {
+  .dashboard-clients li { grid-template-columns: minmax(0, 1fr) auto; gap: .45rem .75rem; }
+  .dashboard-client-track { grid-column: 1 / -1; grid-row: 2; }
   .dashboard-team-head { display: none; }
   .dashboard-team li { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem .35rem; padding: 1rem; }
   .dashboard-team-name { grid-column: 1 / -1; }

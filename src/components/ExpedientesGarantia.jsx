@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabase.jsx'
 import Dialogo from './Dialogo'
-import { ESTADOS, MOTIVOS, leerExpedientes, nuevoExpediente, validarExpediente } from '../utils/expedientesGarantia.js'
+import { ESTADOS, MOTIVOS, candidatosExpedienteGarantia, leerExpedientes, nuevoExpediente, validarExpediente } from '../utils/expedientesGarantia.js'
 import { claveSerieGarantia } from '../utils/vencimientosGarantia.js'
 
 async function abrirArchivo(archivo) {
@@ -82,7 +82,29 @@ export function EditorExpediente({ inicial, registros, onCerrar, onGuardado }) {
   </Dialogo>
 }
 
-export default function ExpedientesGarantia({ datos, tickets = [], ticketInicial, onCerrar }) {
+function SelectorTicketExpediente({ candidatos, onElegir, onManual, onCerrar }) {
+  const [buscar, setBuscar] = useState('')
+  const termino = buscar.trim().toLowerCase()
+  const visibles = candidatos.filter(({ ficha }) => `${ficha.referencia} ${ficha.serie} ${ficha.cliente}`.toLowerCase().includes(termino))
+  return <Dialogo titulo="Elegir ticket para el expediente" onCerrar={onCerrar}>
+    <div className="app-dialog-panel">
+      <div className="app-dialog-header"><h3>Elegir una alerta de garantía</h3><button type="button" onClick={onCerrar}>Cerrar</button></div>
+      <div className="app-dialog-body space-y-4">
+        <p className="text-sm">Selecciona el ticket y se completarán automáticamente la referencia u orden, la serie y el cliente.</p>
+        <label className="block">Buscar cliente, referencia o serie<input autoFocus className="control-field mt-1" value={buscar} onChange={e => setBuscar(e.target.value)}/></label>
+        <div className="space-y-2">{visibles.map(({ ticket, ficha, diagnostico }) => <button type="button" key={ficha.referencia} className="block w-full rounded-lg border-2 border-orange-500 bg-orange-50 p-3 text-left text-slate-900 transition hover:bg-orange-100" onClick={() => onElegir(ticket)}>
+          <strong className="block break-words">#{ficha.referencia} · {ficha.cliente || 'Sin cliente'}</strong>
+          <span className="mt-1 block break-all text-sm">Serie: {ficha.serie}</span>
+          <span className="mt-1 block text-xs font-bold text-orange-800">{diagnostico}</span>
+        </button>)}</div>
+        {!visibles.length && <p className="rounded-lg border-2 border-slate-400 p-3 text-sm">{candidatos.length ? 'No hay coincidencias para esta búsqueda.' : 'No hay alertas con serie válida y sin ficha pendiente de crear.'}</p>}
+      </div>
+      <div className="app-dialog-footer"><button type="button" className="btn-ghost" onClick={onCerrar}>Cancelar</button><button type="button" className="btn-ghost" onClick={onManual}>Crear manualmente</button></div>
+    </div>
+  </Dialogo>
+}
+
+export default function ExpedientesGarantia({ datos, tickets = [], ticketInicial, onCerrar, controlAlertas }) {
   const [registros, setRegistros] = useState([])
   const [estado, setEstado] = useState('cargando')
   const [error, setError] = useState('')
@@ -90,6 +112,7 @@ export default function ExpedientesGarantia({ datos, tickets = [], ticketInicial
   const [busqueda, setBusqueda] = useState('')
   const [filtro, setFiltro] = useState('Todos')
   const [revision, setRevision] = useState(0)
+  const [selector, setSelector] = useState(false)
   useEffect(() => {
     let vivo = true
     setEstado('cargando')
@@ -107,9 +130,10 @@ export default function ExpedientesGarantia({ datos, tickets = [], ticketInicial
   const guardar = () => { datos.reintentar(); setRevision(r => r + 1) }
   if (ticketInicial) return editor ? <EditorExpediente inicial={editor} registros={registros} onCerrar={cerrarEditor} onGuardado={guardar}/> : <Dialogo titulo="Expediente de garantía" onCerrar={onCerrar}><div className="app-dialog-panel"><div className="app-dialog-body"><p role="status">{error || 'Consultando expedientes…'}</p><button className="btn-ghost" onClick={() => setRevision(r => r + 1)}>Reintentar</button><button className="btn-ghost" onClick={onCerrar}>Cerrar</button></div></div></Dialogo>
   const visibles = registros.filter(r => (filtro === 'Todos' || r.estado === filtro) && `${r.referencia} ${r.serie} ${r.cliente}`.toLowerCase().includes(busqueda.toLowerCase()))
+  const candidatos = candidatosExpedienteGarantia(controlAlertas, registros)
   const nuevas = tickets.filter(t => { const n = nuevoExpediente(t); return n.referencia && n.serie && registros.some(r => r.serie === n.serie) && !registros.some(r => r.referencia === n.referencia) }).filter((t,i,a) => a.findIndex(x => nuevoExpediente(x).referencia === nuevoExpediente(t).referencia) === i)
   return <section className="space-y-4">
-    <div className="card space-y-3 p-4"><h2 className="text-xl font-bold">Expedientes de garantía</h2><p className="text-sm">Respaldos por despacho, factura, reparación o excepción. Las nuevas atenciones requieren su propia ficha.</p><button className="btn-primary" disabled={estado !== 'listo'} onClick={() => setEditor(nuevoExpediente())}>Nuevo expediente</button><button className="btn-ghost" onClick={() => setRevision(r => r + 1)}>Actualizar</button>
+    <div className="card space-y-3 p-4"><h2 className="text-xl font-bold">Expedientes de garantía</h2><p className="text-sm">Respaldos por despacho, factura, reparación o excepción. Las nuevas atenciones requieren su propia ficha.</p><button className="btn-primary" disabled={estado !== 'listo'} onClick={() => setSelector(true)}>Nuevo expediente desde Técnicos{candidatos.length ? ` (${candidatos.length})` : ''}</button><button className="btn-ghost" onClick={() => setRevision(r => r + 1)}>Actualizar</button>
       <label className="block">Buscar referencia, serie o cliente<input className="control-field mt-1" value={busqueda} onChange={e => setBusqueda(e.target.value)}/></label><label className="block">Estado<select className="control-field mt-1" value={filtro} onChange={e => setFiltro(e.target.value)}>{['Todos', ...ESTADOS].map(v => <option key={v}>{v}</option>)}</select></label>
       {estado === 'cargando' && <p role="status">Consultando expedientes…</p>}{error && <p role="alert">{error}</p>}
     </div>
@@ -117,5 +141,6 @@ export default function ExpedientesGarantia({ datos, tickets = [], ticketInicial
     <div className="grid min-w-0 gap-4 lg:grid-cols-2">{visibles.map(r => <article key={r.id} className="card min-w-0 space-y-3 border-2 border-slate-600 p-4"><h3 className="break-words font-bold">#{r.referencia} · {r.cliente}</h3><p className="break-all text-sm">Serie {r.serie}</p><p className="text-sm font-bold">{r.motivo} · {r.estado}</p><p className="text-sm">{['Reparación', 'Excepción'].includes(r.motivo) ? 'Autorización limitada a este ticket' : `Vencimiento: ${r.fecha_vencimiento || 'Pendiente'}`}</p><p className="whitespace-pre-wrap break-words text-sm">{r.explicacion}</p>{r.archivos.map(a => <button key={a.path} className="block max-w-full break-all text-left text-sm underline" onClick={() => abrirArchivo(a).catch(e => setError(e.message))}>{a.nombre}</button>)}{!r.archivos.length && <p className="text-sm">Sin documentos adjuntos</p>}<button className="btn-primary" onClick={() => setEditor(r)}>Abrir / subir respaldo</button></article>)}</div>
     {estado === 'listo' && !visibles.length && <p>No hay expedientes para esta búsqueda.</p>}
     {editor && <EditorExpediente inicial={editor} registros={registros} onCerrar={cerrarEditor} onGuardado={guardar}/>}
+    {selector && <SelectorTicketExpediente candidatos={candidatos} onCerrar={() => setSelector(false)} onManual={() => { setSelector(false); setEditor(nuevoExpediente()) }} onElegir={ticket => { setSelector(false); setEditor(nuevoExpediente(ticket)) }}/>} 
   </section>
 }

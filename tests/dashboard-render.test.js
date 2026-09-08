@@ -27,6 +27,17 @@ test('dashboard renderiza resumen, alertas, carga y referencias con los datos re
   assert.doesNotMatch(html, /NaN|Infinity|Cambiar Normal|Atención cubierta/)
 })
 
+test('dashboard muestra un único total por cliente para la carga operativa', () => {
+  const html = renderizar({ allTickets: [
+    { CLIENTE: 'Cliente Uno', ESTADO: 'En Proceso', tecnico: 'Ana' },
+    { CLIENTE: 'Cliente Uno', ESTADO: 'Asignada a Agencia', tecnico: 'Ana' },
+    { CLIENTE: 'Cliente Uno', ESTADO: 'Orden Finalizada', tecnico: 'Ana' },
+  ] })
+  assert.match(html, /Tickets por cliente/)
+  assert.match(html, /Cliente Uno/)
+  assert.match(html, />2<\/strong>/)
+})
+
 test('dashboard muestra las limitaciones del catálogo e historial, sin afirmar que no hay problemas', () => {
   const html = renderizar({ estadoCatalogoGarantias: 'error', estadoHistorial: 'sin-configurar' })
   assert.match(html, /Catálogo de garantías no disponible/)

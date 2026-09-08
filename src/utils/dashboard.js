@@ -14,6 +14,23 @@ export function esTecnicoSinAsignar(nombre) {
   return !limpio || limpio === '-' || /^SIN (?:TECNICO|ASIGNAR|ASIGNACION)(?: \d+)?$/.test(limpio)
 }
 
+const ESTADOS_CLIENTES_DASHBOARD = new Set(['EN PROCESO', 'ASIGNADA A TECNICO', 'ASIGNADA A AGENCIA'])
+
+// Un total por cliente, limitado a los tres estados operativos solicitados.
+export function obtenerTicketsPorClienteDashboard(tickets = []) {
+  const clientes = new Map()
+  tickets.forEach(ticket => {
+    const estado = normalizarTextoGarantia(ticket?.ESTADO_LIMPIO || ticket?.ESTADO)
+    if (!ESTADOS_CLIENTES_DASHBOARD.has(estado)) return
+    const nombre = String(ticket?.CLIENTE ?? '').trim().replace(/\s+/g, ' ') || 'Sin cliente registrado'
+    const clave = nombre === 'Sin cliente registrado' ? '__sin_cliente__' : normalizarTextoGarantia(nombre)
+    const actual = clientes.get(clave)
+    if (actual) actual.cantidad++
+    else clientes.set(clave, { clave, nombre, cantidad: 1 })
+  })
+  return [...clientes.values()].sort((a, b) => b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre, 'es'))
+}
+
 // Sólo resume la base disponible: no modifica tickets ni infiere tiempos
 // a partir del reloj. TIEMPO TRANSCURRIDO es el dato recibido del Excel.
 export function obtenerResumenDashboard(tickets = []) {
@@ -59,6 +76,7 @@ export function obtenerResumenDashboard(tickets = []) {
     equipo: ordenarEquipoDashboard(personas),
     maxCarga: Math.max(1, ...personas.map(p => p.pendientes)),
     masAntiguos: pendientesOrdenados.slice(0, 5),
+    clientesActivos: obtenerTicketsPorClienteDashboard(tickets),
   }
 }
 

@@ -533,7 +533,7 @@ export default function App() {
           />
         </div>
         <div className={tab === 'pendientes' ? 'block fade-in' : 'hidden'}>
-          <ModuloPendientes importacionParticulares={importacionParticulares} vencimientosGarantia={vencimientosGarantia} allTickets={allTickets} />
+          <ModuloPendientes importacionParticulares={importacionParticulares} vencimientosGarantia={vencimientosGarantia} allTickets={allTickets} controlAlertas={controlAlertas} />
         </div>
         <div className={tab === 'vacaciones' ? 'block fade-in' : 'hidden'}>
           {vacacionesMontado && <Vacaciones />}

@@ -14,6 +14,7 @@ export default function Dashboard({ allTickets, nombreArchivo, fechaSubidaExcel,
   const stats = useMemo(() => obtenerResumenDashboard(allTickets), [allTickets])
   const [orden, setOrden] = useState('pendientes')
   const [mostrarTodos, setMostrarTodos] = useState(false)
+  const [mostrarTodosClientes, setMostrarTodosClientes] = useState(false)
   const equipo = useMemo(() => ordenarEquipoDashboard(stats.equipo, orden), [stats.equipo, orden])
   const abrirTecnicos = () => onNavigate('tecnicos')
   const abrirReportes = () => onNavigate('tablas')
@@ -143,6 +144,19 @@ export default function Dashboard({ allTickets, nombreArchivo, fechaSubidaExcel,
           <div className="dashboard-panel-action"><button type="button" className="dashboard-button" onClick={abrirTecnicos}>Gestionar en Técnicos <ArrowRight size={16} /></button></div>
         </section>
       </div>
+
+      <section className="dashboard-panel" aria-labelledby="dashboard-clientes">
+        <PanelHeading id="dashboard-clientes" title="Tickets por cliente" subtitle="Solo la carga activa de atención del archivo subido" icon={Users} badge={numero(stats.clientesActivos.reduce((total, cliente) => total + cliente.cantidad, 0)) + ' tickets'} />
+        {stats.clientesActivos.length ? <ol className="dashboard-clients" id="dashboard-lista-clientes">
+          {stats.clientesActivos.slice(0, mostrarTodosClientes ? stats.clientesActivos.length : 10).map(cliente => <li key={cliente.clave}>
+            <span>{cliente.nombre}</span>
+            <div className="dashboard-client-track" aria-hidden="true"><span style={{ width: cliente.cantidad / stats.clientesActivos[0].cantidad * 100 + '%' }} /></div>
+            <strong>{numero(cliente.cantidad)}</strong>
+          </li>)}
+        </ol> : <p className="dashboard-no-rows">No hay tickets de clientes en la carga activa.</p>}
+        {stats.clientesActivos.length > 10 && <button type="button" className="dashboard-show-all" aria-expanded={mostrarTodosClientes} aria-controls="dashboard-lista-clientes" onClick={() => setMostrarTodosClientes(actual => !actual)}>{mostrarTodosClientes ? 'Mostrar sólo 10' : 'Ver todos los clientes (' + stats.clientesActivos.length + ')'}</button>}
+        <div className="dashboard-panel-footnote">Cada cliente muestra un único total. Solo se cuentan En Proceso, Asignada a Técnico y Asignada a Agencia.</div>
+      </section>
     </div>
   )
 }

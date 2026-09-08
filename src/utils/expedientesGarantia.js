@@ -14,6 +14,26 @@ export function expedienteDeTicket(ticket, porReferencia = {}) {
 export function nuevoExpediente(ticket = {}) {
   return { referencia: referenciaTicketGarantia(ticket), serie: claveSerieGarantia(obtenerSerieTicket(ticket)), cliente: ticket.CLIENTE || '', motivo: 'Despacho', estado: 'Pendiente de respaldo', fecha_vencimiento: '', explicacion: '', autorizado_por: '', archivos: [] }
 }
+
+export function candidatosExpedienteGarantia(control = {}, registros = []) {
+  const existentes = new Set(registros.map(registro => referenciaExpediente(registro.referencia)).filter(Boolean))
+  const vistos = new Set()
+  const grupos = [
+    ['vencidas', 'Garantía vencida'],
+    ['tipoIncorrecto', 'TIPO Normal · revisar'],
+    ['sinSerie', 'Serie por verificar'],
+  ]
+  const resultado = []
+  grupos.forEach(([grupo, diagnostico]) => {
+    ;(control?.[grupo] || []).forEach(alerta => {
+      const ficha = nuevoExpediente(alerta.ticket)
+      if (!ficha.referencia || !ficha.serie || existentes.has(ficha.referencia) || vistos.has(ficha.referencia)) return
+      vistos.add(ficha.referencia)
+      resultado.push({ ticket: alerta.ticket, ficha, diagnostico })
+    })
+  })
+  return resultado
+}
 export function validarExpediente(form) {
   if (!referenciaExpediente(form.referencia) || !claveSerieGarantia(form.serie)) throw new Error('Se necesitan la referencia y una serie válida.')
   if (!MOTIVOS.includes(form.motivo) || !ESTADOS.includes(form.estado)) throw new Error('Motivo o estado inválido.')

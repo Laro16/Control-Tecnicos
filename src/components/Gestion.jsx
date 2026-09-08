@@ -32,7 +32,7 @@ function estBadge(e) {
   return 'bg-slate-50 text-slate-400 border-slate-200'
 }
 
-export default function ModuloPendientes({ importacionParticulares, vencimientosGarantia, allTickets }) {
+export default function ModuloPendientes({ importacionParticulares, vencimientosGarantia, allTickets, controlAlertas }) {
   const [items, setItems] = useState([])
   const [cargando, setCargando] = useState(true)
   const [modal, setModal] = useState(false)
@@ -251,7 +251,7 @@ export default function ModuloPendientes({ importacionParticulares, vencimientos
   const procesoCount = itemsFiltrados.filter(i => i.estado === 'En proceso' || i.estado === 'En Proceso').length
   const completadosCount = itemsFiltrados.filter(i => ['Realizado', 'Completada', 'Pagado'].includes(i.estado)).length
 
-  if (vistaActual === 'Garantia') return <div className="space-y-4"><button className="btn-ghost" onClick={() => setVistaActual('Tarea')}>Volver a pendientes y particulares</button><ExpedientesGarantia datos={vencimientosGarantia} tickets={allTickets}/></div>
+  if (vistaActual === 'Garantia') return <div className="space-y-4"><button className="btn-ghost" onClick={() => setVistaActual('Tarea')}>Volver a pendientes y particulares</button><ExpedientesGarantia datos={vencimientosGarantia} tickets={allTickets} controlAlertas={controlAlertas}/></div>
 
   return (
     <div className="space-y-5 fade-in">

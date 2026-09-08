@@ -1,6 +1,20 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { esTecnicoSinAsignar, gruposAlertasDashboard, horasTicketDashboard, obtenerResumenDashboard, ordenarEquipoDashboard } from '../src/utils/dashboard.js'
+import { esTecnicoSinAsignar, gruposAlertasDashboard, horasTicketDashboard, obtenerResumenDashboard, ordenarEquipoDashboard, obtenerTicketsPorClienteDashboard } from '../src/utils/dashboard.js'
+
+test('dashboard: tickets por cliente sólo usa los tres estados operativos y no los desglosa', () => {
+  const datos = [
+    { CLIENTE: 'Cliente A', ESTADO: 'En Proceso' },
+    { CLIENTE: ' cliente a ', ESTADO: 'Asignada a Técnico' },
+    { CLIENTE: 'Cliente B', ESTADO: 'Asignada a Agencia' },
+    { CLIENTE: 'Cliente A', ESTADO: 'Orden Finalizada' },
+    { CLIENTE: 'Cliente B', ESTADO: 'Pendiente' },
+  ]
+  assert.deepEqual(obtenerTicketsPorClienteDashboard(datos).map(({ nombre, cantidad }) => ({ nombre, cantidad })), [
+    { nombre: 'Cliente A', cantidad: 2 },
+    { nombre: 'Cliente B', cantidad: 1 },
+  ])
+})
 import { obtenerControlAlertas } from '../src/utils/alertas.js'
 
 const ticket = (horas, extra = {}) => ({ tecnico: 'Ana', ESTADO: 'Asignada a Técnico', TIEMPO_TRANSCURRIDO: horas, ...extra })

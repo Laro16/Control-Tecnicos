@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { nuevoExpediente, validarExpediente, leerExpedientes, expedienteDeTicket, referenciaTicketGarantia } from '../src/utils/expedientesGarantia.js'
+import { nuevoExpediente, validarExpediente, leerExpedientes, expedienteDeTicket, referenciaTicketGarantia, candidatosExpedienteGarantia } from '../src/utils/expedientesGarantia.js'
 
 test('ficha creada coincide solo por referencia, nunca por serie ni referencia vacía', () => {
   const ficha = { referencia: '00123', serie: '2401011234' }
@@ -18,6 +18,18 @@ test('usa N° ORDEN únicamente cuando N° REFERENCIA está vacío', () => {
   const ficha = { referencia: 'ORD-99' }
   assert.equal(expedienteDeTicket({ 'N° REFERENCIA': '', 'N° ORDEN': 'ord-99' }, { 'ORD-99': ficha }), ficha)
   assert.equal(expedienteDeTicket({ 'N° REFERENCIA': 'REF-01', 'N° ORDEN': 'ORD-99' }, { 'ORD-99': ficha }), null)
+})
+
+test('selector ofrece alertas sin ficha y permite la misma serie con otra referencia', () => {
+  const alerta = (referencia, serie = '2401011234', extra = {}) => ({ ticket: { 'N° REFERENCIA': referencia, SERIE: serie, CLIENTE: 'Cliente', ...extra } })
+  const control = {
+    vencidas: [alerta('YA-CREADA'), alerta('NUEVA-1')],
+    tipoIncorrecto: [alerta('', '2401011234', { 'N° ORDEN': 'ORD-2' }), alerta('NUEVA-1')],
+    sinSerie: [alerta('SIN-SERIE', '-')],
+  }
+  const candidatos = candidatosExpedienteGarantia(control, [{ referencia: 'YA-CREADA', serie: '2401011234' }])
+  assert.deepEqual(candidatos.map(c => c.ficha.referencia), ['NUEVA-1', 'ORD-2'])
+  assert.deepEqual(candidatos.map(c => c.diagnostico), ['Garantía vencida', 'TIPO Normal · revisar'])
 })
 
 test('nueva atención conserva serie y referencia, nunca hereda autorización', () => {
