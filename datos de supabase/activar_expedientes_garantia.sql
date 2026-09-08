@@ -10,14 +10,15 @@ create table public.garantias_expedientes (
  referencia text not null unique check (length(trim(referencia)) > 0),
  serie text not null check (serie ~ '^[A-Z0-9]{7,40}$' and serie ~ '[0-9]'),
  cliente text not null default '',
- motivo text not null check (motivo in ('Despacho','Factura de venta','Reparación','Excepción')),
+ motivo text not null check (motivo in ('Despacho','Factura de venta','Reparación','Excepción','Sin garantía confirmada')),
  estado text not null check (estado in ('Pendiente de respaldo','En revisión','Autorizado','Rechazado','Cerrado')),
  fecha_vencimiento date check (fecha_vencimiento between date '1900-01-01' and date '9999-12-31'),
  explicacion text not null,
  autorizado_por text not null default '',
  archivos jsonb not null default '[]',
  revision integer not null default 1,
- actualizado_en timestamptz not null default now()
+ actualizado_en timestamptz not null default now(),
+ constraint garantias_expedientes_sin_cobertura_check check (motivo <> 'Sin garantía confirmada' or estado <> 'Autorizado')
 );
 create index on public.garantias_expedientes (serie);
 create table public.garantias_expedientes_revisiones (

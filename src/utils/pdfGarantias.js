@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { prepararGarantiasExportacion } from './exportacionesTecnicos.js'
+import { referenciaTicketGarantia } from './expedientesGarantia.js'
 
 const textoPdf = valor => String(valor ?? '-').replace(/[—–]/g, '-').replace(/[^\x20-\x7E\xA0-\xFF\n\r]/g, '')
 
@@ -23,7 +24,7 @@ export function crearPDFGarantias(alertas, { nombreArchivo = '', generado = new 
       startY: y, margin: { top: 43, bottom: 20, left: 12, right: 12 }, theme: 'grid',
       head: [[{ content: `${titulo} (${filas.length})`, colSpan: 5, styles: { fillColor: color, fontSize: 11 } }], ['Referencia / Técnico', 'Cliente / Negocio', 'Serie / Tipo', 'Plazo', 'Diagnóstico / Acción']],
       body: filas.map(r => [
-        textoPdf(`${r.ticket['N° REFERENCIA'] || '-'}\n${r.ticket.tecnico || '-'}`),
+        textoPdf(`${referenciaTicketGarantia(r.ticket) || '-'}\n${r.ticket.tecnico || '-'}`),
         textoPdf(`${r.ticket.CLIENTE || '-'}\n${r.ticket.NEGOCIO || '-'}`),
         textoPdf(`${r.serie}\nTIPO: ${r.ticket.TIPO || '-'}\nOrigen: ${r.origen}`),
         textoPdf(r.garantia.sinDatosSerie ? `${r.garantia.aniosGarantia} años\nFechas no verificables` : `${r.garantia.fechaVerificada ? 'Vencimiento real confirmado' : `Fab: ${r.garantia.fabDisplay}`}\nVence: ${r.garantia.vencDisplay}\n${r.garantia.diasRestantes < 0 ? `${Math.abs(r.garantia.diasRestantes)} días vencida` : `${r.garantia.diasRestantes} días restantes`}`),

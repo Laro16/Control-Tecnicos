@@ -54,6 +54,11 @@ test('despacho o factura exigen vencimiento y responsable al autorizar', () => {
 test('excepción y reparación no requieren ampliar cobertura por serie', () => {
   for (const motivo of ['Excepción', 'Reparación']) assert.equal(validarExpediente({ ...base(), motivo, estado: 'Autorizado', autorizado_por: 'Jefe', archivos: [{ path: 'a' }] }), true)
 })
+test('sin garantía confirmada se guarda rechazada pero nunca autorizada', () => {
+  const sinGarantia = { ...base(), motivo: 'Sin garantía confirmada', estado: 'Rechazado', fecha_vencimiento: '' }
+  assert.equal(validarExpediente(sinGarantia), true)
+  assert.throws(() => validarExpediente({ ...sinGarantia, estado: 'Autorizado', archivos: [{ path: 'a' }], autorizado_por: 'Jefe' }), /no puede quedar Autorizado/)
+})
 test('rechaza referencias vacías, series inválidas y falta de explicación', () => {
   assert.throws(() => validarExpediente({ ...base(), referencia: ' ' }))
   assert.throws(() => validarExpediente({ ...base(), serie: '-' }))

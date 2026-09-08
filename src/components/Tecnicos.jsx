@@ -11,7 +11,7 @@ import { obtenerSerieTicket, resolverSerie, verificarGarantiaTicket } from '../u
 import { claveAtencion, normalizarSerieHistorial } from '../utils/historialSeries'
 import HistorialSeries from './HistorialSeries'
 import EditorVencimientoGarantia, { ControlVencimiento } from './VencimientoGarantia'
-import { expedienteDeTicket } from '../utils/expedientesGarantia.js'
+import { expedienteDeTicket, referenciaTicketGarantia } from '../utils/expedientesGarantia.js'
 import './garantiasExpedientes.css'
 import { crearLibroTecnicos, descargarArchivo, fechaArchivo, prepararInformeTecnicos } from '../utils/exportacionesTecnicos'
 import { crearPDFGarantias } from '../utils/pdfGarantias'
@@ -38,6 +38,8 @@ function limpiarReferencia(valor) {
   const referencia = String(valor).trim()
   return referencia === '-' ? '' : referencia
 }
+
+const numeroTicket = ticket => referenciaTicketGarantia(ticket) || '-'
 
 function normalizarFechaExcel(fechaTexto) {
   if (!fechaTexto) return null
@@ -75,7 +77,7 @@ function buildMessage(tecnico, tickets, rutaDefinida) {
   msg += `━━━━━━━━━━━━━━━━━━━━━━━━\n`
   tickets.forEach((t, i) => {
     if (i > 0) msg += `\n━━━━━━━━━━━━━━━━━━━━━━━━\n`
-    msg += `\n📌 *REFERENCIA:* ${t['N° REFERENCIA'] || '-'}\n`
+    msg += `\n📌 *REFERENCIA / ORDEN:* ${numeroTicket(t)}\n`
     msg += `🏪 *NEGOCIO:* ${t['NEGOCIO'] || '-'}\n`
     msg += `📝 *DESCRIPCIÓN INICIAL:*\n${t['DESCRIPCIÓN INICIAL'] || '-'}\n`
     msg += `📍 *DIRECCIÓN:* ${t['DIRECCIÓN'] || '-'}\n`
@@ -93,7 +95,7 @@ function buildMessage(tecnico, tickets, rutaDefinida) {
 
 function buildTicketMessage(ticket) {
   return [
-    `🔧 *TICKET ${ticket['N° REFERENCIA'] || '-'}*`,
+    `🔧 *TICKET ${numeroTicket(ticket)}*`,
     `🏪 *NEGOCIO:* ${ticket['NEGOCIO'] || '-'}`,
     `👤 *CLIENTE:* ${ticket['CLIENTE'] || '-'}`,
     `📍 *DIRECCIÓN:* ${ticket['DIRECCIÓN'] || '-'}`,
@@ -283,6 +285,7 @@ export default function ModuloTecnicos({
               // La referencia vacía se conserva vacía. Usar "-" aquí hacía que
               // todas las celdas sin dato aparecieran como un falso duplicado.
               'N° REFERENCIA': limpiarReferencia(fila['N° REFERENCIA'] ?? fila['NO REFERENCIA'] ?? fila['REFERENCIA'] ?? fila['TICKET']),
+              'N° ORDEN': limpiarReferencia(fila['N° ORDEN'] ?? fila['NO ORDEN'] ?? fila['ORDEN']),
               'NEGOCIO': fila['NEGOCIO'] || fila['NOMBRE NEGOCIO'] || fila['SUCURSAL'] || '-',
               'DIRECCIÓN': fila['DIRECCIÓN'] || fila['DIRECCION'] || '-',
               'TELÉFONO': fila['TELÉFONO'] || fila['TELEFONO'] || fila['TEL'] || '-',
@@ -450,7 +453,7 @@ export default function ModuloTecnicos({
       // Fila principal del ticket
       body.push([
         { content: `#${i+1}`, styles: { fontStyle: 'bold', halign: 'center' } },
-        { content: t['N° REFERENCIA'] || '-', styles: { fontStyle: 'bold' } },
+        { content: numeroTicket(t), styles: { fontStyle: 'bold' } },
         { content: t['ESTADO'] || '-', styles: esProceso ? { textColor: [190, 18, 60], fontStyle: 'bold' } : {} },
         { content: info }
       ])
@@ -530,7 +533,7 @@ export default function ModuloTecnicos({
       return [
         `${i+1}`,
         t.tecnico,
-        t['N° REFERENCIA'] || '-',
+        numeroTicket(t),
         t['NEGOCIO'] || '-',
         { content: com, styles: { textColor: [190, 18, 60], fontStyle: 'bold' } }
       ]
@@ -564,7 +567,7 @@ export default function ModuloTecnicos({
     sinSerie: alertasSinSerie, duplicados: ticketsDuplicados,
   } = controlAlertas
   const reincidenciasPorTicket = new Map(controlAlertas.reincidencias.map(alerta => [
-    claveAtencion({ serie: alerta.serie, referencia: normalizarTexto(alerta.ticket['N° REFERENCIA']) }), alerta,
+    claveAtencion({ serie: alerta.serie, referencia: normalizarTexto(numeroTicket(alerta.ticket)) }), alerta,
   ]))
 
   return (
@@ -718,7 +721,7 @@ export default function ModuloTecnicos({
                       {alertasVencidas.map((a, i) => (
                         <div key={i} className={`alert-card bg-rose-50 border border-rose-200 border-l-[4px] border-l-rose-500 rounded-lg px-3 py-2.5 space-y-1.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] ${expedienteDeTicket(a.ticket, vencimientosGarantia?.expedientes?.porReferencia) ? 'garantia-con-expediente' : ''} `}>
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-mono text-[10px] font-bold text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded">#{a.ticket['N° REFERENCIA']}</span>
+                            <span className="font-mono text-[10px] font-bold text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded">#{numeroTicket(a.ticket)}</span>
                             {a.garantia.tipoIncorrecto && <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold text-violet-800">TIPO NORMAL · NO ATENDER SIN GARANTÍA</span>}
                             <span className="text-[10px] font-semibold text-slate-500">{a.ticket.tecnico}</span>
                             <span className="text-[9px] font-semibold text-rose-600 ml-auto shrink-0">Fab: {a.garantia.fabDisplay} · Venció: {a.garantia.vencDisplay} · {a.garantia.aniosGarantia}a</span>
@@ -745,7 +748,7 @@ export default function ModuloTecnicos({
                       {alertasTipoIncorrecto.map((a, i) => (
                         <div key={i} className={`alert-card ${expedienteDeTicket(a.ticket, vencimientosGarantia?.expedientes?.porReferencia) ? 'garantia-con-expediente' : ''} space-y-2 rounded-lg border border-l-[4px] px-3 py-3 ${a.garantia.fechaVerificada ? 'border-emerald-300 border-l-emerald-600 bg-emerald-50' : 'border-violet-300 border-l-violet-600 bg-violet-50'}`}>
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded bg-violet-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-violet-800">#{a.ticket['N° REFERENCIA'] || '-'}</span>
+                            <span className="rounded bg-violet-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-violet-800">#{numeroTicket(a.ticket)}</span>
                             <span className="text-[10px] font-semibold text-slate-500">{a.ticket.tecnico}</span>
                             <span className="ml-auto rounded-md border border-violet-300 bg-white px-2 py-1 text-[9px] font-black text-violet-800">
                               TIPO: {a.garantia.tipoActual} · REVISAR
@@ -778,7 +781,7 @@ export default function ModuloTecnicos({
                       {alertasSinSerie.map((a, i) => (
                         <div key={i} className={`alert-card bg-amber-50 border border-amber-200 border-l-[4px] border-l-amber-500 rounded-lg px-3 py-2.5 space-y-1.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] ${expedienteDeTicket(a.ticket, vencimientosGarantia?.expedientes?.porReferencia) ? 'garantia-con-expediente' : ''} `}>
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-mono text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">#{a.ticket['N° REFERENCIA']}</span>
+                            <span className="font-mono text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">#{numeroTicket(a.ticket)}</span>
                             <span className="text-[10px] font-semibold text-slate-500">{a.ticket.tecnico}</span>
                             <span className="text-[9px] font-semibold text-amber-600 ml-auto shrink-0">Serie: "{obtenerSerieTicket(a.ticket)}" · {a.garantia.aniosGarantia}a</span>
                           </div>
@@ -801,7 +804,7 @@ export default function ModuloTecnicos({
                       {alertasVigentes.map((a, i) => (
                         <div key={i} className={`alert-card bg-emerald-50 border border-emerald-200 border-l-[4px] border-l-emerald-500 rounded-lg px-3 py-2.5 space-y-1.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] ${expedienteDeTicket(a.ticket, vencimientosGarantia?.expedientes?.porReferencia) ? 'garantia-con-expediente' : ''} `}>
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-mono text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">#{a.ticket['N° REFERENCIA']}</span>
+                            <span className="font-mono text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">#{numeroTicket(a.ticket)}</span>
                             <span className="text-[10px] font-semibold text-slate-500">{a.ticket.tecnico}</span>
                             <span className="text-[9px] font-semibold text-emerald-600 ml-auto shrink-0">{a.garantia.diasRestantes}d restantes · {a.garantia.aniosGarantia}a</span>
                           </div>
@@ -927,7 +930,7 @@ export default function ModuloTecnicos({
                       {tickets.map((t, i) => {
                         const g = verificarGarantiaTicket(t, clientesGarantia, vencimientosGarantia?.porSerie)
                         const verdeConfirmado = g?.fechaVerificada && !g.vencida
-                        const reincidencia = reincidenciasPorTicket.get(claveAtencion({ serie: normalizarSerieHistorial(obtenerSerieTicket(t)), referencia: normalizarTexto(t['N° REFERENCIA']) }))
+                        const reincidencia = reincidenciasPorTicket.get(claveAtencion({ serie: normalizarSerieHistorial(obtenerSerieTicket(t)), referencia: normalizarTexto(numeroTicket(t)) }))
                         const esProceso = t['ESTADO_LIMPIO'].includes('PROCESO')
                         const esAgencia = t['ESTADO_LIMPIO'].includes('AGENCIA')
                         const borderColor = g?.vencida ? 'border-l-rose-500'
@@ -946,7 +949,7 @@ export default function ModuloTecnicos({
                           <div key={i} className={`alert-card ${g && expedienteDeTicket(t, vencimientosGarantia?.expedientes?.porReferencia) ? 'garantia-con-expediente' : ''} rounded-lg border-[1.5px] border-slate-300 border-l-[4px] ${borderColor} overflow-hidden bg-white shadow-[0_1px_4px_rgba(0,0,0,0.07)]`}>
                             {/* Badge row */}
                             <div className={`flex items-center gap-1.5 flex-wrap px-3 py-2.5 ${headerBg} border-b border-slate-100`}>
-                              <span className="font-mono text-[10px] font-bold text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-100">#{t['N° REFERENCIA']}</span>
+                              <span className="font-mono text-[10px] font-bold text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-100">#{numeroTicket(t)}</span>
                               <TicketBadge estado={t['ESTADO']} />
                               {reincidencia && <span className="rounded-md bg-sky-700 px-2 py-0.5 text-[9px] font-bold text-white">POSIBLE REINCIDENCIA · {reincidencia.anteriores.length} antecedente{reincidencia.anteriores.length > 1 ? 's' : ''}</span>}
                               {g?.tipoIncorrecto && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-violet-600 text-white flex items-center gap-0.5"><ShieldAlert size={9} /> TIPO NORMAL</span>}

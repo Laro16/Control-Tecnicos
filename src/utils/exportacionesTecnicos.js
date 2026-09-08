@@ -1,5 +1,6 @@
 import { normalizarTextoGarantia, obtenerSerieTicket, resolverSerie } from './garantias.js'
 import { esTicketFinalizado } from './historialSeries.js'
+import { referenciaTicketGarantia } from './expedientesGarantia.js'
 
 const texto = valor => valor == null ? '' : String(valor)
 const ordenarTickets = tickets => [...tickets].sort((a, b) => texto(a.tecnico).localeCompare(texto(b.tecnico), 'es') || texto(a['N° REFERENCIA']).localeCompare(texto(b['N° REFERENCIA']), 'es', { numeric: true }))
@@ -57,7 +58,7 @@ export function prepararInformeTecnicos({ tickets, control, nombreArchivo = '', 
     {
       nombre: 'Garantías', nota: 'Sólo tickets no finalizados de clientes del catálogo. Vencidas primero. TIPO Normal siempre requiere revisión.',
       columnas: [['N°', 7, 'numero'], ['N° REFERENCIA', 19], ['CLIENTE', 40], ['NEGOCIO', 36], ['TÉCNICO', 28], ['RESULTADO', 24], ['TIPO ORIGINAL', 18], ['SERIE', 22], ['ORIGEN DE SERIE', 24], ['FABRICACIÓN', 19, 'fecha'], ['VENCIMIENTO', 19, 'fecha'], ['AÑOS', 11, 'numero'], ['DÍAS AL VENCIMIENTO', 21, 'numero'], ['ACCIÓN / OBSERVACIÓN', 65], ['DIRECCIÓN', 55], ['DESCRIPCIÓN INICIAL', 65], ['ESTADO DEL TICKET', 25]],
-      filas: garantias.map((g, i) => [i + 1, texto(g.ticket['N° REFERENCIA']), texto(g.ticket.CLIENTE), texto(g.ticket.NEGOCIO), texto(g.ticket.tecnico), g.estado, texto(g.ticket.TIPO), g.serie, g.origen, fechaExcel(g.garantia.fechaFabricacion), fechaExcel(g.garantia.fechaVencimiento), g.garantia.aniosGarantia, { formula: `IF(ISNUMBER(K${i + 6}),K${i + 6}-'Resumen'!$B$3,"")`, result: g.garantia.diasRestantes ?? '' }, g.accion, texto(g.ticket['DIRECCIÓN']), texto(g.ticket['DESCRIPCIÓN INICIAL']), texto(g.ticket.ESTADO)]),
+      filas: garantias.map((g, i) => [i + 1, referenciaTicketGarantia(g.ticket), texto(g.ticket.CLIENTE), texto(g.ticket.NEGOCIO), texto(g.ticket.tecnico), g.estado, texto(g.ticket.TIPO), g.serie, g.origen, fechaExcel(g.garantia.fechaFabricacion), fechaExcel(g.garantia.fechaVencimiento), g.garantia.aniosGarantia, { formula: `IF(ISNUMBER(K${i + 6}),K${i + 6}-'Resumen'!$B$3,"")`, result: g.garantia.diasRestantes ?? '' }, g.accion, texto(g.ticket['DIRECCIÓN']), texto(g.ticket['DESCRIPCIÓN INICIAL']), texto(g.ticket.ESTADO)]),
     },
     { nombre: 'Pendientes sin proceso', nota: 'No finalizados, excluyendo En Proceso. Incluye asignaciones a técnico y agencia.', columnas: columnasBase, filas: pendientes.map(filaBase) },
     { nombre: 'En proceso', nota: 'Tickets no finalizados cuyo estado indica En Proceso.', columnas: columnasBase, filas: enProceso.map(filaBase) },

@@ -1,7 +1,7 @@
 import { claveSerieGarantia, fechaGarantiaManual } from './vencimientosGarantia.js'
 import { obtenerSerieTicket } from './garantias.js'
 
-export const MOTIVOS = ['Despacho', 'Factura de venta', 'Reparación', 'Excepción']
+export const MOTIVOS = ['Despacho', 'Factura de venta', 'Reparación', 'Excepción', 'Sin garantía confirmada']
 export const ESTADOS = ['Pendiente de respaldo', 'En revisión', 'Autorizado', 'Rechazado', 'Cerrado']
 export const referenciaExpediente = valor => String(valor ?? '').trim().toUpperCase()
 export function referenciaTicketGarantia(ticket = {}) {
@@ -39,6 +39,7 @@ export function validarExpediente(form) {
   if (!MOTIVOS.includes(form.motivo) || !ESTADOS.includes(form.estado)) throw new Error('Motivo o estado inválido.')
   if (!form.explicacion.trim()) throw new Error('Escribe la explicación de esta atención.')
   if (form.fecha_vencimiento && !fechaGarantiaManual(form.fecha_vencimiento)) throw new Error('Vencimiento inválido.')
+  if (form.motivo === 'Sin garantía confirmada' && form.estado === 'Autorizado') throw new Error('Un caso sin garantía confirmada no puede quedar Autorizado.')
   if (form.estado === 'Autorizado') {
     if (!form.archivos.length || !form.autorizado_por.trim()) throw new Error('Para autorizar, adjunta el respaldo e indica quién confirmó o autorizó.')
     if (['Despacho', 'Factura de venta'].includes(form.motivo) && !form.fecha_vencimiento) throw new Error('Indica el vencimiento confirmado.')

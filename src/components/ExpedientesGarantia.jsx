@@ -17,7 +17,10 @@ export function EditorExpediente({ inicial, registros, onCerrar, onGuardado }) {
   const [revisiones, setRevisiones] = useState(null)
   const cambiar = (campo, valor) => setForm(prev => ({ ...prev, [campo]: valor }))
   const antecedentes = registros.filter(r => r.serie === claveSerieGarantia(form.serie) && r.referencia !== form.referencia)
+  const sinGarantia = form.motivo === 'Sin garantía confirmada'
   const puntual = ['Reparación', 'Excepción'].includes(form.motivo)
+  const sinVencimiento = puntual || sinGarantia
+  const estadosDisponibles = sinGarantia ? ESTADOS.filter(estado => estado !== 'Autorizado') : ESTADOS
   async function subir(files) {
     setOcupado(true); setError('')
     try {
@@ -33,7 +36,7 @@ export function EditorExpediente({ inicial, registros, onCerrar, onGuardado }) {
   async function guardar(e) {
     e.preventDefault(); setError(''); setOcupado(true)
     try {
-      const payload = { ...form, serie: claveSerieGarantia(form.serie), fecha_vencimiento: puntual ? '' : form.fecha_vencimiento }
+      const payload = { ...form, serie: claveSerieGarantia(form.serie), fecha_vencimiento: sinVencimiento ? '' : form.fecha_vencimiento }
       validarExpediente(payload)
       const { data, error: fallo } = await supabase.rpc('guardar_expediente_garantia', { p_datos: payload, p_revision: inicial.revision || 0 })
       if (fallo) throw fallo
@@ -63,10 +66,11 @@ export function EditorExpediente({ inicial, registros, onCerrar, onGuardado }) {
         {antecedentes.length > 0 && <div role="status" className="rounded-lg border-2 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900">Esta serie tiene {antecedentes.length} expediente(s) anterior(es): {antecedentes.map(r => `${r.referencia} · ${r.motivo} · ${r.estado}`).join('; ')}. Esta atención necesita su propio respaldo.</div>}
         <fieldset disabled={ocupado} className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
           {[['referencia', 'N° referencia / N° orden'], ['serie', 'Serie'], ['cliente', 'Cliente']].map(([campo, titulo]) => <label key={campo}>{titulo}<input className="control-field mt-1" required value={form[campo]} readOnly={Boolean(inicial.id)} onChange={e => cambiar(campo, e.target.value)}/></label>)}
-          <label>Motivo<select className="control-field mt-1" value={form.motivo} onChange={e => cambiar('motivo', e.target.value)}>{MOTIVOS.map(v => <option key={v}>{v}</option>)}</select></label>
-          <label>Estado<select className="control-field mt-1" value={form.estado} onChange={e => cambiar('estado', e.target.value)}>{ESTADOS.map(v => <option key={v}>{v}</option>)}</select></label>
-          {!puntual && <label>Vencimiento confirmado<input type="date" min="1900-01-01" max="9999-12-31" className="control-field mt-1" value={form.fecha_vencimiento} onChange={e => cambiar('fecha_vencimiento', e.target.value)}/></label>}
+          <label>Motivo<select className="control-field mt-1" value={form.motivo} onChange={e => { const motivo = e.target.value; setForm(prev => ({ ...prev, motivo, ...(motivo === 'Sin garantía confirmada' ? { estado: 'Rechazado', fecha_vencimiento: '' } : {}) })) }}>{MOTIVOS.map(v => <option key={v}>{v}</option>)}</select></label>
+          <label>Estado<select className="control-field mt-1" value={form.estado} onChange={e => cambiar('estado', e.target.value)}>{estadosDisponibles.map(v => <option key={v}>{v}</option>)}</select></label>
+          {!sinVencimiento && <label>Vencimiento confirmado<input type="date" min="1900-01-01" max="9999-12-31" className="control-field mt-1" value={form.fecha_vencimiento} onChange={e => cambiar('fecha_vencimiento', e.target.value)}/></label>}
           {puntual && <p className="text-sm font-bold">Solo este servicio. No modifica el vencimiento de la serie.</p>}
+          {sinGarantia && <p className="text-sm font-bold text-rose-700">Sin cobertura confirmada. No registra vencimiento ni autoriza esta atención.</p>}
           <label className="sm:col-span-2">Quién confirmó / autorizó<input className="control-field mt-1" value={form.autorizado_por} onChange={e => cambiar('autorizado_por', e.target.value)}/></label>
           <label className="sm:col-span-2">Explicación y seguimiento<textarea required rows={4} className="control-field mt-1" value={form.explicacion} onChange={e => cambiar('explicacion', e.target.value)}/></label>
           <label className="sm:col-span-2">Adjuntar captura, factura o autorización (PDF o imagen, hasta 10 MB)<input className="mt-2 block w-full min-w-0 text-sm" type="file" multiple accept="image/jpeg,image/png,image/webp,application/pdf" onChange={e => { subir([...e.target.files]); e.target.value = '' }}/></label>
@@ -138,7 +142,7 @@ export default function ExpedientesGarantia({ datos, tickets = [], ticketInicial
       {estado === 'cargando' && <p role="status">Consultando expedientes…</p>}{error && <p role="alert">{error}</p>}
     </div>
     {estado === 'listo' && nuevas.length > 0 && <div className="card space-y-2 border-2 border-amber-500 p-4"><h3 className="font-bold">Series con antecedentes en otros reportes</h3>{nuevas.map(t => { const ficha = nuevoExpediente(t); return <div key={ficha.referencia} className="flex flex-wrap items-center gap-2 border-t border-slate-400 pt-2"><span className="break-all text-sm">#{ficha.referencia} · {t.CLIENTE} · Serie {ficha.serie}</span><button className="btn-ghost" onClick={() => setEditor(ficha)}>Crear ficha de esta atención</button></div> })}</div>}
-    <div className="grid min-w-0 gap-4 lg:grid-cols-2">{visibles.map(r => <article key={r.id} className="card min-w-0 space-y-3 border-2 border-slate-600 p-4"><h3 className="break-words font-bold">#{r.referencia} · {r.cliente}</h3><p className="break-all text-sm">Serie {r.serie}</p><p className="text-sm font-bold">{r.motivo} · {r.estado}</p><p className="text-sm">{['Reparación', 'Excepción'].includes(r.motivo) ? 'Autorización limitada a este ticket' : `Vencimiento: ${r.fecha_vencimiento || 'Pendiente'}`}</p><p className="whitespace-pre-wrap break-words text-sm">{r.explicacion}</p>{r.archivos.map(a => <button key={a.path} className="block max-w-full break-all text-left text-sm underline" onClick={() => abrirArchivo(a).catch(e => setError(e.message))}>{a.nombre}</button>)}{!r.archivos.length && <p className="text-sm">Sin documentos adjuntos</p>}<button className="btn-primary" onClick={() => setEditor(r)}>Abrir / subir respaldo</button></article>)}</div>
+    <div className="grid min-w-0 gap-4 lg:grid-cols-2">{visibles.map(r => <article key={r.id} className="card min-w-0 space-y-3 border-2 border-slate-600 p-4"><h3 className="break-words font-bold">#{r.referencia} · {r.cliente}</h3><p className="break-all text-sm">Serie {r.serie}</p><p className="text-sm font-bold">{r.motivo} · {r.estado}</p><p className="text-sm">{r.motivo === 'Sin garantía confirmada' ? 'Sin cobertura confirmada para esta atención' : ['Reparación', 'Excepción'].includes(r.motivo) ? 'Autorización limitada a este ticket' : `Vencimiento: ${r.fecha_vencimiento || 'Pendiente'}`}</p><p className="whitespace-pre-wrap break-words text-sm">{r.explicacion}</p>{r.archivos.map(a => <button key={a.path} className="block max-w-full break-all text-left text-sm underline" onClick={() => abrirArchivo(a).catch(e => setError(e.message))}>{a.nombre}</button>)}{!r.archivos.length && <p className="text-sm">Sin documentos adjuntos</p>}<button className="btn-primary" onClick={() => setEditor(r)}>Abrir / subir respaldo</button></article>)}</div>
     {estado === 'listo' && !visibles.length && <p>No hay expedientes para esta búsqueda.</p>}
     {editor && <EditorExpediente inicial={editor} registros={registros} onCerrar={cerrarEditor} onGuardado={guardar}/>}
     {selector && <SelectorTicketExpediente candidatos={candidatos} onCerrar={() => setSelector(false)} onManual={() => { setSelector(false); setEditor(nuevoExpediente()) }} onElegir={ticket => { setSelector(false); setEditor(nuevoExpediente(ticket)) }}/>} 

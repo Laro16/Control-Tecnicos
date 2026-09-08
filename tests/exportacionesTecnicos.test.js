@@ -16,6 +16,15 @@ test('clasifica garantías como el panel y pone vencidas primero sin duplicarlas
   assert.match(filas[1].accion, /No atender sin garantía/)
 })
 
+test('garantías usan N° ORDEN cuando N° REFERENCIA está vacío', () => {
+  const datos = ejemploExportacion()
+  datos.control.garantias[0].ticket['N° REFERENCIA'] = ''
+  datos.control.garantias[0].ticket['N° ORDEN'] = 'ORD-009'
+  const informe = prepararInformeTecnicos(datos)
+  const fila = informe.hojas.find(hoja => hoja.nombre === 'Garantías').filas.find(actual => actual[1] === 'ORD-009')
+  assert.ok(fila)
+})
+
 test('organiza toda la base sin perder filas, y distingue vistas de subconjuntos', () => {
   const datos = ejemploExportacion()
   const informe = prepararInformeTecnicos(datos)
