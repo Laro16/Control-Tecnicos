@@ -1,42 +1,11 @@
--- Ejecutar COMPLETO una vez, después de activar_vencimientos_garantia.sql.
--- No reemplaza vencimientos anteriores ni modifica particulares.
--- Mantiene el modelo SIN LOGIN de la app: cualquiera con acceso a la app/API
--- puede consultar expedientes y respaldos. El bucket no tiene URL pública,
--- pero estas políticas NO sustituyen autenticación. No subir datos sensibles
--- sin incorporar primero acceso autenticado.
+-- Ejecutar COMPLETO una vez si activar_expedientes_garantia.sql ya se ejecutó.
+-- Agrega una instantánea de los datos del Excel a cada expediente existente o nuevo.
 begin;
-create table public.garantias_expedientes (
- id bigint generated always as identity primary key,
- referencia text not null unique check (length(trim(referencia)) > 0),
- serie text not null check (serie ~ '^[A-Z0-9]{7,40}$' and serie ~ '[0-9]'),
- cliente text not null default '',
- motivo text not null check (motivo in ('Despacho','Factura de venta','Reparación','Excepción','Sin garantía confirmada')),
- estado text not null check (estado in ('Pendiente de respaldo','En revisión','Autorizado','Rechazado','Cerrado')),
- fecha_vencimiento date check (fecha_vencimiento between date '1900-01-01' and date '9999-12-31'),
- explicacion text not null,
- autorizado_por text not null default '',
- datos_ticket jsonb not null default '{}',
- archivos jsonb not null default '[]',
- revision integer not null default 1,
- actualizado_en timestamptz not null default now(),
- constraint garantias_expedientes_sin_cobertura_check check (motivo <> 'Sin garantía confirmada' or estado <> 'Autorizado')
-);
-create index on public.garantias_expedientes (serie);
-create table public.garantias_expedientes_revisiones (
- id bigint generated always as identity primary key,
- expediente_id bigint not null references public.garantias_expedientes(id),
- datos jsonb not null,
- registrado_en timestamptz not null default now()
-);
-alter table public.garantias_expedientes enable row level security;
-alter table public.garantias_expedientes_revisiones enable row level security;
-revoke all on public.garantias_expedientes, public.garantias_expedientes_revisiones from anon, authenticated;
-grant select on public.garantias_expedientes, public.garantias_expedientes_revisiones to anon, authenticated;
-create policy "Leer expedientes" on public.garantias_expedientes for select to anon, authenticated using (true);
-create policy "Leer revisiones" on public.garantias_expedientes_revisiones for select to anon, authenticated using (true);
 
--- Una sola transacción para la ficha, su revisión y el vencimiento compartido.
-create function public.guardar_expediente_garantia(p_datos jsonb, p_revision integer)
+alter table public.garantias_expedientes
+  add column if not exists datos_ticket jsonb not null default '{}'::jsonb;
+
+create or replace function public.guardar_expediente_garantia(p_datos jsonb, p_revision integer)
 returns public.garantias_expedientes
 language plpgsql security definer set search_path = public
 as $expediente$
@@ -70,10 +39,8 @@ begin
  return actual;
 end;
 $expediente$;
+
 revoke all on function public.guardar_expediente_garantia(jsonb,integer) from public;
 grant execute on function public.guardar_expediente_garantia(jsonb,integer) to anon,authenticated;
-insert into storage.buckets (id,name,public,file_size_limit,allowed_mime_types)
-values ('respaldos-garantia','respaldos-garantia',false,10485760,array['image/jpeg','image/png','image/webp','application/pdf']);
-create policy "Leer respaldos garantia" on storage.objects for select to anon,authenticated using(bucket_id='respaldos-garantia');
-create policy "Agregar respaldos garantia" on storage.objects for insert to anon,authenticated with check(bucket_id='respaldos-garantia');
+
 commit;
