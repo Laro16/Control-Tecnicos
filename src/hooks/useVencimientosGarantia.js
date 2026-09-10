@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../supabase.jsx'
 import useExpedientesGarantia from './useExpedientesGarantia.js'
-import { guardarVencimientoGarantia, leerVencimientosGarantia } from '../utils/vencimientosGarantia.js'
+import { combinarVencimientosGarantia, guardarVencimientoGarantia, leerVencimientosGarantia } from '../utils/vencimientosGarantia.js'
 
 export default function useVencimientosGarantia() {
   const expedientes = useExpedientesGarantia()
@@ -44,5 +44,9 @@ export default function useVencimientosGarantia() {
       if (montado.current) setGuardando(false)
     }
   }, [])
-  return { porSerie, estado, guardando, guardar, reintentar: cargar, expedientes }
+  const porSerieEfectivo = useMemo(
+    () => combinarVencimientosGarantia(porSerie, Object.values(expedientes.porReferencia || {})),
+    [porSerie, expedientes.porReferencia]
+  )
+  return { porSerie: porSerieEfectivo, estado, guardando, guardar, reintentar: cargar, expedientes }
 }

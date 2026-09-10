@@ -1,8 +1,10 @@
 import { obtenerControlAlertas } from '../../src/utils/alertas.js'
 
 export function ejemploExportacion() {
-  const anio = String(new Date().getFullYear()).slice(-2)
-  const base = { CLIENTE: 'CLIENTE DE PRUEBA', NEGOCIO: 'Tienda de prueba', tecnico: 'TÉCNICO DE PRUEBA', ESTADO: 'Asignada a Técnico', ESTADO_LIMPIO: 'ASIGNADA A TECNICO', TIPO: 'Garantia', SERIE: `${anio}01011234`, 'DIRECCIÓN': 'Zona 1, calle de prueba, municipio de ejemplo', 'TELÉFONO': '0012345678', 'DESCRIPCIÓN INICIAL': 'Equipo no enfría. Revisar funcionamiento.', DESCRIPCIÓN: 'Sin comentarios', FECHA_TEXTO: '-', FECHA_OBJ: null, TIEMPO_TRANSCURRIDO: '35.5' }
+  const anioCompleto = new Date().getFullYear()
+  const anio = String(anioCompleto).slice(-2)
+  const fechaIngreso = new Date(anioCompleto, 0, 1)
+  const base = { CLIENTE: 'CLIENTE DE PRUEBA', NEGOCIO: 'Tienda de prueba', tecnico: 'TÉCNICO DE PRUEBA', ESTADO: 'Asignada a Técnico', ESTADO_LIMPIO: 'ASIGNADA A TECNICO', TIPO: 'Garantia', SERIE: `${anio}01011234`, 'DIRECCIÓN': 'Zona 1, calle de prueba, municipio de ejemplo', 'TELÉFONO': '0012345678', 'FECHA INGRESO': `01/01/${anioCompleto}`, FECHA_INGRESO_OBJ: fechaIngreso, 'DESCRIPCIÓN INICIAL': 'Equipo no enfría. Revisar funcionamiento.', DESCRIPCIÓN: 'Sin comentarios', FECHA_TEXTO: '-', FECHA_OBJ: null, TIEMPO_TRANSCURRIDO: '35.5' }
   const tickets = [
     { ...base, 'N° REFERENCIA': '001234', TIPO: 'Normal', SERIE: '1001011234', ESTADO: 'En Proceso', ESTADO_LIMPIO: 'EN PROCESO' },
     { ...base, 'N° REFERENCIA': '002234', TIPO: 'Normal', SERIE: '', 'DESCRIPCIÓN INICIAL': `Teléfono 48771534. Serie ${anio}01011234. Equipo no enfría.` },

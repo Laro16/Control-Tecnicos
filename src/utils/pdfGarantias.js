@@ -10,10 +10,10 @@ export function crearPDFGarantias(alertas, { nombreArchivo = '', generado = new 
   if (!registros.length) throw new Error('No hay garantías pendientes para exportar.')
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   const grupos = [
-    ['VENCIDA', 'Garantías vencidas - No atender sin garantía', [190, 18, 60]],
+    ['VENCIDA', 'Tickets ingresados fuera de cobertura - No atender sin garantía', [190, 18, 60]],
     ['NORMAL - REVISAR', 'TIPO Normal - Revisar cobertura antes de atender', [109, 40, 217]],
-    ['VERIFICAR SERIE', 'Series por verificar', [146, 64, 14]],
-    ['VIGENTE', 'Garantías vigentes según plazo calculado o confirmado', [4, 120, 87]],
+    ['VERIFICAR DATOS', 'Garantías con datos por verificar', [146, 64, 14]],
+    ['VIGENTE', 'Tickets cubiertos al momento de ingresar', [4, 120, 87]],
   ]
   let y = 43
   for (const [estado, titulo, color] of grupos) {
@@ -27,7 +27,11 @@ export function crearPDFGarantias(alertas, { nombreArchivo = '', generado = new 
         textoPdf(`${referenciaTicketGarantia(r.ticket) || '-'}\n${r.ticket.tecnico || '-'}`),
         textoPdf(`${r.ticket.CLIENTE || '-'}\n${r.ticket.NEGOCIO || '-'}`),
         textoPdf(`${r.serie}\nTIPO: ${r.ticket.TIPO || '-'}\nOrigen: ${r.origen}`),
-        textoPdf(r.garantia.sinDatosSerie ? `${r.garantia.aniosGarantia} años\nFechas no verificables` : `${r.garantia.fechaVerificada ? 'Vencimiento real confirmado' : `Fab: ${r.garantia.fabDisplay}`}\nVence: ${r.garantia.vencDisplay}\n${r.garantia.diasRestantes < 0 ? `${Math.abs(r.garantia.diasRestantes)} días vencida` : `${r.garantia.diasRestantes} días restantes`}`),
+        textoPdf(r.garantia.sinDatosSerie
+          ? `${r.garantia.aniosGarantia} años\nSerie no verificable`
+          : r.garantia.sinFechaIngreso
+            ? `${r.garantia.fechaVerificada ? 'Vencimiento confirmado' : `Fab: ${r.garantia.fabDisplay}`}\nVence: ${r.garantia.vencDisplay}\nCobertura hasta: ${r.garantia.coberturaHastaDisplay}\nFalta FECHA INGRESO`
+            : `${r.garantia.fechaVerificada ? 'Vencimiento confirmado' : `Fab: ${r.garantia.fabDisplay}`}\nIngresó: ${r.garantia.fechaIngresoDisplay}\nVence: ${r.garantia.vencDisplay}\nCobertura hasta: ${r.garantia.coberturaHastaDisplay}\n${r.garantia.diasMargenIngreso < 0 ? `${Math.abs(r.garantia.diasMargenIngreso)} días fuera de cobertura` : `${r.garantia.diasMargenIngreso} días de margen al ingresar`}`),
         textoPdf(`${r.accion}\nDirección: ${r.ticket['DIRECCIÓN'] || '-'}\nFalla reportada: ${r.ticket['DESCRIPCIÓN INICIAL'] || '-'}`),
       ]),
       styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.5, overflow: 'linebreak', valign: 'top', lineColor: [51, 65, 85], lineWidth: 0.25, textColor: [15, 23, 42] },
@@ -46,11 +50,11 @@ export function crearPDFGarantias(alertas, { nombreArchivo = '', generado = new 
     doc.setFont('helvetica', 'bold').setFontSize(15).setTextColor(255)
     doc.text('CONTROL DE GARANTÍAS', 12, 12)
     doc.setFont('helvetica', 'normal').setFontSize(8.5)
-    doc.text(textoPdf(`Evaluado: ${generado.toLocaleString('es-GT')} | ${registros.length} tickets no finalizados de clientes del catálogo`), 12, 19)
+    doc.text(textoPdf(`Generado: ${generado.toLocaleString('es-GT')} | ${registros.length} tickets no finalizados de clientes del catálogo`), 12, 19)
     doc.text(doc.splitTextToSize(textoPdf(`Fuente: ${nombreArchivo || 'Base cargada'}`), 273), 12, 25)
     doc.setFontSize(7.5).setTextColor(51, 65, 85)
     doc.text(textoPdf(conteos), 12, 40)
-    doc.text('TIPO Normal no autoriza atención, aunque la serie esté dentro del plazo. Reporte de la base completa sin filtros de pantalla.', 12, 198)
+    doc.text('La FECHA INGRESO decide la cobertura y todo el mes de vencimiento está cubierto. TIPO Normal siempre requiere revisión.', 12, 198)
     doc.text(`Control de técnicos | Página ${n} de ${totalPaginas}`, 12, 204)
   }
   return doc

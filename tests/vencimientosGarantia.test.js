@@ -1,12 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { claveSerieGarantia, fechaGarantiaManual, guardarVencimientoGarantia, leerVencimientosGarantia } from '../src/utils/vencimientosGarantia.js'
+import { claveSerieGarantia, combinarVencimientosGarantia, fechaGarantiaManual, guardarVencimientoGarantia, leerVencimientosGarantia } from '../src/utils/vencimientosGarantia.js'
 import { verificarGarantiaTicket } from '../src/utils/garantias.js'
 import { obtenerControlAlertas } from '../src/utils/alertas.js'
 import { prepararInformeTecnicos } from '../src/utils/exportacionesTecnicos.js'
 
 const catalogo = [{nombre:'Cliente QA', anios:2}]
-const ticket = {CLIENTE:'Cliente QA',TIPO:'Garantia',SERIE:'1001011234',ESTADO:'En Proceso','N° REFERENCIA':'QA1'}
+const ticket = {CLIENTE:'Cliente QA',TIPO:'Garantia',SERIE:'1001011234',ESTADO:'En Proceso','N° REFERENCIA':'QA1','FECHA INGRESO':'10/09/2026'}
 const manual = fecha => ({'1001011234':{serie:'1001011234',fecha_vencimiento:fecha}})
 
 test('sin fecha manual conserva el cálculo original; una fecha confirmada lo sustituye', () => {
@@ -16,6 +16,24 @@ test('sin fecha manual conserva el cálculo original; una fecha confirmada lo su
   assert.equal(g.fechaVerificada,true)
   assert.equal(g.vencDisplay,'01/01/2099')
   assert.equal(ticket.SERIE,'1001011234')
+})
+test('una ficha autorizada recupera el vencimiento por serie si la tabla de fechas no lo contiene', () => {
+  const expedientes = [
+    { id: 1, serie: ticket.SERIE, motivo: 'Despacho', estado: 'Autorizado', fecha_vencimiento: '2099-01-01', actualizado_en: '2026-09-08T10:00:00Z' },
+    { id: 2, serie: '2001011234', motivo: 'Reparación', estado: 'Autorizado', fecha_vencimiento: '2099-01-01', actualizado_en: '2026-09-09T10:00:00Z' },
+    { id: 3, serie: '2001015678', motivo: 'Factura de venta', estado: 'Pendiente de respaldo', fecha_vencimiento: '2099-01-01', actualizado_en: '2026-09-10T10:00:00Z' },
+  ]
+  const combinados = combinarVencimientosGarantia({}, expedientes)
+  assert.equal(combinados[ticket.SERIE].fecha_vencimiento, '2099-01-01')
+  assert.equal(combinados[ticket.SERIE].origen, 'expediente')
+  assert.equal(combinados['2001011234'], undefined)
+  assert.equal(combinados['2001015678'], undefined)
+  assert.equal(verificarGarantiaTicket(ticket, catalogo, combinados).vencida, false)
+})
+test('la última corrección manual conserva prioridad sobre cualquier ficha', () => {
+  const expediente = { id: 1, serie: ticket.SERIE, motivo: 'Despacho', estado: 'Autorizado', fecha_vencimiento: '2099-01-01' }
+  assert.equal(combinarVencimientosGarantia(manual('2000-01-01'), [expediente])[ticket.SERIE].fecha_vencimiento, '2000-01-01')
+  assert.equal(combinarVencimientosGarantia(manual(null), [expediente])[ticket.SERIE].fecha_vencimiento, null)
 })
 test('se aplica a una carga nueva con otra referencia y serie recuperada de la descripción inicial', () => {
   const nueva = {...ticket,SERIE:'','N° REFERENCIA':'QA999','DESCRIPCIÓN INICIAL':'Teléfono 48771234; serie 1001011234.'}
@@ -28,12 +46,35 @@ test('una fecha confirmada vencida prevalece aunque fabricación sugiera vigenci
   assert.equal(g.vencida,true)
   assert.equal(g.vencDisplay,'01/01/2000')
 })
-test('vence al terminar el día indicado, sin adelantarlo por zona horaria', () => {
-  const ahora = new Date()
-  const hoy = `${ahora.getFullYear()}-${String(ahora.getMonth()+1).padStart(2,'0')}-${String(ahora.getDate()).padStart(2,'0')}`
-  const g = verificarGarantiaTicket(ticket,catalogo,manual(hoy))
+test('todo el mes de vencimiento conserva cobertura y el mes siguiente ya no', () => {
+  const g = verificarGarantiaTicket({...ticket,'FECHA INGRESO':'30/09/2026'},catalogo,manual('2026-09-01'))
   assert.equal(g.vencida,false)
-  assert.equal(g.diasRestantes,0)
+  assert.equal(g.coberturaHastaDisplay,'30/09/2026')
+  assert.equal(g.diasMargenIngreso,0)
+  const posterior = verificarGarantiaTicket({...ticket,'FECHA INGRESO':'01/10/2026'},catalogo,manual('2026-09-18'))
+  assert.equal(posterior.vencida,true)
+  assert.equal(posterior.diasMargenIngreso,-1)
+})
+test('la fecha de atención no cambia un ticket que ingresó cubierto', () => {
+  const g = verificarGarantiaTicket({...ticket,'FECHA INGRESO':'30/09/2026','FECHA REALIZADA':'15/02/2030'},catalogo,manual('2026-09-01'))
+  assert.equal(g.vencida,false)
+  assert.equal(g.fechaIngresoDisplay,'30/09/2026')
+})
+test('una referencia posterior de la misma serie se evalúa con su propia fecha de ingreso', () => {
+  const anterior = verificarGarantiaTicket({...ticket,'N° REFERENCIA':'QA1','FECHA INGRESO':'30/09/2026'},catalogo,manual('2026-09-18'))
+  const posterior = verificarGarantiaTicket({...ticket,'N° REFERENCIA':'QA2','FECHA INGRESO':'02/10/2026'},catalogo,manual('2026-09-18'))
+  assert.equal(anterior.vencida,false)
+  assert.equal(posterior.vencida,true)
+})
+test('si falta FECHA INGRESO no supone que está vigente ni vencida', () => {
+  const sinIngreso = {...ticket,'FECHA INGRESO':'-'}
+  const g = verificarGarantiaTicket(sinIngreso,catalogo,manual('2099-01-01'))
+  assert.equal(g.sinFechaIngreso,true)
+  assert.equal(g.vencida,null)
+  const control = obtenerControlAlertas([sinIngreso],catalogo,[],manual('2099-01-01'))
+  assert.equal(control.sinSerie.length,1)
+  assert.equal(control.vigentes.length,0)
+  assert.equal(control.vencidas.length,0)
 })
 test('confirma series sin fecha de fabricación interpretable y no amplía el catálogo de clientes', () => {
   assert.equal(verificarGarantiaTicket({...ticket,SERIE:'ABC0123456'},catalogo,{ABC0123456:{fecha_vencimiento:'2099-01-01'}}).sinDatosSerie,false)
@@ -57,8 +98,9 @@ test('las alertas dejan de contar la vencida confirmada vigente, pero conservan 
 test('el Excel usa la fecha real e identifica su origen sin alterar la base exportada', () => {
   const control = obtenerControlAlertas([ticket],catalogo,[],manual('2099-01-01'))
   const informe = prepararInformeTecnicos({tickets:[ticket],control})
-  assert.equal(informe.hojas[0].filas[0][10].toISOString(),'2099-01-01T00:00:00.000Z')
-  assert.match(informe.hojas[0].filas[0][13],/confirmado manualmente/)
+  assert.equal(informe.hojas[0].filas[0][11].toISOString(),'2099-01-01T00:00:00.000Z')
+  assert.equal(informe.hojas[0].filas[0][12].toISOString(),'2099-01-31T00:00:00.000Z')
+  assert.match(informe.hojas[0].filas[0][15],/Vencimiento confirmado/)
 })
 test('consulta todas las páginas y respeta la última revisión, incluso al volver al cálculo automático', async () => {
   const filas = [{id:1001,serie:ticket.SERIE,fecha_vencimiento:null},...Array.from({length:500},(_,i)=>({id:1000-i,serie:String(2000000+i),fecha_vencimiento:'2099-01-01'})),{id:1,serie:ticket.SERIE,fecha_vencimiento:'2099-01-01'}]

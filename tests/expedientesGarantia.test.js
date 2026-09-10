@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { nuevoExpediente, validarExpediente, leerExpedientes, expedienteDeTicket, referenciaTicketGarantia, candidatosExpedienteGarantia } from '../src/utils/expedientesGarantia.js'
+import { nuevoExpediente, validarExpediente, leerExpedientes, expedienteDeTicket, referenciaTicketGarantia, candidatosExpedienteGarantia, combinarDatosTicket, datosTicketExpediente, expedientesAnterioresTicket, numeroOrdenDesdeFila } from '../src/utils/expedientesGarantia.js'
 
 test('ficha creada coincide solo por referencia, nunca por serie ni referencia vacía', () => {
   const ficha = { referencia: '00123', serie: '2401011234' }
@@ -18,6 +18,14 @@ test('usa N° ORDEN únicamente cuando N° REFERENCIA está vacío', () => {
   const ficha = { referencia: 'ORD-99' }
   assert.equal(expedienteDeTicket({ 'N° REFERENCIA': '', 'N° ORDEN': 'ord-99' }, { 'ORD-99': ficha }), ficha)
   assert.equal(expedienteDeTicket({ 'N° REFERENCIA': 'REF-01', 'N° ORDEN': 'ORD-99' }, { 'ORD-99': ficha }), null)
+  assert.equal(referenciaTicketGarantia({ 'N° REFERENCIA': '-', 'N° ORDEN': 'ORD-99' }), 'ORD-99')
+})
+
+test('lee variantes seguras del encabezado N° ORDEN', () => {
+  assert.equal(numeroOrdenDesdeFila({ 'N° ORDEN': 402700 }), '402700')
+  assert.equal(numeroOrdenDesdeFila({ 'Nº Orden': ' 00012 ' }), '00012')
+  assert.equal(numeroOrdenDesdeFila({ 'Número de orden': 'ABC-9' }), 'ABC-9')
+  assert.equal(numeroOrdenDesdeFila({ 'ORDEN FINALIZADA': 'NO USAR' }), '')
 })
 
 test('selector ofrece alertas sin ficha y permite la misma serie con otra referencia', () => {
@@ -29,16 +37,55 @@ test('selector ofrece alertas sin ficha y permite la misma serie con otra refere
   }
   const candidatos = candidatosExpedienteGarantia(control, [{ referencia: 'YA-CREADA', serie: '2401011234' }])
   assert.deepEqual(candidatos.map(c => c.ficha.referencia), ['NUEVA-1', 'ORD-2'])
-  assert.deepEqual(candidatos.map(c => c.diagnostico), ['Garantía vencida', 'TIPO Normal · revisar'])
+  assert.deepEqual(candidatos.map(c => c.diagnostico), ['Ingresó fuera de cobertura', 'TIPO Normal · revisar'])
 })
 
 test('nueva atención conserva serie y referencia, nunca hereda autorización', () => {
-  const form = nuevoExpediente({ 'N° REFERENCIA': ' ab123 ', CLIENTE: 'Cliente', 'DESCRIPCIÓN INICIAL': 'Equipo 2401011234 no enfría' })
+  const form = nuevoExpediente({ 'N° REFERENCIA': ' ab123 ', 'N° ORDEN': '402443', CLIENTE: 'Cliente', NEGOCIO: 'SHELL', MODELO: 'CR-23', TÉCNICO: 'Henry', 'DESCRIPCIÓN INICIAL': 'Equipo 2401011234 no enfría' })
   assert.equal(form.referencia, 'AB123')
   assert.equal(form.serie, '2401011234')
   assert.equal(form.estado, 'Pendiente de respaldo')
   assert.equal(form.fecha_vencimiento, '')
   assert.deepEqual(form.archivos, [])
+  assert.deepEqual(form.datos_ticket, {
+    numero_referencia: 'AB123',
+    numero_orden: '402443',
+    negocio: 'SHELL',
+    modelo: 'CR-23',
+    tecnico: 'Henry',
+    descripcion_inicial: 'Equipo 2401011234 no enfría',
+  })
+})
+
+test('conserva datos útiles del reporte y completa únicamente campos vacíos', () => {
+  const datos = datosTicketExpediente({
+    'Nº Referencia': 'ref-9',
+    'Número de orden': '0009',
+    NEGOCIO: 'Tienda central',
+    DIRECCION: 'Zona 1',
+    TELEFONO: '5555 5555',
+    ESTADO: 'En Proceso',
+    TIPO: 'Normal',
+    'FECHA DE INGRESO': '10/09/2026',
+  })
+  assert.equal(datos.numero_referencia, 'REF-9')
+  assert.equal(datos.numero_orden, '0009')
+  assert.equal(datos.direccion, 'Zona 1')
+  assert.equal(datos.telefono, '5555 5555')
+  assert.deepEqual(combinarDatosTicket(datos, { negocio: 'Nombre guardado', modelo: '-' }), {
+    numero_referencia: 'REF-9', numero_orden: '0009', negocio: 'Nombre guardado', estado_ticket: 'En Proceso', tipo_original: 'Normal', direccion: 'Zona 1', telefono: '5555 5555', fecha_ingreso: '10/09/2026',
+  })
+})
+
+test('solo propone otra ficha cuando la serie reaparece después, no para reportes anteriores', () => {
+  const existente = {
+    referencia: 'TECNOCHEF-1934', serie: '2508105893',
+    datos_ticket: { fecha_ingreso: '08/09/2026' },
+  }
+  const anterior = { 'N° REFERENCIA': 'TECNOCHEF-1927', SERIE: '2508105893', 'FECHA INGRESO': '03/09/2026' }
+  const posterior = { 'N° REFERENCIA': 'TECNOCHEF-1940', SERIE: '2508105893', 'FECHA INGRESO': '10/09/2026' }
+  assert.deepEqual(expedientesAnterioresTicket(anterior, [existente]), [])
+  assert.deepEqual(expedientesAnterioresTicket(posterior, [existente]), [existente])
 })
 const base = () => ({ ...nuevoExpediente({ 'N° REFERENCIA': '123', SERIE: '2401011234' }), explicacion: 'Verificado en sistema' })
 test('se puede guardar pendiente sin documento pero no autorizar', () => {

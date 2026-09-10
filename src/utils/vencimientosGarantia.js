@@ -10,6 +10,25 @@ export function fechaGarantiaManual(valor) {
   return anio >= 1900 && fecha.getFullYear() === anio && fecha.getMonth() === mes - 1 && fecha.getDate() === dia ? fecha : null
 }
 
+export function combinarVencimientosGarantia(confirmados = {}, expedientes = []) {
+  const resultado = { ...confirmados }
+  const ordenados = [...expedientes].sort((a, b) =>
+    String(b.actualizado_en || '').localeCompare(String(a.actualizado_en || '')) || Number(b.id || 0) - Number(a.id || 0))
+  for (const expediente of ordenados) {
+    const serie = claveSerieGarantia(expediente.serie)
+    if (!serie || Object.hasOwn(resultado, serie)) continue
+    if (expediente.estado !== 'Autorizado' || !['Despacho', 'Factura de venta'].includes(expediente.motivo)) continue
+    if (!fechaGarantiaManual(expediente.fecha_vencimiento)) continue
+    resultado[serie] = {
+      serie,
+      fecha_vencimiento: expediente.fecha_vencimiento,
+      registrado_en: expediente.actualizado_en || null,
+      origen: 'expediente',
+    }
+  }
+  return resultado
+}
+
 // Cada corrección agrega una revisión; nunca se borran las confirmaciones anteriores.
 export async function leerVencimientosGarantia(db) {
   const porSerie = {}

@@ -26,10 +26,10 @@ export function obtenerControlAlertas(tickets = [], clientesGarantia = [], histo
 
   // Una alerta por ticket: Normal con plazo vencido aparece primero entre
   // vencidas; los demás Normal siguen alertando, nunca pasan a vigentes.
-  const tipoIncorrecto = garantias.filter(a => a.garantia.tipoIncorrecto === true && !a.garantia.vencida)
+  const tipoIncorrecto = garantias.filter(a => a.garantia.tipoIncorrecto === true && a.garantia.vencida !== true)
   const vencidas = garantias.filter(a => a.garantia.vencida === true)
-  const sinSerie = garantias.filter(a => !a.garantia.tipoIncorrecto && a.garantia.sinDatosSerie === true)
-  const vigentes = garantias.filter(a => !a.garantia.tipoIncorrecto && a.garantia.vencida === false && !a.garantia.sinDatosSerie)
+  const sinSerie = garantias.filter(a => !a.garantia.tipoIncorrecto && (a.garantia.sinDatosSerie === true || a.garantia.sinFechaIngreso === true))
+  const vigentes = garantias.filter(a => !a.garantia.tipoIncorrecto && a.garantia.vencida === false && !a.garantia.sinDatosSerie && !a.garantia.sinFechaIngreso)
   const duplicados = obtenerTicketsDuplicados(tickets)
   const reincidencias = detectarReincidencias(tickets, historialSeries)
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabase.jsx'
 import Dialogo from './Dialogo'
-import { ESTADOS, MOTIVOS, candidatosExpedienteGarantia, leerExpedientes, nuevoExpediente, validarExpediente } from '../utils/expedientesGarantia.js'
+import { ESTADOS, MOTIVOS, candidatosExpedienteGarantia, combinarDatosTicket, datosTicketExpediente, expedientesAnterioresTicket, leerExpedientes, nuevoExpediente, referenciaExpediente, validarExpediente } from '../utils/expedientesGarantia.js'
 import { claveSerieGarantia } from '../utils/vencimientosGarantia.js'
 
 async function abrirArchivo(archivo) {
@@ -10,8 +10,32 @@ async function abrirArchivo(archivo) {
   window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
 }
 
+const CAMPOS_TICKET = [
+  ['numero_orden', 'N° orden'],
+  ['negocio', 'Negocio'],
+  ['modelo', 'Modelo'],
+  ['tecnico', 'Técnico'],
+  ['fecha_ingreso', 'Fecha de ingreso'],
+  ['estado_ticket', 'Estado en el reporte'],
+  ['tipo_original', 'Tipo en el reporte'],
+  ['telefono', 'Teléfono'],
+  ['direccion', 'Dirección', true],
+  ['descripcion_inicial', 'Falla reportada', true],
+]
+
+function DatosTicket({ datos = {}, compacto = false }) {
+  const visibles = CAMPOS_TICKET.filter(([campo]) => datos[campo])
+  if (!visibles.length) return null
+  return <dl className={`grid min-w-0 gap-x-4 gap-y-2 text-sm ${compacto ? 'sm:grid-cols-2' : 'sm:grid-cols-2 lg:grid-cols-3'}`}>
+    {visibles.map(([campo, titulo, anchoCompleto]) => <div key={campo} className={`min-w-0 ${anchoCompleto ? 'sm:col-span-2 lg:col-span-full' : ''}`}>
+      <dt className="text-xs font-bold uppercase tracking-wide text-slate-500">{titulo}</dt>
+      <dd className={`mt-0.5 ${campo === 'descripcion_inicial' ? 'whitespace-pre-wrap' : ''} break-words text-slate-900`}>{datos[campo]}</dd>
+    </div>)}
+  </dl>
+}
+
 export function EditorExpediente({ inicial, registros, onCerrar, onGuardado }) {
-  const [form, setForm] = useState(() => ({ ...inicial, fecha_vencimiento: inicial.fecha_vencimiento || '' }))
+  const [form, setForm] = useState(() => ({ ...inicial, fecha_vencimiento: inicial.fecha_vencimiento || '', archivos: inicial.archivos || [], datos_ticket: inicial.datos_ticket || {} }))
   const [ocupado, setOcupado] = useState(false)
   const [error, setError] = useState('')
   const [revisiones, setRevisiones] = useState(null)
@@ -64,6 +88,10 @@ export function EditorExpediente({ inicial, registros, onCerrar, onGuardado }) {
       <div className="app-dialog-body space-y-4">
         <p className="text-sm">Una ficha por ticket. Las autorizaciones puntuales no se heredan. Los vencimientos respaldados solo se aplican al guardar en estado Autorizado.</p>
         {antecedentes.length > 0 && <div role="status" className="rounded-lg border-2 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900">Esta serie tiene {antecedentes.length} expediente(s) anterior(es): {antecedentes.map(r => `${r.referencia} · ${r.motivo} · ${r.estado}`).join('; ')}. Esta atención necesita su propio respaldo.</div>}
+        {Object.keys(form.datos_ticket || {}).length > 0 && <section className="rounded-lg border-2 border-slate-500 bg-slate-50 p-3">
+          <h4 className="mb-3 font-bold">Datos del reporte de origen</h4>
+          <DatosTicket datos={form.datos_ticket} compacto />
+        </section>}
         <fieldset disabled={ocupado} className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
           {[['referencia', 'N° referencia / N° orden'], ['serie', 'Serie'], ['cliente', 'Cliente']].map(([campo, titulo]) => <label key={campo}>{titulo}<input className="control-field mt-1" required value={form[campo]} readOnly={Boolean(inicial.id)} onChange={e => cambiar(campo, e.target.value)}/></label>)}
           <label>Motivo<select className="control-field mt-1" value={form.motivo} onChange={e => { const motivo = e.target.value; setForm(prev => ({ ...prev, motivo, ...(motivo === 'Sin garantía confirmada' ? { estado: 'Rechazado', fecha_vencimiento: '' } : {}) })) }}>{MOTIVOS.map(v => <option key={v}>{v}</option>)}</select></label>
@@ -99,6 +127,8 @@ function SelectorTicketExpediente({ candidatos, onElegir, onManual, onCerrar }) 
         <div className="space-y-2">{visibles.map(({ ticket, ficha, diagnostico }) => <button type="button" key={ficha.referencia} className="block w-full rounded-lg border-2 border-orange-500 bg-orange-50 p-3 text-left text-slate-900 transition hover:bg-orange-100" onClick={() => onElegir(ticket)}>
           <strong className="block break-words">#{ficha.referencia} · {ficha.cliente || 'Sin cliente'}</strong>
           <span className="mt-1 block break-all text-sm">Serie: {ficha.serie}</span>
+          {(ficha.datos_ticket.numero_orden || ficha.datos_ticket.negocio) && <span className="mt-1 block text-sm">{ficha.datos_ticket.numero_orden ? `Orden: ${ficha.datos_ticket.numero_orden}` : ''}{ficha.datos_ticket.numero_orden && ficha.datos_ticket.negocio ? ' · ' : ''}{ficha.datos_ticket.negocio || ''}</span>}
+          {(ficha.datos_ticket.modelo || ficha.datos_ticket.tecnico) && <span className="mt-1 block text-xs">{ficha.datos_ticket.modelo ? `Modelo: ${ficha.datos_ticket.modelo}` : ''}{ficha.datos_ticket.modelo && ficha.datos_ticket.tecnico ? ' · ' : ''}{ficha.datos_ticket.tecnico ? `Técnico: ${ficha.datos_ticket.tecnico}` : ''}</span>}
           <span className="mt-1 block text-xs font-bold text-orange-800">{diagnostico}</span>
         </button>)}</div>
         {!visibles.length && <p className="rounded-lg border-2 border-slate-400 p-3 text-sm">{candidatos.length ? 'No hay coincidencias para esta búsqueda.' : 'No hay alertas con serie válida y sin ficha pendiente de crear.'}</p>}
@@ -125,7 +155,10 @@ export default function ExpedientesGarantia({ datos, tickets = [], ticketInicial
       setRegistros(rows); setEstado('listo'); setError('')
       if (ticketInicial) {
         const nuevo = nuevoExpediente(ticketInicial)
-        setEditor(rows.find(r => r.referencia === nuevo.referencia) || { ...nuevo, fecha_vencimiento: datos.porSerie[nuevo.serie]?.fecha_vencimiento || '' })
+        const existente = rows.find(r => referenciaExpediente(r.referencia) === nuevo.referencia)
+        setEditor(existente
+          ? { ...existente, datos_ticket: combinarDatosTicket(nuevo.datos_ticket, existente.datos_ticket) }
+          : { ...nuevo, fecha_vencimiento: datos.porSerie[nuevo.serie]?.fecha_vencimiento || '' })
       }
     }).catch(e => { if (vivo) { setEstado('error'); setError(`No se pudieron consultar los expedientes. Activa activar_expedientes_garantia.sql en Supabase o revisa la conexión. ${e.message || ''}`) } })
     return () => { vivo = false }
@@ -133,16 +166,26 @@ export default function ExpedientesGarantia({ datos, tickets = [], ticketInicial
   const cerrarEditor = () => { setEditor(null); if (ticketInicial) onCerrar() }
   const guardar = () => { datos.reintentar(); setRevision(r => r + 1) }
   if (ticketInicial) return editor ? <EditorExpediente inicial={editor} registros={registros} onCerrar={cerrarEditor} onGuardado={guardar}/> : <Dialogo titulo="Expediente de garantía" onCerrar={onCerrar}><div className="app-dialog-panel"><div className="app-dialog-body"><p role="status">{error || 'Consultando expedientes…'}</p><button className="btn-ghost" onClick={() => setRevision(r => r + 1)}>Reintentar</button><button className="btn-ghost" onClick={onCerrar}>Cerrar</button></div></div></Dialogo>
-  const visibles = registros.filter(r => (filtro === 'Todos' || r.estado === filtro) && `${r.referencia} ${r.serie} ${r.cliente}`.toLowerCase().includes(busqueda.toLowerCase()))
+  const ticketsPorReferencia = new Map(tickets.map(ticket => {
+    const ficha = nuevoExpediente(ticket)
+    return [ficha.referencia, ticket]
+  }).filter(([referencia]) => referencia))
+  const enriquecer = registro => ({ ...registro, datos_ticket: combinarDatosTicket(datosTicketExpediente(ticketsPorReferencia.get(referenciaExpediente(registro.referencia)) || {}), registro.datos_ticket) })
+  const registrosEnriquecidos = registros.map(enriquecer)
+  const visibles = registrosEnriquecidos.filter(r => (filtro === 'Todos' || r.estado === filtro) && `${r.referencia} ${r.serie} ${r.cliente} ${Object.values(r.datos_ticket || {}).join(' ')}`.toLowerCase().includes(busqueda.toLowerCase()))
   const candidatos = candidatosExpedienteGarantia(controlAlertas, registros)
-  const nuevas = tickets.filter(t => { const n = nuevoExpediente(t); return n.referencia && n.serie && registros.some(r => r.serie === n.serie) && !registros.some(r => r.referencia === n.referencia) }).filter((t,i,a) => a.findIndex(x => nuevoExpediente(x).referencia === nuevoExpediente(t).referencia) === i)
+  const nuevas = tickets.filter(t => { const n = nuevoExpediente(t); return n.referencia && n.serie && !registros.some(r => referenciaExpediente(r.referencia) === n.referencia) && expedientesAnterioresTicket(t, registrosEnriquecidos).length > 0 }).filter((t,i,a) => a.findIndex(x => nuevoExpediente(x).referencia === nuevoExpediente(t).referencia) === i)
   return <section className="space-y-4">
     <div className="card space-y-3 p-4"><h2 className="text-xl font-bold">Expedientes de garantía</h2><p className="text-sm">Respaldos por despacho, factura, reparación o excepción. Las nuevas atenciones requieren su propia ficha.</p><button className="btn-primary" disabled={estado !== 'listo'} onClick={() => setSelector(true)}>Nuevo expediente desde Técnicos{candidatos.length ? ` (${candidatos.length})` : ''}</button><button className="btn-ghost" onClick={() => setRevision(r => r + 1)}>Actualizar</button>
       <label className="block">Buscar referencia, serie o cliente<input className="control-field mt-1" value={busqueda} onChange={e => setBusqueda(e.target.value)}/></label><label className="block">Estado<select className="control-field mt-1" value={filtro} onChange={e => setFiltro(e.target.value)}>{['Todos', ...ESTADOS].map(v => <option key={v}>{v}</option>)}</select></label>
       {estado === 'cargando' && <p role="status">Consultando expedientes…</p>}{error && <p role="alert">{error}</p>}
     </div>
-    {estado === 'listo' && nuevas.length > 0 && <div className="card space-y-2 border-2 border-amber-500 p-4"><h3 className="font-bold">Series con antecedentes en otros reportes</h3>{nuevas.map(t => { const ficha = nuevoExpediente(t); return <div key={ficha.referencia} className="flex flex-wrap items-center gap-2 border-t border-slate-400 pt-2"><span className="break-all text-sm">#{ficha.referencia} · {t.CLIENTE} · Serie {ficha.serie}</span><button className="btn-ghost" onClick={() => setEditor(ficha)}>Crear ficha de esta atención</button></div> })}</div>}
-    <div className="grid min-w-0 gap-4 lg:grid-cols-2">{visibles.map(r => <article key={r.id} className="card min-w-0 space-y-3 border-2 border-slate-600 p-4"><h3 className="break-words font-bold">#{r.referencia} · {r.cliente}</h3><p className="break-all text-sm">Serie {r.serie}</p><p className="text-sm font-bold">{r.motivo} · {r.estado}</p><p className="text-sm">{r.motivo === 'Sin garantía confirmada' ? 'Sin cobertura confirmada para esta atención' : ['Reparación', 'Excepción'].includes(r.motivo) ? 'Autorización limitada a este ticket' : `Vencimiento: ${r.fecha_vencimiento || 'Pendiente'}`}</p><p className="whitespace-pre-wrap break-words text-sm">{r.explicacion}</p>{r.archivos.map(a => <button key={a.path} className="block max-w-full break-all text-left text-sm underline" onClick={() => abrirArchivo(a).catch(e => setError(e.message))}>{a.nombre}</button>)}{!r.archivos.length && <p className="text-sm">Sin documentos adjuntos</p>}<button className="btn-primary" onClick={() => setEditor(r)}>Abrir / subir respaldo</button></article>)}</div>
+    {estado === 'listo' && nuevas.length > 0 && <div className="card space-y-3 border-2 border-amber-500 p-4"><h3 className="font-bold">Series que volvieron en reportes posteriores</h3><p className="text-sm">Estas series ya tenían expediente y volvieron a aparecer después con otra referencia u orden. Cada nueva atención conserva su propio respaldo.</p>{nuevas.map(t => { const ficha = nuevoExpediente(t); const anteriores = expedientesAnterioresTicket(t, registrosEnriquecidos); return <div key={ficha.referencia} className="space-y-2 border-t-2 border-amber-400 pt-3">
+      <div className="flex flex-wrap items-center justify-between gap-2"><div><strong className="block break-words">Nuevo reporte: #{ficha.referencia}</strong><span className="block text-sm">{ficha.cliente || 'Sin cliente'} · Serie {ficha.serie}{ficha.datos_ticket.numero_orden ? ` · Orden ${ficha.datos_ticket.numero_orden}` : ''}</span></div><button className="btn-ghost" onClick={() => setEditor(ficha)}>Crear ficha de esta atención</button></div>
+      <p className="text-xs text-amber-900">Ficha(s) previa(s): {anteriores.map(r => `#${r.referencia}`).join(', ')}. No coincide el número de reporte, por eso no se considera la misma ficha.</p>
+      {(ficha.datos_ticket.negocio || ficha.datos_ticket.modelo || ficha.datos_ticket.tecnico) && <p className="text-xs text-slate-600">{[ficha.datos_ticket.negocio, ficha.datos_ticket.modelo && `Modelo ${ficha.datos_ticket.modelo}`, ficha.datos_ticket.tecnico && `Técnico ${ficha.datos_ticket.tecnico}`].filter(Boolean).join(' · ')}</p>}
+    </div> })}</div>}
+    <div className="grid min-w-0 gap-4 lg:grid-cols-2">{visibles.map(r => <article key={r.id} className="card min-w-0 space-y-3 border-2 border-slate-600 p-4"><div><h3 className="break-words font-bold">#{r.referencia} · {r.cliente}</h3><p className="mt-1 break-all text-sm">Serie {r.serie}{r.datos_ticket.numero_orden ? ` · Orden ${r.datos_ticket.numero_orden}` : ''}</p></div><div className="rounded-lg border-2 border-slate-400 bg-slate-50 p-3"><DatosTicket datos={r.datos_ticket}/></div><p className="text-sm font-bold">{r.motivo} · {r.estado}</p><p className="text-sm">{r.motivo === 'Sin garantía confirmada' ? 'Sin cobertura confirmada para esta atención' : ['Reparación', 'Excepción'].includes(r.motivo) ? 'Autorización limitada a este ticket' : `Vencimiento: ${r.fecha_vencimiento || 'Pendiente'}`}</p><p className="whitespace-pre-wrap break-words text-sm">{r.explicacion}</p>{(r.archivos || []).map(a => <button key={a.path} className="block max-w-full break-all text-left text-sm underline" onClick={() => abrirArchivo(a).catch(e => setError(e.message))}>{a.nombre}</button>)}{!(r.archivos || []).length && <p className="text-sm">Sin documentos adjuntos</p>}<button className="btn-primary" onClick={() => setEditor(r)}>Abrir / subir respaldo</button></article>)}</div>
     {estado === 'listo' && !visibles.length && <p>No hay expedientes para esta búsqueda.</p>}
     {editor && <EditorExpediente inicial={editor} registros={registros} onCerrar={cerrarEditor} onGuardado={guardar}/>}
     {selector && <SelectorTicketExpediente candidatos={candidatos} onCerrar={() => setSelector(false)} onManual={() => { setSelector(false); setEditor(nuevoExpediente()) }} onElegir={ticket => { setSelector(false); setEditor(nuevoExpediente(ticket)) }}/>} 

@@ -85,8 +85,8 @@ test('dashboard: cinco más antiguos con referencia y cliente, excluyendo cierre
 
 test('dashboard: garantías coinciden con la campana; Normal vencida no se duplica', () => {
   const datos = [
-    ticket(80, { CLIENTE: 'Cliente prueba', TIPO: 'Normal', SERIE: '1001011234', 'N° REFERENCIA': 'DUP1' }),
-    ticket(5, { CLIENTE: 'Cliente prueba', TIPO: 'Normal', SERIE: '-', 'N° REFERENCIA': 'DUP1' }),
+    ticket(80, { CLIENTE: 'Cliente prueba', TIPO: 'Normal', SERIE: '1001011234', 'FECHA INGRESO': '10/09/2026', 'N° REFERENCIA': 'DUP1' }),
+    ticket(5, { CLIENTE: 'Cliente prueba', TIPO: 'Normal', SERIE: '-', 'FECHA INGRESO': '10/09/2026', 'N° REFERENCIA': 'DUP1' }),
   ]
   const control = obtenerControlAlertas(datos, [{ nombre: 'Cliente prueba', anios: 2 }])
   const grupos = gruposAlertasDashboard(control)

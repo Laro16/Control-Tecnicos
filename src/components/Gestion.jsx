@@ -8,7 +8,7 @@ import ExpedientesGarantia from './ExpedientesGarantia'
 import {
   Plus, Pencil, Trash2, CheckCircle, X, ClipboardList, RotateCcw, 
   Paperclip, DownloadCloud, Download, CalendarClock, Briefcase,
-  ListTodo, CircleDollarSign, ArrowUpRight
+  ListTodo, ArrowUpRight
 } from 'lucide-react'
 
 const PRIORIDADES = ['Baja', 'Media', 'Alta']
@@ -32,14 +32,14 @@ function estBadge(e) {
   return 'bg-slate-50 text-slate-400 border-slate-200'
 }
 
-export default function ModuloPendientes({ importacionParticulares, vencimientosGarantia, allTickets, controlAlertas }) {
+export default function ModuloPendientes({ vista = 'Tarea', importacionParticulares, vencimientosGarantia, allTickets, controlAlertas }) {
   const [items, setItems] = useState([])
   const [cargando, setCargando] = useState(true)
   const [modal, setModal] = useState(false)
   const [form, setForm] = useState(VACIO_TAREA)
   const [editId, setEditId] = useState(null)
   const [filtro, setFiltro] = useState('Todos')
-  const [vistaActual, setVistaActual] = useState('Tarea')
+  const vistaActual = vista
   const [error, setError] = useState('')
   
   const [archivosSubir, setArchivosSubir] = useState([])
@@ -48,6 +48,7 @@ export default function ModuloPendientes({ importacionParticulares, vencimientos
   const [subiendoFiles, setSubiendoFiles] = useState(false)
   const [imgPreview, setImgPreview] = useState(null)
   const [documentoEnfocado, setDocumentoEnfocado] = useState(null)
+  useEffect(() => { setFiltro('Todos') }, [vistaActual])
   useEffect(() => {
     if (!modal || documentoEnfocado === null) return
     const seccion = document.getElementById(`documento-particular-${documentoEnfocado}`)
@@ -251,7 +252,7 @@ export default function ModuloPendientes({ importacionParticulares, vencimientos
   const procesoCount = itemsFiltrados.filter(i => i.estado === 'En proceso' || i.estado === 'En Proceso').length
   const completadosCount = itemsFiltrados.filter(i => ['Realizado', 'Completada', 'Pagado'].includes(i.estado)).length
 
-  if (vistaActual === 'Garantia') return <div className="space-y-4"><button className="btn-ghost" onClick={() => setVistaActual('Tarea')}>Volver a pendientes y particulares</button><ExpedientesGarantia datos={vencimientosGarantia} tickets={allTickets} controlAlertas={controlAlertas}/></div>
+  if (vistaActual === 'Garantia') return <div className="fade-in"><ExpedientesGarantia datos={vencimientosGarantia} tickets={allTickets} controlAlertas={controlAlertas}/></div>
 
   return (
     <div className="space-y-5 fade-in">
@@ -274,15 +275,6 @@ export default function ModuloPendientes({ importacionParticulares, vencimientos
           <button onClick={abrirNuevo} className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-xs font-extrabold text-slate-900 shadow-lg transition hover:bg-sky-50 active:scale-[0.98]">
             <Plus size={15} /> Nuevo {vistaActual === 'Tarea' ? 'pendiente' : 'servicio'}
           </button>
-        </div>
-        <div className="relative z-10 mt-5 flex w-full flex-wrap gap-1 rounded-xl bg-white/[0.08] p-1 ring-1 ring-white/10 sm:w-fit">
-          {['Tarea', 'Particular', 'Garantia'].map(v => (
-            <button key={v} onClick={() => { setVistaActual(v); setFiltro('Todos') }}
-              className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2 text-[10px] font-extrabold transition sm:flex-none ${vistaActual === v ? 'bg-white text-slate-900 shadow-md' : 'text-slate-300 hover:bg-white/[0.06] hover:text-white'}`}>
-              {v === 'Tarea' ? <ClipboardList size={13} /> : <CircleDollarSign size={13} />}
-              {v === 'Tarea' ? 'Mis pendientes' : v === 'Garantia' ? 'Expedientes de garantía' : 'Servicios particulares'}
-            </button>
-          ))}
         </div>
       </section>
 

@@ -33,7 +33,7 @@ export default function Dashboard({ allTickets, nombreArchivo, fechaSubidaExcel,
   const historialListo = estadoHistorial === 'listo'
   const avisos = [
     !catalogoListo && (estadoCatalogoGarantias === 'cargando' ? 'Comprobando el catálogo de garantías…' : 'Catálogo de garantías no disponible. No se puede confirmar la cobertura; recarga la página para reintentar.'),
-    !historialListo && (['cargando', 'guardando'].includes(estadoHistorial) ? 'Sincronizando el historial de series. Las reincidencias pueden estar incompletas.' : 'Historial de series no sincronizado. Las reincidencias pueden estar incompletas; revísalo en Técnicos.'),
+    !historialListo && (['cargando', 'guardando'].includes(estadoHistorial) ? 'Sincronizando el historial de series. Las reincidencias pueden estar incompletas.' : 'Historial de series no sincronizado. Las reincidencias pueden estar incompletas; revísalo en Alerta de garantías.'),
   ].filter(Boolean)
 
   return (
@@ -67,7 +67,7 @@ export default function Dashboard({ allTickets, nombreArchivo, fechaSubidaExcel,
 
       <div className="dashboard-grid">
         <section className="dashboard-panel" aria-labelledby="dashboard-alertas">
-          <PanelHeading id="dashboard-alertas" title="Revisar primero" subtitle="Las mismas alertas de Técnicos y la campana" icon={ShieldAlert} badge={numero(controlAlertas.total) + ' incidencias'} />
+          <PanelHeading id="dashboard-alertas" title="Revisar primero" subtitle="Accesos directos a Alertas de garantía y Duplicados" icon={ShieldAlert} badge={numero(controlAlertas.total) + ' incidencias'} />
           {avisos.length > 0 && <div className="dashboard-notices" role="status">{avisos.map(aviso => <p key={aviso}>{aviso}</p>)}</div>}
           <div className="dashboard-alert-list">
             {grupos.map(grupo => {
@@ -84,7 +84,7 @@ export default function Dashboard({ allTickets, nombreArchivo, fechaSubidaExcel,
             })}
           </div>
           <div className="dashboard-panel-footnote">
-            {catalogoListo && <p><CheckCircle2 size={15} aria-hidden="true" />{numero(controlAlertas.vigentes.length)} garantías vigentes según la serie.</p>}
+            {catalogoListo && <p><CheckCircle2 size={15} aria-hidden="true" />{numero(controlAlertas.vigentes.length)} tickets cubiertos al ingresar.</p>}
             <span>Un ticket puede tener más de una incidencia. «Normal» siempre requiere revisión.</span>
           </div>
         </section>

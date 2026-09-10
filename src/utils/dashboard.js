@@ -87,9 +87,9 @@ export function ordenarEquipoDashboard(personas, orden = 'pendientes') {
 
 export function gruposAlertasDashboard(control) {
   return [
-    { id: 'vencidas', titulo: 'Garantías vencidas', detalle: 'No atender sin garantía.', tono: 'rose', cantidad: control.vencidas.length },
+    { id: 'vencidas', titulo: 'Fuera de cobertura', detalle: 'El ticket ingresó después del mes de vencimiento.', tono: 'rose', cantidad: control.vencidas.length },
     { id: 'tipo-incorrecto', titulo: 'TIPO Normal · revisar', detalle: 'Revisar el motivo, aunque la serie esté vigente.', tono: 'violet', cantidad: control.tipoIncorrecto.length },
-    { id: 'sin-serie', titulo: 'Series por verificar', detalle: 'No se pudo calcular la vigencia.', tono: 'amber', cantidad: control.sinSerie.length },
+    { id: 'sin-serie', titulo: 'Garantías por verificar', detalle: 'Falta una serie válida o FECHA INGRESO.', tono: 'amber', cantidad: control.sinSerie.length },
     { id: 'duplicados', titulo: 'Referencias duplicadas', detalle: 'Grupos repetidos; incluye finalizados.', tono: 'orange', cantidad: control.duplicados.length },
     { id: 'reincidencias', titulo: 'Posibles reincidencias', detalle: 'Misma serie en otra atención finalizada.', tono: 'sky', cantidad: control.reincidencias.length },
   ]

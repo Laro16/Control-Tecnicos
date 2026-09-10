@@ -7,11 +7,10 @@ import {
   DownloadCloud, MapPin, ShieldAlert, ShieldCheck, Copy, ChevronRight, Users, Activity,
   Phone, Navigation, MessageCircle, Check
 } from 'lucide-react'
-import { obtenerSerieTicket, resolverSerie, verificarGarantiaTicket } from '../utils/garantias'
-import { claveAtencion, normalizarSerieHistorial } from '../utils/historialSeries'
+import { obtenerSerieTicket, resolverSerie } from '../utils/garantias'
 import HistorialSeries from './HistorialSeries'
 import EditorVencimientoGarantia, { ControlVencimiento } from './VencimientoGarantia'
-import { expedienteDeTicket, referenciaTicketGarantia } from '../utils/expedientesGarantia.js'
+import { expedienteDeTicket, numeroOrdenDesdeFila, referenciaTicketGarantia } from '../utils/expedientesGarantia.js'
 import './garantiasExpedientes.css'
 import { crearLibroTecnicos, descargarArchivo, fechaArchivo, prepararInformeTecnicos } from '../utils/exportacionesTecnicos'
 import { crearPDFGarantias } from '../utils/pdfGarantias'
@@ -43,25 +42,34 @@ const numeroTicket = ticket => referenciaTicketGarantia(ticket) || '-'
 
 function normalizarFechaExcel(fechaTexto) {
   if (!fechaTexto) return null
+  if (fechaTexto instanceof Date) {
+    if (Number.isNaN(fechaTexto.getTime())) return null
+    const dia = String(fechaTexto.getDate()).padStart(2, '0')
+    const mes = String(fechaTexto.getMonth() + 1).padStart(2, '0')
+    const anio = String(fechaTexto.getFullYear())
+    return { display: `${dia}/${mes}/${anio}`, iso: `${anio}-${mes}-${dia}`, dateObj: new Date(fechaTexto.getFullYear(), fechaTexto.getMonth(), fechaTexto.getDate()) }
+  }
   if (typeof fechaTexto === 'number') {
     const fecha = XLSX.SSF.parse_date_code(fechaTexto)
     if (!fecha) return null
     fechaTexto = `${fecha.d}/${fecha.m}/${fecha.y}`
   }
-  let limpio = String(fechaTexto).trim().replace(/-/g, '/')
-  const partes = limpio.split('/')
-  if (partes.length === 3) {
-    let dia = partes[0].padStart(2, '0')
-    let mes = partes[1].padStart(2, '0')
-    let anio = partes[2]
+  const limpio = String(fechaTexto).trim()
+  let partes = limpio.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2}|\d{4})(?:\s.*)?$/)
+  let dia, mes, anio
+  if (partes) {
+    ;[, dia, mes, anio] = partes
     if (anio.length === 2) anio = '20' + anio
-    return {
-      display: `${dia}/${mes}/${anio}`,
-      iso: `${anio}-${mes}-${dia}`,
-      dateObj: new Date(`${anio}-${mes}-${dia}T00:00:00`)
-    }
+  } else {
+    partes = limpio.match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})(?:[T\s].*)?$/)
+    if (!partes) return null
+    ;[, anio, mes, dia] = partes
   }
-  return null
+  const fecha = new Date(Number(anio), Number(mes) - 1, Number(dia))
+  if (fecha.getFullYear() !== Number(anio) || fecha.getMonth() !== Number(mes) - 1 || fecha.getDate() !== Number(dia)) return null
+  dia = String(dia).padStart(2, '0')
+  mes = String(mes).padStart(2, '0')
+  return { display: `${dia}/${mes}/${anio}`, iso: `${anio}-${mes}-${dia}`, dateObj: fecha }
 }
 
 function obtenerComentarioProceso(ticket) {
@@ -178,6 +186,7 @@ function TicketBadge({ estado }) {
 }
 
 export default function ModuloTecnicos({ 
+  vista = 'tecnicos',
   allTickets, setAllTickets, nombreArchivo, setNombreArchivo, 
   fechaSubidaExcel, setFechaSubidaExcel,
   rutasTecnicos, setRutasTecnicos, rutasAutomaticas, valorRutaTecnico, baseMunicipios,
@@ -196,6 +205,14 @@ export default function ModuloTecnicos({
   const leyendoExcel = useRef(false)
   const [procesandoExcel, setProcesandoExcel] = useState(false)
   const ultimaAlertaEnfocada = useRef(null)
+  const vistaTecnicos = vista === 'tecnicos'
+  const vistaAlertas = vista === 'alertas-garantia'
+  const vistaDuplicados = vista === 'duplicados'
+
+  useEffect(() => {
+    if (vistaAlertas) setGarantiaAbierta(true)
+    if (vistaDuplicados) setDuplicadosAbierta(true)
+  }, [vistaAlertas, vistaDuplicados])
 
   useEffect(() => {
     if (!solicitudAlerta || solicitudAlerta.tipo === 'reincidencias') return
@@ -275,6 +292,8 @@ export default function ModuloTecnicos({
             let clienteOriginal = String(fila['CLIENTE'] || '-').trim()
             let fechaRaw = fila['FECHA REALIZADA'] || fila['FECHA REALIZACION'] || fila['FECHA'] || ''
             const fechaEstructura = normalizarFechaExcel(fechaRaw)
+            const fechaIngresoRaw = fila['FECHA INGRESO'] || fila['FECHA DE INGRESO'] || ''
+            const fechaIngresoEstructura = normalizarFechaExcel(fechaIngresoRaw)
             const descripcion = fila['DESCRIPCIÓN'] || fila['DESCRIPCION'] || fila['COMENTARIO'] || '-'
             const descripcionInicial = fila['DESCRIPCIÓN INICIAL'] || fila['DESCRIPCION INICIAL'] || '-'
             const serieEnDescripcion = ['DESCRIPCION', 'DESCRIPCION INICIAL'].includes(normalizarTexto(fila['ORIGEN DE SERIE']))
@@ -285,7 +304,7 @@ export default function ModuloTecnicos({
               // La referencia vacía se conserva vacía. Usar "-" aquí hacía que
               // todas las celdas sin dato aparecieran como un falso duplicado.
               'N° REFERENCIA': limpiarReferencia(fila['N° REFERENCIA'] ?? fila['NO REFERENCIA'] ?? fila['REFERENCIA'] ?? fila['TICKET']),
-              'N° ORDEN': limpiarReferencia(fila['N° ORDEN'] ?? fila['NO ORDEN'] ?? fila['ORDEN']),
+              'N° ORDEN': numeroOrdenDesdeFila(fila),
               'NEGOCIO': fila['NEGOCIO'] || fila['NOMBRE NEGOCIO'] || fila['SUCURSAL'] || '-',
               'DIRECCIÓN': fila['DIRECCIÓN'] || fila['DIRECCION'] || '-',
               'TELÉFONO': fila['TELÉFONO'] || fila['TELEFONO'] || fila['TEL'] || '-',
@@ -299,6 +318,8 @@ export default function ModuloTecnicos({
               'ESTADO': estadoOriginal,
               'ESTADO_LIMPIO': estadoLimpio,
               'TIEMPO_TRANSCURRIDO': fila['TIEMPO TRANSCURRIDO'] || fila['TIEMPO'] || '0',
+              'FECHA INGRESO': fechaIngresoEstructura ? fechaIngresoEstructura.display : (fechaIngresoRaw || '-'),
+              'FECHA_INGRESO_OBJ': fechaIngresoEstructura ? fechaIngresoEstructura.dateObj : null,
               'FECHA_TEXTO': fechaEstructura ? fechaEstructura.display : (fechaRaw || '-'),
               'FECHA_OBJ': fechaEstructura ? fechaEstructura.dateObj : null,
               'DESCRIPCIÓN INICIAL': descripcionInicial,
@@ -566,10 +587,6 @@ export default function ModuloTecnicos({
     vencidas: alertasVencidas, vigentes: alertasVigentes,
     sinSerie: alertasSinSerie, duplicados: ticketsDuplicados,
   } = controlAlertas
-  const reincidenciasPorTicket = new Map(controlAlertas.reincidencias.map(alerta => [
-    claveAtencion({ serie: alerta.serie, referencia: normalizarTexto(numeroTicket(alerta.ticket)) }), alerta,
-  ]))
-
   return (
     <div className="space-y-5 fade-in">
       {ticketVencimiento && vencimientosGarantia && <EditorVencimientoGarantia ticket={ticketVencimiento} datos={vencimientosGarantia} onCerrar={() => setTicketVencimiento(null)} />}
@@ -582,19 +599,26 @@ export default function ModuloTecnicos({
         <div className="relative z-10 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="mb-3 flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.18em] text-sky-300">
-              <Activity size={13} /> Operación en campo
+              {vistaAlertas ? <ShieldAlert size={13} /> : vistaDuplicados ? <Copy size={13} /> : <Activity size={13} />}
+              {vistaAlertas ? 'Control de cobertura' : vistaDuplicados ? 'Control de calidad de datos' : 'Operación en campo'}
             </div>
-            <h1 className="text-2xl font-black tracking-tight sm:text-3xl">Control por técnico</h1>
-            <p className="mt-2 max-w-xl text-xs leading-relaxed text-slate-300 sm:text-sm">Carga la base, distribuye las órdenes y revisa rutas, garantías y posibles duplicados desde un único tablero.</p>
+            <h1 className="text-2xl font-black tracking-tight sm:text-3xl">{vistaAlertas ? 'Alertas de garantía' : vistaDuplicados ? 'Tickets duplicados' : 'Control por técnico'}</h1>
+            <p className="mt-2 max-w-xl text-xs leading-relaxed text-slate-300 sm:text-sm">
+              {vistaAlertas
+                ? 'Revisa coberturas, expedientes pendientes e historial de series en un espacio dedicado.'
+                : vistaDuplicados
+                  ? 'Identifica referencias repetidas sin mezclarlas con la distribución diaria de técnicos.'
+                  : 'Carga la base, filtra al responsable y distribuye las órdenes y rutas de trabajo.'}
+            </p>
           </div>
           {allTickets.length > 0 && (
             <div className="flex flex-wrap items-center gap-2">
-              <button onClick={generarPDFGlobalEnProceso} className="flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 text-[10px] font-extrabold text-white transition hover:bg-white/15">
+              {vistaTecnicos && <button onClick={generarPDFGlobalEnProceso} className="flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 text-[10px] font-extrabold text-white transition hover:bg-white/15">
                 <FileText size={13} /> En proceso
-              </button>
-              <button type="button" onClick={descargarPDFGarantias} disabled={Boolean(exportando) || estadoCatalogoGarantias === 'cargando'} title="Descargar garantías pendientes con diagnóstico de series y TIPO Normal" className="flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 text-[10px] font-extrabold text-white transition hover:bg-white/15 disabled:opacity-50">
+              </button>}
+              {vistaAlertas && <button type="button" onClick={descargarPDFGarantias} disabled={Boolean(exportando) || estadoCatalogoGarantias === 'cargando'} title="Descargar garantías pendientes con diagnóstico de series y TIPO Normal" className="flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 text-[10px] font-extrabold text-white transition hover:bg-white/15 disabled:opacity-50">
                 <ShieldAlert size={13} /> PDF Garantías
-              </button>
+              </button>}
               <button onClick={descargarExcelCompleto} disabled={Boolean(exportando) || estadoCatalogoGarantias === 'cargando'} title="Resumen, garantías, pendientes, en proceso, finalizados, duplicados, reincidencias y base completa" className="flex items-center gap-1.5 rounded-xl bg-white px-3.5 py-2.5 text-[10px] font-extrabold text-slate-900 shadow-lg transition hover:bg-sky-50 disabled:opacity-50">
                 <DownloadCloud size={13} /> {exportando === 'excel' ? 'Generando Excel…' : 'Excel organizado'}
               </button>
@@ -604,7 +628,7 @@ export default function ModuloTecnicos({
       </section>
 
       {/* ── Upload zone ── */}
-      <div
+      {vistaTecnicos && <div
         className={`upload-zone card group flex cursor-pointer items-center gap-4 border-2 border-dashed px-4 py-4 transition-all ${dragging ? 'border-sky-400 bg-sky-50' : 'border-slate-200 hover:border-sky-300 hover:bg-sky-50/40'}`}
         onClick={() => fileRef.current.click()}
         onDragOver={e => { e.preventDefault(); setDragging(true) }}
@@ -633,16 +657,16 @@ export default function ModuloTecnicos({
           </button>
         )}
         <input ref={fileRef} type="file" className="hidden" onChange={onFileChange} disabled={procesandoExcel || importacionParticulares?.estado === 'importando'} />
-      </div>
+      </div>}
 
-      {procesandoExcel && importacionParticulares?.estado !== 'importando' && <p className="text-sm text-slate-600" role="status">Leyendo el archivo…</p>}
-      <EstadoParticulares importacion={importacionParticulares} />
+      {vistaTecnicos && procesandoExcel && importacionParticulares?.estado !== 'importando' && <p className="text-sm text-slate-600" role="status">Leyendo el archivo…</p>}
+      {vistaTecnicos && <EstadoParticulares importacion={importacionParticulares} />}
 
-      {allTickets.length === 0 && <HistorialSeries datos={historialSeries} reincidencias={controlAlertas.reincidencias} solicitudAlerta={solicitudAlerta} />}
+      {vistaAlertas && allTickets.length === 0 && <HistorialSeries datos={historialSeries} reincidencias={controlAlertas.reincidencias} solicitudAlerta={solicitudAlerta} />}
       {allTickets.length > 0 && (
         <>
           {/* ── Stats strip + Filtros ── */}
-          <div className="card overflow-hidden">
+          {vistaTecnicos && <div className="card overflow-hidden">
             {/* Stats strip */}
             <div className="grid grid-cols-2 border-b border-slate-100 sm:grid-cols-4">
               <div className="px-4 py-3.5 border-r border-b sm:border-b-0 border-slate-100">
@@ -665,14 +689,21 @@ export default function ModuloTecnicos({
 
             {/* Filtros */}
             <div className="p-4 space-y-3.5">
-              <div>
-                <label className="section-title mb-2 block">Técnico</label>
-                <div className="flex flex-wrap gap-1">
-                  <button onClick={() => setFiltroTecnico('Todos')} className={`pill ${filtroTecnico === 'Todos' ? 'pill-active' : 'pill-inactive'}`}>Todos</button>
-                  {tecnicosConPendientes.map(t => (
-                    <button key={t} onClick={() => setFiltroTecnico(t)} className={`pill ${filtroTecnico === t ? 'pill-active' : 'pill-inactive'}`}>{t}</button>
-                  ))}
-                </div>
+              <div className="grid gap-3 sm:grid-cols-[minmax(220px,360px)_1fr] sm:items-end">
+                <label className="block" htmlFor="filtro-tecnico">
+                  <span className="section-title mb-2 block">Filtrar por técnico</span>
+                  <span className="relative flex items-center">
+                    <Filter size={15} className="pointer-events-none absolute left-3 text-slate-400" />
+                    <select id="filtro-tecnico" value={filtroTecnico} onChange={event => setFiltroTecnico(event.target.value)} className="control-field appearance-none pl-9 pr-9 font-bold">
+                      <option value="Todos">Todos los técnicos ({tecnicosConPendientes.length})</option>
+                      {tecnicosConPendientes.map(t => <option key={t} value={t}>{t} ({gruposPendientesAgrupados[t].length})</option>)}
+                    </select>
+                    <ChevronDown size={15} className="pointer-events-none absolute right-3 text-slate-400" />
+                  </span>
+                </label>
+                <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-[10px] font-semibold text-slate-500">
+                  {filtroTecnico === 'Todos' ? 'Mostrando toda la carga operativa.' : `Mostrando únicamente las órdenes de ${filtroTecnico}.`}
+                </p>
               </div>
               
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-slate-100 pt-2.5">
@@ -687,10 +718,17 @@ export default function ModuloTecnicos({
                 </button>
               </div>
             </div>
-          </div>
+          </div>}
 
           {/* ── Alertas Garantía (colapsable) ── */}
-          {alertasGarantia.length > 0 && (
+          {vistaAlertas && alertasGarantia.length === 0 && (
+            <div className="card p-6 text-center">
+              <ShieldCheck size={28} className="mx-auto mb-2 text-emerald-600" />
+              <p className="text-sm font-extrabold text-slate-800">No hay tickets de clientes del catálogo para revisar</p>
+              <p className="mt-1 text-xs text-slate-500">El historial de series continúa disponible abajo.</p>
+            </div>
+          )}
+          {vistaAlertas && alertasGarantia.length > 0 && (
             <div className="card-section">
               <button
                 onClick={() => setGarantiaAbierta(!garantiaAbierta)}
@@ -704,7 +742,7 @@ export default function ModuloTecnicos({
                 <div className="flex flex-wrap items-center gap-1.5">
                   {alertasVencidas.length > 0 && <span className="text-[9px] font-bold bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded">{alertasVencidas.length} vencida{alertasVencidas.length !== 1 ? 's' : ''}</span>}
                   {alertasTipoIncorrecto.length > 0 && <span className="text-[9px] font-bold bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded">{alertasTipoIncorrecto.length} Normal por revisar</span>}
-                  {alertasSinSerie.length > 0 && <span className="text-[9px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">{alertasSinSerie.length} sin serie</span>}
+                  {alertasSinSerie.length > 0 && <span className="text-[9px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">{alertasSinSerie.length} por verificar</span>}
                   {alertasVigentes.length > 0 && <span className="text-[9px] font-bold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">{alertasVigentes.length} vigente{alertasVigentes.length !== 1 ? 's' : ''}</span>}
                   <ChevronDown size={13} className={`text-slate-400 transition-transform ${garantiaAbierta ? 'rotate-180' : ''}`} />
                 </div>
@@ -716,7 +754,7 @@ export default function ModuloTecnicos({
                     <div id="alertas-vencidas" tabIndex={-1} className="alert-anchor p-3 space-y-2.5 border-t border-slate-200">
                       <p className="text-[10px] font-bold text-rose-600 uppercase flex items-center gap-1.5 mb-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
-                        Garantía vencida — No atender bajo garantía
+                        Ticket ingresado fuera del mes de cobertura — No atender bajo garantía
                       </p>
                       {alertasVencidas.map((a, i) => (
                         <div key={i} className={`alert-card bg-rose-50 border border-rose-200 border-l-[4px] border-l-rose-500 rounded-lg px-3 py-2.5 space-y-1.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] ${expedienteDeTicket(a.ticket, vencimientosGarantia?.expedientes?.porReferencia) ? 'garantia-con-expediente' : ''} `}>
@@ -724,7 +762,7 @@ export default function ModuloTecnicos({
                             <span className="font-mono text-[10px] font-bold text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded">#{numeroTicket(a.ticket)}</span>
                             {a.garantia.tipoIncorrecto && <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold text-violet-800">TIPO NORMAL · NO ATENDER SIN GARANTÍA</span>}
                             <span className="text-[10px] font-semibold text-slate-500">{a.ticket.tecnico}</span>
-                            <span className="text-[9px] font-semibold text-rose-600 ml-auto shrink-0">Fab: {a.garantia.fabDisplay} · Venció: {a.garantia.vencDisplay} · {a.garantia.aniosGarantia}a</span>
+                            <span className="text-[9px] font-semibold text-rose-600 ml-auto shrink-0">Ingresó: {a.garantia.fechaIngresoDisplay} · Cobertura hasta: {a.garantia.coberturaHastaDisplay}</span>
                           </div>
                           <p className="text-[11px] font-bold text-slate-800">{a.ticket['NEGOCIO'] || '-'}</p>
                           <WarrantyClient ticket={a.ticket} tone="rose" />
@@ -746,7 +784,7 @@ export default function ModuloTecnicos({
                         TIPO Normal — Revisar cobertura antes de atender
                       </p>
                       {alertasTipoIncorrecto.map((a, i) => (
-                        <div key={i} className={`alert-card ${expedienteDeTicket(a.ticket, vencimientosGarantia?.expedientes?.porReferencia) ? 'garantia-con-expediente' : ''} space-y-2 rounded-lg border border-l-[4px] px-3 py-3 ${a.garantia.fechaVerificada ? 'border-emerald-300 border-l-emerald-600 bg-emerald-50' : 'border-violet-300 border-l-violet-600 bg-violet-50'}`}>
+                        <div key={i} className={`alert-card ${expedienteDeTicket(a.ticket, vencimientosGarantia?.expedientes?.porReferencia) ? 'garantia-con-expediente' : ''} space-y-2 rounded-lg border border-l-[4px] px-3 py-3 ${a.garantia.fechaVerificada && !a.garantia.sinFechaIngreso ? 'border-emerald-300 border-l-emerald-600 bg-emerald-50' : 'border-violet-300 border-l-violet-600 bg-violet-50'}`}>
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="rounded bg-violet-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-violet-800">#{numeroTicket(a.ticket)}</span>
                             <span className="text-[10px] font-semibold text-slate-500">{a.ticket.tecnico}</span>
@@ -761,9 +799,10 @@ export default function ModuloTecnicos({
                             Este cliente sólo puede atenderse con garantía. El sistema de origen generó TIPO "Normal": revisar el motivo antes de atender; no basta con cambiar el tipo.
                           </p>
                           <p className="text-[10px] font-semibold text-violet-800">
-                            {a.garantia.fechaVerificada ? `Cobertura vigente hasta ${a.garantia.vencDisplay}, según la fecha confirmada en la web de la empresa. Se conserva el aviso del TIPO Normal original.` : a.garantia.sinDatosSerie
-                              ? 'No se pudo verificar el plazo con SERIE ni con DESCRIPCIÓN INICIAL.'
-                              : `La serie está dentro del plazo calculado (hasta ${a.garantia.vencDisplay}), pero esto no elimina la alerta Normal ni confirma la cobertura.`}
+                            {a.garantia.sinDatosSerie ? 'No se pudo verificar el plazo con SERIE ni con DESCRIPCIÓN INICIAL.' : a.garantia.sinFechaIngreso
+                              ? `El vencimiento está registrado, pero falta una FECHA INGRESO válida para decidir si este ticket entró dentro de cobertura.`
+                              : a.garantia.fechaVerificada ? `El ticket ingresó el ${a.garantia.fechaIngresoDisplay}; quedó cubierto hasta el ${a.garantia.coberturaHastaDisplay}, según el vencimiento confirmado ${a.garantia.vencDisplay}. Se conserva el aviso del TIPO Normal original.`
+                              : `El ticket ingresó el ${a.garantia.fechaIngresoDisplay}, dentro de la cobertura calculada hasta el ${a.garantia.coberturaHastaDisplay}; esto no elimina la alerta Normal original.`}
                           </p>
                           <p className="text-[9px] font-medium text-slate-500">Serie: {obtenerSerieTicket(a.ticket)}</p>
                           <p className="text-[9px] font-medium text-slate-500">📍 {a.ticket['DIRECCIÓN'] || '-'}</p>
@@ -776,14 +815,14 @@ export default function ModuloTecnicos({
                     <div id="alertas-sin-serie" tabIndex={-1} className={`alert-anchor p-3 space-y-2.5 ${(alertasTipoIncorrecto.length || alertasVencidas.length) ? 'border-t border-slate-300' : ''}`}>
                       <p className="text-[10px] font-bold text-amber-600 uppercase flex items-center gap-1.5 mb-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                        Verificar serie manualmente
+                        Verificar serie o fecha de ingreso
                       </p>
                       {alertasSinSerie.map((a, i) => (
                         <div key={i} className={`alert-card bg-amber-50 border border-amber-200 border-l-[4px] border-l-amber-500 rounded-lg px-3 py-2.5 space-y-1.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] ${expedienteDeTicket(a.ticket, vencimientosGarantia?.expedientes?.porReferencia) ? 'garantia-con-expediente' : ''} `}>
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-mono text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">#{numeroTicket(a.ticket)}</span>
                             <span className="text-[10px] font-semibold text-slate-500">{a.ticket.tecnico}</span>
-                            <span className="text-[9px] font-semibold text-amber-600 ml-auto shrink-0">Serie: "{obtenerSerieTicket(a.ticket)}" · {a.garantia.aniosGarantia}a</span>
+                            <span className="text-[9px] font-semibold text-amber-600 ml-auto shrink-0">{a.garantia.sinFechaIngreso && !a.garantia.sinDatosSerie ? 'Falta FECHA INGRESO válida' : `Serie: "${obtenerSerieTicket(a.ticket)}"`} · {a.garantia.aniosGarantia}a</span>
                           </div>
                           <p className="text-[11px] font-bold text-slate-800">{a.ticket['NEGOCIO'] || '-'}</p>
                           <WarrantyClient ticket={a.ticket} tone="amber" />
@@ -799,14 +838,14 @@ export default function ModuloTecnicos({
                     <div className={`p-3 space-y-2.5 ${(alertasTipoIncorrecto.length || alertasVencidas.length || alertasSinSerie.length) ? 'border-t border-slate-300' : ''}`}>
                       <p className="text-[10px] font-bold text-emerald-600 uppercase flex items-center gap-1.5 mb-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                        Garantía vigente
+                        Ticket cubierto al ingresar
                       </p>
                       {alertasVigentes.map((a, i) => (
                         <div key={i} className={`alert-card bg-emerald-50 border border-emerald-200 border-l-[4px] border-l-emerald-500 rounded-lg px-3 py-2.5 space-y-1.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] ${expedienteDeTicket(a.ticket, vencimientosGarantia?.expedientes?.porReferencia) ? 'garantia-con-expediente' : ''} `}>
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-mono text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">#{numeroTicket(a.ticket)}</span>
                             <span className="text-[10px] font-semibold text-slate-500">{a.ticket.tecnico}</span>
-                            <span className="text-[9px] font-semibold text-emerald-600 ml-auto shrink-0">{a.garantia.diasRestantes}d restantes · {a.garantia.aniosGarantia}a</span>
+                            <span className="text-[9px] font-semibold text-emerald-600 ml-auto shrink-0">{a.garantia.diasMargenIngreso}d de margen al ingresar · {a.garantia.aniosGarantia}a</span>
                           </div>
                           <p className="text-[11px] font-bold text-slate-800">{a.ticket['NEGOCIO'] || '-'}</p>
                           <WarrantyClient ticket={a.ticket} tone="emerald" />
@@ -827,7 +866,14 @@ export default function ModuloTecnicos({
           )}
 
           {/* ── Tickets Duplicados (colapsable) ── */}
-          {ticketsDuplicados.length > 0 && (
+          {vistaDuplicados && ticketsDuplicados.length === 0 && (
+            <div className="card p-6 text-center">
+              <Check size={28} className="mx-auto mb-2 text-emerald-600" />
+              <p className="text-sm font-extrabold text-slate-800">No hay referencias duplicadas</p>
+              <p className="mt-1 text-xs text-slate-500">Las referencias vacías se omiten correctamente.</p>
+            </div>
+          )}
+          {vistaDuplicados && ticketsDuplicados.length > 0 && (
             <div id="alertas-duplicados" tabIndex={-1} className="alert-anchor card-section">
               <button
                 onClick={() => setDuplicadosAbierta(!duplicadosAbierta)}
@@ -874,9 +920,9 @@ export default function ModuloTecnicos({
             </div>
           )}
 
-          <HistorialSeries datos={historialSeries} reincidencias={controlAlertas.reincidencias} solicitudAlerta={solicitudAlerta} />
+          {vistaAlertas && <HistorialSeries datos={historialSeries} reincidencias={controlAlertas.reincidencias} solicitudAlerta={solicitudAlerta} />}
           {/* ── Tarjetas de técnicos ── */}
-          {tecnicosConPendientes
+          {vistaTecnicos && tecnicosConPendientes
             .filter(tecnico => filtroTecnico === 'Todos' || filtroTecnico === tecnico)
             .map(tecnico => {
               const tickets = gruposPendientesAgrupados[tecnico].filter(t => {
@@ -928,34 +974,20 @@ export default function ModuloTecnicos({
                   {expandido[tecnico] && (
                     <div className="p-3 sm:p-4 space-y-4 slide-up bg-slate-50/60">
                       {tickets.map((t, i) => {
-                        const g = verificarGarantiaTicket(t, clientesGarantia, vencimientosGarantia?.porSerie)
-                        const verdeConfirmado = g?.fechaVerificada && !g.vencida
-                        const reincidencia = reincidenciasPorTicket.get(claveAtencion({ serie: normalizarSerieHistorial(obtenerSerieTicket(t)), referencia: normalizarTexto(numeroTicket(t)) }))
                         const esProceso = t['ESTADO_LIMPIO'].includes('PROCESO')
                         const esAgencia = t['ESTADO_LIMPIO'].includes('AGENCIA')
-                        const borderColor = g?.vencida ? 'border-l-rose-500'
-                          : verdeConfirmado ? 'border-l-emerald-500'
-                          : g?.tipoIncorrecto ? 'border-l-violet-500'
-                          : esProceso ? 'border-l-amber-400' 
+                        const borderColor = esProceso ? 'border-l-amber-400' 
                           : esAgencia ? 'border-l-violet-400' 
                           : 'border-l-sky-400'
-                        const headerBg = g?.vencida ? 'bg-rose-50'
-                          : verdeConfirmado ? 'bg-emerald-50'
-                          : g?.tipoIncorrecto ? 'bg-violet-50'
-                          : esProceso ? 'bg-amber-50/60' 
+                        const headerBg = esProceso ? 'bg-amber-50/60' 
                           : esAgencia ? 'bg-violet-50/60' 
                           : 'bg-slate-50'
                         return (
-                          <div key={i} className={`alert-card ${g && expedienteDeTicket(t, vencimientosGarantia?.expedientes?.porReferencia) ? 'garantia-con-expediente' : ''} rounded-lg border-[1.5px] border-slate-300 border-l-[4px] ${borderColor} overflow-hidden bg-white shadow-[0_1px_4px_rgba(0,0,0,0.07)]`}>
+                          <div key={i} className={`alert-card rounded-lg border-[1.5px] border-slate-300 border-l-[4px] ${borderColor} overflow-hidden bg-white shadow-[0_1px_4px_rgba(0,0,0,0.07)]`}>
                             {/* Badge row */}
                             <div className={`flex items-center gap-1.5 flex-wrap px-3 py-2.5 ${headerBg} border-b border-slate-100`}>
                               <span className="font-mono text-[10px] font-bold text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-100">#{numeroTicket(t)}</span>
                               <TicketBadge estado={t['ESTADO']} />
-                              {reincidencia && <span className="rounded-md bg-sky-700 px-2 py-0.5 text-[9px] font-bold text-white">POSIBLE REINCIDENCIA · {reincidencia.anteriores.length} antecedente{reincidencia.anteriores.length > 1 ? 's' : ''}</span>}
-                              {g?.tipoIncorrecto && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-violet-600 text-white flex items-center gap-0.5"><ShieldAlert size={9} /> TIPO NORMAL</span>}
-                              {g?.vencida && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-rose-600 text-white flex items-center gap-0.5"><ShieldAlert size={9} /> VENCIDA</span>}
-                              {g && (verdeConfirmado || !g.tipoIncorrecto) && !g.vencida && !g.sinDatosSerie && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-600 text-white flex items-center gap-0.5"><ShieldCheck size={9} /> VIGENTE</span>}
-                              {g?.sinDatosSerie && !g.tipoIncorrecto && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500 text-white flex items-center gap-0.5"><ShieldAlert size={9} /> VERIFICAR</span>}
                             </div>
                             
                             {/* Negocio */}
@@ -993,39 +1025,12 @@ export default function ModuloTecnicos({
                               </div>
                             </div>
 
-                            {/* Garantía inline */}
-                            {g?.tipoIncorrecto && (
-                              <div className="mx-3 mb-2 rounded-md border-l-[3px] border-violet-500 bg-violet-100 px-3 py-1.5 text-[10px] text-violet-800">
-                                <span className="font-bold">⚠️ TIPO INCORRECTO — </span>
-                                El sistema de origen marcó TIPO "{g.tipoActual}". Este cliente no puede atenderse sin garantía: revisar el motivo, aunque la serie esté dentro del plazo.
-                              </div>
-                            )}
-                            {g?.vencida && (
-                              <div className="mx-3 mb-2 text-[10px] text-rose-700 bg-rose-100 rounded-md px-3 py-1.5 border-l-[3px] border-rose-500">
-                                <span className="font-bold">⚠️ NO ATENDER — </span>
-                                Fab: {g.fabDisplay} · Venció: {g.vencDisplay} · {g.aniosGarantia}a ({g.clienteNombre})
-                              </div>
-                            )}
-                            {g && !g.tipoIncorrecto && !g.vencida && !g.sinDatosSerie && (
-                              <div className="mx-3 mb-2 text-[10px] text-emerald-700 bg-emerald-50 rounded-md px-3 py-1.5 border-l-[3px] border-emerald-400">
-                                <span className="font-bold">✅ VIGENTE — </span>
-                                Fab: {g.fabDisplay} · Vence: {g.vencDisplay} · {g.diasRestantes}d ({g.clienteNombre})
-                              </div>
-                            )}
-                            {g?.sinDatosSerie && !g.tipoIncorrecto && (
-                              <div className="mx-3 mb-2 text-[10px] text-amber-700 bg-amber-50 rounded-md px-3 py-1.5 border-l-[3px] border-amber-400">
-                                <span className="font-bold">⚠️ VERIFICAR — </span>
-                                {g.clienteNombre} ({g.aniosGarantia}a) — Serie: "{obtenerSerieTicket(t)}"
-                              </div>
-                            )}
-                            
                             {t['ESTADO_LIMPIO'].includes('PROCESO') && (
                               <div className="mx-3 mb-3 text-[10px] text-rose-700 bg-rose-50 rounded-md px-3 py-1.5 border-l-[3px] border-rose-400">
                                 <span className="font-bold block mb-0.5 uppercase text-[9px]">Comentario en Proceso</span>
                                 <span className="font-semibold">{obtenerComentarioProceso(t)}</span>
                               </div>
                             )}
-                            {g && <div className="mx-3 mb-3"><ControlVencimiento ticket={t} garantia={g} expediente={expedienteDeTicket(t, vencimientosGarantia?.expedientes?.porReferencia)} estadoExpedientes={vencimientosGarantia?.expedientes?.estado} onEditar={setTicketVencimiento} /></div>}
                             <TicketActions ticket={t} onCopy={copiarTicket} />
                           </div>
                         )
@@ -1036,6 +1041,11 @@ export default function ModuloTecnicos({
               )
             })}
         </>
+      )}
+      {allTickets.length === 0 && (vistaAlertas || vistaDuplicados) && (
+        <div className="card p-5 text-center text-sm text-slate-600">
+          Carga una base desde <strong>Técnicos</strong> para revisar {vistaAlertas ? 'las alertas de garantía' : 'las referencias duplicadas'}.
+        </div>
       )}
     </div>
   )

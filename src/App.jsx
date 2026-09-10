@@ -12,7 +12,7 @@ import useHistorialSeries from './hooks/useHistorialSeries'
 import useVencimientosGarantia from './hooks/useVencimientosGarantia'
 import useImportacionParticulares from './hooks/useImportacionParticulares'
 import garantiasUrl from './Garantias.xlsx?url'
-import { Wrench, ClipboardList, BarChart3, Cloud, CloudOff, Loader2, LayoutDashboard, CalendarDays, Menu, Moon, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Sun, X } from 'lucide-react'
+import { Wrench, ClipboardList, BarChart3, Briefcase, Cloud, CloudOff, Copy, Loader2, LayoutDashboard, CalendarDays, Menu, Moon, MoreHorizontal, PanelLeftClose, PanelLeftOpen, ShieldAlert, ShieldCheck, Sun, X } from 'lucide-react'
 
 function normalizarTexto(texto) {
   if (!texto) return ''
@@ -100,7 +100,7 @@ export default function App() {
   )
 
   function verAlertas(tipo) {
-    setTab('tecnicos')
+    setTab(tipo === 'duplicados' ? 'duplicados' : 'alertas-garantia')
     setSolicitudAlerta(actual => ({ tipo, secuencia: (actual?.secuencia || 0) + 1 }))
   }
 
@@ -299,6 +299,10 @@ export default function App() {
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'tecnicos', label: 'Técnicos', icon: Wrench },
+    { id: 'alertas-garantia', label: 'Alerta de garantías', icon: ShieldAlert },
+    { id: 'duplicados', label: 'Duplicados', icon: Copy },
+    { id: 'particulares', label: 'Particulares', icon: Briefcase },
+    { id: 'garantias', label: 'Garantías', icon: ShieldCheck },
     { id: 'tablas', label: 'Reportes', icon: BarChart3 },
     { id: 'pendientes', label: 'Gestión', icon: ClipboardList },
     { id: 'vacaciones', label: 'Vacaciones', icon: CalendarDays },
@@ -501,8 +505,9 @@ export default function App() {
             onVerAlertas={verAlertas}
           />
         </div>
-        <div className={tab === 'tecnicos' ? 'block fade-in' : 'hidden'}>
+        <div className={['tecnicos', 'alertas-garantia', 'duplicados'].includes(tab) ? 'block fade-in' : 'hidden'}>
           <ModuloTecnicos 
+            vista={tab}
             allTickets={allTickets} 
             setAllTickets={setAllTickets} 
             nombreArchivo={nombreArchivo} 
@@ -532,8 +537,8 @@ export default function App() {
             valorRutaTecnico={valorRutaTecnico}
           />
         </div>
-        <div className={tab === 'pendientes' ? 'block fade-in' : 'hidden'}>
-          <ModuloPendientes importacionParticulares={importacionParticulares} vencimientosGarantia={vencimientosGarantia} allTickets={allTickets} controlAlertas={controlAlertas} />
+        <div className={['pendientes', 'particulares', 'garantias'].includes(tab) ? 'block fade-in' : 'hidden'}>
+          <ModuloPendientes vista={tab === 'particulares' ? 'Particular' : tab === 'garantias' ? 'Garantia' : 'Tarea'} importacionParticulares={importacionParticulares} vencimientosGarantia={vencimientosGarantia} allTickets={allTickets} controlAlertas={controlAlertas} />
         </div>
         <div className={tab === 'vacaciones' ? 'block fade-in' : 'hidden'}>
           {vacacionesMontado && <Vacaciones />}

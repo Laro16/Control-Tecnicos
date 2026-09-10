@@ -3,10 +3,11 @@ import assert from 'node:assert/strict'
 import { obtenerControlAlertas, obtenerTicketsDuplicados } from '../src/utils/alertas.js'
 
 const catalogo = [{ nombre: 'Cliente de prueba', anios: 2 }]
+const anioActual = new Date().getFullYear()
 const ticket = (datos = {}) => ({
   CLIENTE: 'Cliente de prueba', TIPO: 'Garantia',
   ESTADO: 'Asignada a Técnico', ESTADO_LIMPIO: 'ASIGNADA A TECNICO',
-  'N° REFERENCIA': 'A1', SERIE: '1001011234', ...datos,
+  'N° REFERENCIA': 'A1', SERIE: '1001011234', 'FECHA INGRESO': `01/01/${anioActual}`, ...datos,
 })
 
 test('ignora referencias vacías y agrupa todas las filas, también finalizadas', () => {

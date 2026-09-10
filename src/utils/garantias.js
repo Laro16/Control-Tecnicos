@@ -100,6 +100,37 @@ export function parsearFechaSerie(serie) {
   return fecha
 }
 
+function parsearFechaCalendario(valor) {
+  if (valor instanceof Date) {
+    if (Number.isNaN(valor.getTime())) return null
+    return new Date(valor.getFullYear(), valor.getMonth(), valor.getDate())
+  }
+  const texto = String(valor ?? '').trim()
+  let partes = texto.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/)
+  if (partes) {
+    const [, dia, mes, anio] = partes.map(Number)
+    const fecha = new Date(anio, mes - 1, dia)
+    return fecha.getFullYear() === anio && fecha.getMonth() === mes - 1 && fecha.getDate() === dia ? fecha : null
+  }
+  partes = texto.match(/^(\d{4})-(\d{2})-(\d{2})(?:T.*)?$/)
+  if (partes) {
+    const [, anio, mes, dia] = partes.map(Number)
+    const fecha = new Date(anio, mes - 1, dia)
+    return fecha.getFullYear() === anio && fecha.getMonth() === mes - 1 && fecha.getDate() === dia ? fecha : null
+  }
+  return null
+}
+
+export function obtenerFechaIngresoTicket(ticket = {}) {
+  return parsearFechaCalendario(ticket.FECHA_INGRESO_OBJ) || parsearFechaCalendario(ticket['FECHA INGRESO'])
+}
+
+export function finMesGarantia(fecha) {
+  return fecha instanceof Date && !Number.isNaN(fecha.getTime())
+    ? new Date(fecha.getFullYear(), fecha.getMonth() + 1, 0)
+    : null
+}
+
 export function verificarGarantiaTicket(ticket, clientesGarantia = [], vencimientos = {}) {
   const clienteGarantia = buscarClienteGarantia(ticket?.CLIENTE, clientesGarantia)
   if (!clienteGarantia) return null
@@ -123,30 +154,41 @@ export function verificarGarantiaTicket(ticket, clientesGarantia = [], vencimien
   const fechaFabricacion = parsearFechaSerie(obtenerSerieTicket(ticket))
   const confirmado = vencimientos[claveSerieGarantia(obtenerSerieTicket(ticket))]
   const fechaConfirmada = fechaGarantiaManual(confirmado?.fecha_vencimiento)
+  const fechaIngreso = obtenerFechaIngresoTicket(ticket)
+  const formatear = fecha => `${String(fecha.getDate()).padStart(2, '0')}/${String(fecha.getMonth() + 1).padStart(2, '0')}/${fecha.getFullYear()}`
   if (!fechaFabricacion && !fechaConfirmada) {
     return {
       ...base,
       sinDatosSerie: true,
+      sinFechaIngreso: !fechaIngreso,
+      fechaIngreso,
+      fechaIngresoDisplay: fechaIngreso ? formatear(fechaIngreso) : 'No disponible',
     }
   }
 
   const fechaVencimiento = fechaConfirmada || new Date(fechaFabricacion)
   if (!fechaConfirmada) fechaVencimiento.setFullYear(fechaVencimiento.getFullYear() + clienteGarantia.anios)
-  const hoy = new Date(); hoy.setHours(0, 0, 0, 0)
-  const vencida = hoy > fechaVencimiento
-  const diasRestantes = Math.ceil((fechaVencimiento - hoy) / (1000 * 60 * 60 * 24))
-  const formatear = fecha => `${String(fecha.getDate()).padStart(2, '0')}/${String(fecha.getMonth() + 1).padStart(2, '0')}/${fecha.getFullYear()}`
+  const fechaLimiteIngreso = finMesGarantia(fechaVencimiento)
+  const sinFechaIngreso = !fechaIngreso
+  const vencida = sinFechaIngreso ? null : fechaIngreso > fechaLimiteIngreso
+  const diasMargenIngreso = sinFechaIngreso ? null : Math.round((fechaLimiteIngreso - fechaIngreso) / (1000 * 60 * 60 * 24))
 
   return {
     ...base,
     sinDatosSerie: false,
+    sinFechaIngreso,
     vencida,
-    diasRestantes,
+    diasRestantes: diasMargenIngreso,
+    diasMargenIngreso,
+    fechaIngreso,
+    fechaIngresoDisplay: fechaIngreso ? formatear(fechaIngreso) : 'No disponible',
     fechaFabricacion,
     fechaVencimiento,
+    fechaLimiteIngreso,
     fechaVerificada: Boolean(fechaConfirmada),
     origenVencimiento: fechaConfirmada ? 'Vencimiento confirmado manualmente' : 'Calculado por fabricación',
     fabDisplay: fechaFabricacion ? formatear(fechaFabricacion) : 'No verificable',
     vencDisplay: formatear(fechaVencimiento),
+    coberturaHastaDisplay: formatear(fechaLimiteIngreso),
   }
 }
