@@ -104,11 +104,14 @@ test('descarga un PNG o un ZIP con todas sus imágenes y libera los recursos', a
   const zip = await JSZip.loadAsync(await blobs[1].arrayBuffer())
   assert.deepEqual(Object.keys(zip.files), ['avances-prueba-01.png', 'avances-prueba-02.png'])
   assert.equal(await zip.file('avances-prueba-02.png').async('string'), 'contenido-png-de-prueba')
+  assert.equal(await descargarAvanceImagen([{ ...pagina, cantidad: 2 }, { ...pagina, numero: 2, cantidad: 2 }], { ...opciones, individuales: true }), 2)
+  assert.deepEqual(descargas.slice(2).map(d => d.nombre), ['avances-prueba-01.png', 'avances-prueba-02.png'])
+  assert.ok(blobs.slice(2).every(blob => blob.type === 'image/png'))
   liberar.forEach(callback => callback())
-  assert.deepEqual(urlsRevocadas, ['blob:prueba-1', 'blob:prueba-2'])
+  assert.deepEqual(urlsRevocadas, ['blob:prueba-1', 'blob:prueba-2', 'blob:prueba-3', 'blob:prueba-4'])
 
   errorCanvas = true
   await assert.rejects(() => descargarAvanceImagen([pagina], opciones), /No fue posible generar la imagen/)
   await assert.rejects(() => descargarAvanceImagen([], opciones), /No hay finalizados/)
-  assert.equal(descargas.length, 2)
+  assert.equal(descargas.length, 4)
 })

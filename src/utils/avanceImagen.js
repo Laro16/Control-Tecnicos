@@ -33,14 +33,25 @@ export function prepararPaginasAvance(fechas, tecnicos, matriz) {
   return paginas.map((pagina, i) => ({ ...pagina, numero: i + 1, cantidad: paginas.length }))
 }
 
-function dividirTexto(ctx, texto, ancho) {
+export function dividirTexto(ctx, texto, ancho) {
   const lineas = []
   let linea = ''
   // Divide también palabras largas, sin recortar nombres de técnicos.
   for (const caracter of String(texto)) {
-    if (linea && ctx.measureText(linea + caracter).width > ancho) {
+    if (caracter === '\n') {
       lineas.push(linea.trim())
       linea = ''
+      continue
+    }
+    if (linea && ctx.measureText(linea + caracter).width > ancho) {
+      const espacio = linea.lastIndexOf(' ')
+      if (espacio > 0 && caracter !== ' ') {
+        lineas.push(linea.slice(0, espacio).trim())
+        linea = linea.slice(espacio + 1)
+      } else {
+        lineas.push(linea.trim())
+        linea = ''
+      }
     }
     linea += caracter
   }
@@ -93,7 +104,7 @@ export function dibujarPaginaAvance(canvas, pagina, { periodo, generado }) {
       ctx.strokeStyle = '#334155'
       ctx.lineWidth = 1
       ctx.strokeRect(x, y, anchura, altura)
-      ctx.fillStyle = color
+      ctx.fillStyle = typeof color === 'function' ? color(i) : color
       ctx.font = `${negrita ? 'bold ' : ''}12px Arial`
       ctx.textAlign = i === 0 ? 'left' : 'center'
       const lineas = Array.isArray(valores[i]) ? valores[i] : [String(valores[i])]
@@ -106,10 +117,14 @@ export function dibujarPaginaAvance(canvas, pagina, { periodo, generado }) {
   celdas(y, 36, ['TÉCNICO', ...pagina.fechas, 'TOTAL'], '#334155', '#ffffff', true)
   y += 36
   filas.forEach((fila, i) => {
-    celdas(y, fila.alto, [fila.nombre, ...fila.valores.map(n => n || '—'), fila.total], i % 2 ? '#f1f5f9' : '#ffffff', '#0f172a', true)
+    celdas(y, fila.alto, [fila.nombre, ...fila.valores.map(n => n || '—'), fila.total], i % 2 ? '#f1f5f9' : '#ffffff', columna => {
+      if (columna === 0) return '#0f172a'
+      const valor = columna === anchos.length - 1 ? fila.total : fila.valores[columna - 1]
+      return valor === 0 ? '#94a3b8' : valor <= 3 ? '#e11d48' : valor === 4 ? '#d97706' : '#059669'
+    }, true)
     y += fila.alto
   })
-  celdas(y, 40, [pagina.cantidad > 1 ? 'TOTAL DE ESTA PÁGINA' : 'TOTAL GENERAL', ...pagina.totales, pagina.total], '#0f172a', '#ffffff', true)
+  celdas(y, 40, [pagina.cantidad > 1 ? 'TOTAL DE ESTA PÁGINA' : 'TOTAL GENERAL', ...pagina.totales, pagina.total], '#0f172a', columna => columna === anchos.length - 1 ? '#34d399' : '#ffffff', true)
   ctx.textAlign = 'left'
   ctx.fillStyle = '#334155'
   ctx.font = 'bold 11px Arial'
@@ -120,16 +135,25 @@ export function dibujarPaginaAvance(canvas, pagina, { periodo, generado }) {
 }
 
 export async function descargarAvanceImagen(paginas, opciones) {
+  if (!paginas.length) throw new Error('No hay finalizados para descargar en este período.')
+  return descargarPaginasImagen(paginas, opciones, dibujarPaginaAvance, 'avances')
+}
+
+export async function descargarPaginasImagen(paginas, opciones, dibujar, prefijo) {
   const archivos = []
   for (const pagina of paginas) {
-    const canvas = dibujarPaginaAvance(document.createElement('canvas'), pagina, opciones)
+    const canvas = dibujar(document.createElement('canvas'), pagina, opciones)
     const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
     canvas.width = 0
     canvas.height = 0
     if (!blob) throw new Error('No fue posible generar la imagen. Prueba con un período más corto.')
-    archivos.push({ nombre: `avances-${opciones.nombre}-${String(pagina.numero).padStart(2, '0')}.png`, blob })
+    archivos.push({ nombre: `${prefijo}-${opciones.nombre}-${String(pagina.numero).padStart(2, '0')}.png`, blob })
   }
-  if (!archivos.length) throw new Error('No hay finalizados para descargar en este período.')
+  if (!archivos.length) throw new Error('No hay datos para descargar en esta tabla.')
+  if (opciones.individuales) {
+    archivos.forEach(({ blob, nombre }) => descargarBlob(blob, nombre))
+    return archivos.length
+  }
   let blob = archivos[0].blob
   let nombre = archivos[0].nombre
   if (archivos.length > 1) {
@@ -137,8 +161,13 @@ export async function descargarAvanceImagen(paginas, opciones) {
     const zip = new JSZip()
     archivos.forEach(archivo => zip.file(archivo.nombre, archivo.blob))
     blob = await zip.generateAsync({ type: 'blob' })
-    nombre = `avances-${opciones.nombre}.zip`
+    nombre = `${prefijo}-${opciones.nombre}.zip`
   }
+  descargarBlob(blob, nombre)
+  return archivos.length
+}
+
+function descargarBlob(blob, nombre) {
   const url = URL.createObjectURL(blob)
   const enlace = document.createElement('a')
   enlace.href = url
@@ -147,5 +176,4 @@ export async function descargarAvanceImagen(paginas, opciones) {
   enlace.click()
   enlace.remove()
   setTimeout(() => URL.revokeObjectURL(url), 30000)
-  return archivos.length
 }

@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import Dialogo from './Dialogo'
 import { Calendar, BarChart2, Copy, X, Download, Loader2 } from 'lucide-react'
 import { filtrarCierresAvance, prepararPaginasAvance, descargarAvanceImagen } from '../utils/avanceImagen'
+import { prepararPaginasRuta, descargarRutaImagen } from '../utils/rutaImagen'
 
 function fechaLocalISO(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -20,6 +21,7 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
   const [toast, setToast] = useState(null)
   const [modalDetalles, setModalDetalles] = useState(null)
   const [descargandoAvance, setDescargandoAvance] = useState(false)
+  const [descargandoRuta, setDescargandoRuta] = useState(false)
 
   const tablaFinalizadasRef = useRef()
   const tablaEnvejecimientoRef = useRef()
@@ -86,7 +88,7 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
     granTotalFinalizadas += totalesFecha[f]
   })
 
-  async function descargarAvances() {
+  async function descargarAvances(individuales = true) {
     if (descargandoAvance) return
     setDescargandoAvance(true)
     try {
@@ -98,11 +100,13 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
           : fechaFin ? `Cierres hasta ${mostrarFecha(fechaFin)}`
             : 'Todos los cierres cargados'
       const cantidad = await descargarAvanceImagen(paginas, {
+        individuales,
         periodo,
         generado: new Date().toLocaleString('es-GT'),
         nombre: fechaInicio && fechaFin ? `${fechaInicio}_${fechaFin}` : fechaLocalISO(new Date()),
       })
-      setToast(cantidad === 1 ? '✅ Avance descargado en PNG' : `✅ ${cantidad} imágenes descargadas en un ZIP`)
+      setToast(cantidad === 1 ? '✅ Avance descargado en PNG' : individuales ? `✅ ${cantidad} imágenes PNG de productividad descargadas` : `✅ ${cantidad} imágenes descargadas en un ZIP`)
+      return cantidad
     } catch (error) {
       setToast(`❌ ${error.message || 'No se pudo descargar el avance'}`)
     } finally {
@@ -161,6 +165,34 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
     totalesEnv.mas100 += matrizEnvejecimiento[tec].mas100.count
     totalesEnv.total += matrizEnvejecimiento[tec].total.count
   })
+
+  async function descargarRutas(individuales = true) {
+    if (descargandoRuta) return
+    setDescargandoRuta(true)
+    try {
+      const paginas = prepararPaginasRuta(listaTecnicosActivos, matrizEnvejecimiento, valorRutaTecnico)
+      const cantidad = await descargarRutaImagen(paginas, {
+        individuales,
+        generado: new Date().toLocaleString('es-GT'),
+        nombre: fechaLocalISO(new Date()),
+      })
+      setToast(cantidad === 1 ? '✅ Rutas descargadas en PNG a color' : individuales ? `✅ ${cantidad} imágenes PNG de rutas descargadas` : `✅ ${cantidad} imágenes de rutas descargadas en un ZIP`)
+      return cantidad
+    } catch (error) {
+      setToast(`❌ ${error.message || 'No se pudieron descargar las rutas'}`)
+    } finally {
+      setDescargandoRuta(false)
+      setTimeout(() => setToast(null), 5000)
+    }
+  }
+
+  async function descargarAmbas() {
+    if (descargandoAvance || descargandoRuta) return
+    const avances = await descargarAvances(true)
+    if (!avances) return
+    const rutas = await descargarRutas(true)
+    if (rutas) setToast(`✅ ${avances + rutas} imágenes PNG descargadas: productividad y rutas`)
+  }
 
   if (allTickets.length === 0) {
     return (
@@ -262,6 +294,13 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
       </div>
 
       {/* ── TABLA 1: CONTROL DE PRODUCTIVIDAD ── */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs text-slate-500">PNG separados para arrastrar a WhatsApp. Si el navegador lo solicita, permite las descargas múltiples.</p>
+        <button type="button" onClick={descargarAmbas} disabled={descargandoAvance || descargandoRuta || !granTotalFinalizadas || !totalesEnv.total} className="btn-primary flex items-center gap-2 disabled:opacity-50">
+          {descargandoAvance || descargandoRuta ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+          Descargar ambas como imágenes
+        </button>
+      </div>
       <div className={productividadCompacta ? 'w-full max-w-[520px]' : ''}>
         <div ref={tablaFinalizadasRef} className="card-section">
           <div className="px-4 py-2.5 bg-slate-800">
@@ -318,10 +357,11 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
           </div>
         </div>
         <div className="flex flex-wrap justify-end gap-2 mt-2">
-          <button type="button" onClick={descargarAvances} disabled={descargandoAvance || granTotalFinalizadas === 0} className="btn-primary flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50">
+          <button type="button" onClick={() => descargarAvances(true)} disabled={descargandoAvance || descargandoRuta || granTotalFinalizadas === 0} className="btn-primary flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50">
             {descargandoAvance ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-            {descargandoAvance ? 'Generando imagen…' : 'Descargar avance como imagen'}
+            {descargandoAvance ? 'Generando imagen…' : 'Descargar productividad PNG'}
           </button>
+          {(columnasFechas.length > 7 || listaTecnicosFinalizados.length > 25) && <button type="button" onClick={() => descargarAvances(false)} disabled={descargandoAvance || descargandoRuta} className="btn-ghost disabled:opacity-50">Productividad ZIP</button>}
           <button onClick={() => copiarTablaAlPortapapeles(tablaFinalizadasRef, 'Productividad')} className="flex items-center gap-1.5 text-[10px] px-3 py-1.5 text-slate-400 hover:text-slate-700 hover:bg-white font-semibold rounded-md transition">
             <Copy size={11} /> Copiar tabla
           </button>
@@ -389,7 +429,12 @@ export default function ModuloTablas({ allTickets, rutasTecnicos, setRutasTecnic
             </table>
           </div>
         </div>
-        <div className="flex justify-end mt-1.5">
+        <div className="flex flex-wrap justify-end gap-2 mt-2">
+          <button type="button" onClick={() => descargarRutas(true)} disabled={descargandoAvance || descargandoRuta || totalesEnv.total === 0} className="btn-primary flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50">
+            {descargandoRuta ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+            {descargandoRuta ? 'Generando imagen…' : 'Descargar rutas PNG'}
+          </button>
+          {listaTecnicosActivos.length > 20 && <button type="button" onClick={() => descargarRutas(false)} disabled={descargandoAvance || descargandoRuta} className="btn-ghost disabled:opacity-50">Rutas ZIP</button>}
           <button onClick={() => copiarTablaAlPortapapeles(tablaEnvejecimientoRef, 'Rutas')} className="flex items-center gap-1.5 text-[10px] px-3 py-1.5 text-slate-400 hover:text-slate-700 hover:bg-white font-semibold rounded-md transition">
             <Copy size={11} /> Copiar tabla
           </button>
