@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDownToLine, FileDown, LogOut, Plus, ReceiptText, Wallet } from 'lucide-react'
+import { ArrowDownToLine, CheckCircle, FileDown, LogOut, Plus, ReceiptText, Wallet } from 'lucide-react'
 import { supabase } from '../supabase.jsx'
 import { comprimirFactura, CONCEPTOS_VIATICOS, quetzales, resumenViaticos } from '../utils/viaticos.js'
 import { mensajeErrorIngresoViaticos } from '../utils/accesoViaticos.js'
+import { descargarReciboEfectivo, estadoRecepcion } from '../utils/reciboViaticos.js'
 
 const hoy = () => {
   const fecha = new Date()
@@ -12,10 +13,12 @@ const campo = 'w-full rounded-lg border border-slate-400 bg-white px-3 py-2 text
 const etiqueta = 'grid gap-1 text-xs font-bold text-slate-700'
 const fechaVisible = valor => valor ? valor.split('-').reverse().join('/') : '—'
 
-async function leerTodo(tabla, columnas, orden) {
+async function leerTodo(tabla, columnas, orden, empleadoId = null) {
   const filas = []
   for (let inicio = 0; ; inicio += 1000) {
-    const { data, error } = await supabase.from(tabla).select(columnas).order(orden, { ascending: false }).order('id', { ascending: false }).range(inicio, inicio + 999)
+    let consulta = supabase.from(tabla).select(columnas)
+    if (empleadoId) consulta = consulta.eq('empleado_id', empleadoId)
+    const { data, error } = await consulta.order(orden, { ascending: false }).order('id', { ascending: false }).range(inicio, inicio + 999)
     if (error) throw error
     filas.push(...(data || []))
     if (!data || data.length < 1000) break
@@ -43,6 +46,7 @@ export default function Viaticos({ portal = false }) {
   const [entrega, setEntrega] = useState({ empleado_id: '', fecha: hoy(), monto: '', medio: 'Transferencia', referencia: '', observaciones: '' })
   const [gasto, setGasto] = useState({ empleado_id: '', fecha: hoy(), negocio: '', monto: '', concepto: 'Desayuno', departamento: '', municipio: '', observaciones: '' })
   const [foto, setFoto] = useState(null)
+  const [fotoTransferencia, setFotoTransferencia] = useState(null)
   const [instalacion, setInstalacion] = useState(null)
   const cargaActual = useRef(0)
 
@@ -99,7 +103,9 @@ export default function Viaticos({ portal = false }) {
       setPersona(esAdmin ? null : propios[0])
       setEmpleados(esAdmin ? personal || [] : propios)
       if (!esAdmin) {
-        setEntregas([])
+        const propias = await leerTodo('viaticos_entregas', 'id,empleado_id,fecha,monto,medio,referencia,observaciones,comprobante_ruta,comprobante_nombre,recibido_en,recibido_por,recibido_nombre', 'fecha', propios[0].id)
+        if (consulta !== cargaActual.current) return
+        setEntregas(propias)
         setGastos([])
         return
       }
@@ -140,13 +146,59 @@ export default function Viaticos({ portal = false }) {
   async function guardarEntrega(evento) {
     evento.preventDefault()
     if (rol !== 'admin') return
+    const formulario = evento.currentTarget
     setOcupado(true); setError(''); setMensaje('')
-    const { error: fallo } = await supabase.from('viaticos_entregas').insert({
-      ...entrega, empleado_id: entrega.empleado_id, monto: Number(entrega.monto), referencia: entrega.referencia.trim(), observaciones: entrega.observaciones.trim(),
-    })
+    let ruta = null
+    try {
+      if (entrega.medio === 'Transferencia') {
+        if (!fotoTransferencia) throw new Error('Adjunta una foto del comprobante de la transferencia.')
+        if (!fotoTransferencia.type.startsWith('image/')) throw new Error('El comprobante de transferencia debe ser una foto.')
+        const archivo = await comprimirFactura(fotoTransferencia)
+        ruta = `transferencias/${entrega.empleado_id}/${crypto.randomUUID()}.jpg`
+        const { error: errorFoto } = await supabase.storage.from('facturas-viaticos').upload(ruta, archivo, { contentType: archivo.type, upsert: false })
+        if (errorFoto) throw errorFoto
+      }
+      const { error: fallo } = await supabase.from('viaticos_entregas').insert({
+        ...entrega, empleado_id: entrega.empleado_id, monto: Number(entrega.monto), referencia: entrega.referencia.trim(), observaciones: entrega.observaciones.trim(),
+        comprobante_ruta: ruta, comprobante_nombre: ruta ? fotoTransferencia.name : null,
+      })
+      if (fallo) throw fallo
+      ruta = null
+      setMensaje(entrega.medio === 'Efectivo' ? 'Entrega registrada. Ya puedes descargar el recibo; quedará pendiente hasta que el técnico confirme la recepción.' : 'Transferencia registrada con su foto. Falta la confirmación del técnico.')
+      setEntrega({ empleado_id: '', fecha: hoy(), monto: '', medio: 'Transferencia', referencia: '', observaciones: '' })
+      setFotoTransferencia(null)
+      const entradaArchivo = formulario.querySelector('input[type="file"]')
+      if (entradaArchivo) entradaArchivo.value = ''
+      await cargar(sesion)
+    } catch (fallo) {
+      if (ruta) await supabase.storage.from('facturas-viaticos').remove([ruta])
+      setError(fallo.message || 'No se pudo registrar la entrega.')
+    } finally { setOcupado(false) }
+  }
+
+  async function confirmarEntrega(item) {
+    if (rol !== 'tecnico' || item.empleado_id !== persona?.id) return
+    if (!window.confirm(`Confirmo que recibí ${quetzales(item.monto)} por ${item.medio.toLowerCase()} el ${fechaVisible(item.fecha)}. ¿Registrar mi confirmación?`)) return
+    setOcupado(true); setError(''); setMensaje('')
+    try {
+      const { error: fallo } = await supabase.rpc('confirmar_recepcion_viaticos', { p_entrega: item.id })
+      if (fallo) throw fallo
+      setMensaje('Recepción confirmada. Quedó registrada con tu usuario y la fecha actual.')
+      await cargar(sesion)
+    } catch (fallo) { setError(fallo.message || 'No se pudo confirmar la entrega.') }
+    finally { setOcupado(false) }
+  }
+
+  async function abrirComprobanteEntrega(item) {
+    if (!item.comprobante_ruta) return
+    const { data, error: fallo } = await supabase.storage.from('facturas-viaticos').createSignedUrl(item.comprobante_ruta, 300)
     if (fallo) setError(fallo.message)
-    else { setMensaje('Entrega registrada.'); setEntrega({ empleado_id: '', fecha: hoy(), monto: '', medio: 'Transferencia', referencia: '', observaciones: '' }); await cargar(sesion) }
-    setOcupado(false)
+    else window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
+  }
+
+  async function obtenerReciboEfectivo(item) {
+    try { await descargarReciboEfectivo(item, nombres[item.empleado_id] || persona?.nombre || item.recibido_nombre) }
+    catch (fallo) { setError(fallo.message || 'No se pudo generar el recibo.') }
   }
 
   async function guardarGasto(evento) {
@@ -233,7 +285,7 @@ export default function Viaticos({ portal = false }) {
       const moneda = '#,##0.00;[Red]-#,##0.00'
       const hojaResumen = agregarHoja('Resumen', [['Técnico','nombre',32],['Entregado GTQ','totalEntregado',18],['Gastado GTQ','totalGastado',18],['Sin foto GTQ','sinRespaldo',18],['Disponible GTQ','saldoDisponible',19],['A favor técnico GTQ','saldoAFavorTecnico',23],['Estado','estadoCuadre',25]], resumen)
       ;['B','C','D','E','F'].forEach(col => { hojaResumen.getColumn(col).numFmt = moneda })
-      const hojaEntregas = agregarHoja('Entregas', [['Fecha','fecha',14],['Técnico','tecnico',32],['Monto GTQ','monto',18],['Medio','medio',18],['Referencia','referencia',25],['Observaciones','observaciones',45]], entregasVisibles.map(e => ({ ...e, tecnico: nombres[e.empleado_id] || '—', monto: Number(e.monto) })))
+      const hojaEntregas = agregarHoja('Entregas', [['Fecha','fecha',14],['Técnico','tecnico',32],['Monto GTQ','monto',18],['Medio','medio',18],['Referencia','referencia',25],['Comprobante','comprobante_nombre',32],['Recepción','recepcion',26],['Confirmó','recibido_nombre',32],['Confirmado en','recibido_en',28],['Observaciones','observaciones',45]], entregasVisibles.map(e => ({ ...e, tecnico: nombres[e.empleado_id] || '—', monto: Number(e.monto), comprobante_nombre: e.comprobante_nombre || '—', recepcion: estadoRecepcion(e), recibido_en: e.recibido_en ? new Date(e.recibido_en).toLocaleString('es-GT', { timeZone: 'America/Guatemala' }) : '—' })))
       hojaEntregas.getColumn('C').numFmt = moneda
       const hojaGastos = agregarHoja('Gastos y facturas', [['Fecha','fecha',14],['Técnico','tecnico',32],['Negocio','negocio',30],['Monto GTQ','monto',18],['Concepto','concepto',18],['Departamento','departamento',20],['Municipio','municipio',20],['Comprobante','foto_nombre',32],['Observaciones','observaciones',45]], gastosVisibles.map(e => ({ ...e, tecnico: nombres[e.empleado_id] || '—', monto: Number(e.monto), foto_nombre: e.foto_nombre || 'Sin foto' })))
       hojaGastos.getColumn('D').numFmt = moneda
@@ -254,7 +306,7 @@ export default function Viaticos({ portal = false }) {
       pdf.text(`Disponible: ${quetzales(totales.disponible)}    A favor de técnicos: ${quetzales(totales.aFavorTecnicos)}`, 14, 37)
       autoTable(pdf, { startY: 43, head: [['Técnico', 'Entregado', 'Gastado', 'Sin foto', 'Disponible', 'A favor técnico', 'Estado']], body: resumen.map(e => [e.nombre, quetzales(e.totalEntregado), quetzales(e.totalGastado), quetzales(e.sinRespaldo), quetzales(e.saldoDisponible), quetzales(e.saldoAFavorTecnico), e.estadoCuadre]), headStyles: { fillColor: [15, 23, 42] } })
       pdf.addPage(); pdf.setFontSize(13); pdf.text('Entregas de dinero', 14, 17)
-      autoTable(pdf, { startY: 22, head: [['Fecha','Técnico','Monto','Medio','Referencia','Observaciones']], body: entregasVisibles.map(e => [fechaVisible(e.fecha), nombres[e.empleado_id] || '—', quetzales(e.monto), e.medio, e.referencia, e.observaciones]), styles: { fontSize: 8 }, headStyles: { fillColor: [15, 23, 42] } })
+      autoTable(pdf, { startY: 22, head: [['Fecha','Técnico','Monto','Medio','Referencia','Comprobante','Recepción','Confirmó','Fecha confirmación']], body: entregasVisibles.map(e => [fechaVisible(e.fecha), nombres[e.empleado_id] || '—', quetzales(e.monto), e.medio, e.referencia || '—', e.comprobante_nombre || '—', estadoRecepcion(e), e.recibido_nombre || '—', e.recibido_en ? new Date(e.recibido_en).toLocaleString('es-GT', { timeZone: 'America/Guatemala' }) : '—']), styles: { fontSize: 7 }, headStyles: { fillColor: [15, 23, 42] } })
       pdf.addPage(); pdf.setFontSize(13); pdf.text('Gastos y facturas', 14, 17)
       autoTable(pdf, { startY: 22, head: [['Fecha','Técnico','Negocio','Monto','Concepto','Departamento','Municipio','Comprobante']], body: gastosVisibles.map(e => [fechaVisible(e.fecha), nombres[e.empleado_id] || '—', e.negocio, quetzales(e.monto), e.concepto, e.departamento, e.municipio, e.foto_nombre || 'Sin foto']), styles: { fontSize: 7 }, headStyles: { fillColor: [15, 23, 42] } })
       pdf.save(`Viaticos_${fechaArchivo}.pdf`)
@@ -265,7 +317,7 @@ export default function Viaticos({ portal = false }) {
   if (!sesion) return <section className="mx-auto max-w-md card p-6 sm:p-8">
     <img src="/icons/ticket-manager.svg" alt="" className="mb-4 h-14 w-14" />
     <h1 className="text-2xl font-black">Ticket Manager</h1>
-    <p className="mt-2 text-sm text-slate-600">Inicia sesión. La cuenta administradora abre el panel completo; los técnicos solo pueden ingresar facturas de viáticos.</p>
+    <p className="mt-2 text-sm text-slate-600">Inicia sesión. La cuenta administradora abre el panel completo; los técnicos pueden registrar facturas y confirmar sus entregas de viáticos.</p>
     <form onSubmit={entrar} className="mt-6 grid gap-4">
       <label className={etiqueta}>Correo<input type="email" required autoComplete="username" className={campo} value={correo} onChange={e => setCorreo(e.target.value)} /></label>
       <label className={etiqueta}>Contraseña<input type="password" required autoComplete="current-password" className={campo} value={clave} onChange={e => setClave(e.target.value)} /></label>
@@ -279,7 +331,7 @@ export default function Viaticos({ portal = false }) {
   return <div className="space-y-5">
     <header className="rounded-2xl border-2 border-slate-900 bg-slate-950 p-5 text-white sm:p-7">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div><p className="text-xs font-bold uppercase tracking-widest text-sky-300">Ticket Manager · Viáticos</p><h1 className="mt-1 text-2xl font-black">{rol === 'admin' ? 'Dinero entregado y facturas' : 'Ingresar factura o gasto'}</h1><p className="mt-2 text-sm text-slate-300">{rol === 'admin' ? 'Administración · todos los técnicos' : persona?.nombre || sesion.user.email}</p></div>
+        <div><p className="text-xs font-bold uppercase tracking-widest text-sky-300">Ticket Manager · Viáticos</p><h1 className="mt-1 text-2xl font-black">{rol === 'admin' ? 'Dinero entregado y facturas' : 'Facturas y entregas recibidas'}</h1><p className="mt-2 text-sm text-slate-300">{rol === 'admin' ? 'Administración · todos los técnicos' : persona?.nombre || sesion.user.email}</p></div>
         <div className="flex flex-wrap gap-2">{instalacion && <button type="button" onClick={instalarApp} className="rounded-lg border border-white/30 px-3 py-2 text-sm">Instalar app</button>}{rol === 'admin' && <button type="button" onClick={copiarEnlace} className="rounded-lg border border-white/30 px-3 py-2 text-sm">Copiar enlace para técnicos</button>}{portal && rol === 'admin' && <a href={window.location.pathname} className="rounded-lg border border-white/30 px-3 py-2 text-sm">Volver al panel</a>}<button type="button" onClick={() => supabase.auth.signOut()} className="inline-flex items-center gap-2 rounded-lg border border-white/30 px-3 py-2 text-sm"><LogOut size={15}/> Salir</button></div>
       </div>
     </header>
@@ -310,12 +362,26 @@ export default function Viaticos({ portal = false }) {
         {saldoPendienteTecnico > 0 && <div className="rounded-lg border border-emerald-500 bg-emerald-50 p-3 text-sm text-emerald-950 sm:col-span-2 lg:col-span-3">A favor del técnico: <strong>{quetzales(saldoPendienteTecnico)}</strong>. Una nueva entrega reduce este saldo; puedes hacerla parcial o completa. <button type="button" className="ml-2 font-bold underline" onClick={() => setEntrega(p => ({ ...p, monto: saldoPendienteTecnico.toFixed(2) }))}>Usar este monto</button></div>}
         <label className={etiqueta}>Fecha<input required type="date" className={campo} value={entrega.fecha} onChange={e => setEntrega(p => ({ ...p, fecha: e.target.value }))}/></label>
         <label className={etiqueta}>Cantidad entregada · GTQ<input required min="0.01" step="0.01" type="number" className={campo} value={entrega.monto} onChange={e => setEntrega(p => ({ ...p, monto: e.target.value }))}/></label>
-        <label className={etiqueta}>Medio<select className={campo} value={entrega.medio} onChange={e => setEntrega(p => ({ ...p, medio: e.target.value }))}><option>Transferencia</option><option>Efectivo</option></select></label>
-        <label className={etiqueta}>Referencia de transferencia<input className={campo} value={entrega.referencia} onChange={e => setEntrega(p => ({ ...p, referencia: e.target.value }))}/></label>
+        <label className={etiqueta}>Medio<select className={campo} value={entrega.medio} onChange={e => { setEntrega(p => ({ ...p, medio: e.target.value })); setFotoTransferencia(null) }}><option>Transferencia</option><option>Efectivo</option></select></label>
+        {entrega.medio === 'Transferencia' && <label className={etiqueta}>Foto de la transferencia *<input required type="file" accept="image/*" className={campo} onChange={e => setFotoTransferencia(e.target.files?.[0] || null)}/><span className="font-normal text-slate-500">Se comprime para conservar claridad sin subir un archivo demasiado grande.</span></label>}
+        {entrega.medio === 'Transferencia' && <label className={etiqueta}>Referencia de transferencia<input className={campo} value={entrega.referencia} onChange={e => setEntrega(p => ({ ...p, referencia: e.target.value }))}/></label>}
         <label className={etiqueta}>Observaciones<input className={campo} value={entrega.observaciones} onChange={e => setEntrega(p => ({ ...p, observaciones: e.target.value }))}/></label>
+        <p className="text-xs text-slate-600 sm:col-span-2 lg:col-span-3">{entrega.medio === 'Efectivo' ? 'Después de guardar podrás descargar un recibo de efectivo. El técnico debe confirmar la recepción desde su acceso.' : 'La foto es obligatoria y el técnico deberá confirmar que recibió la transferencia.'}</p>
         <button disabled={ocupado} className="btn-primary sm:col-span-2 lg:col-span-3"><Plus size={14} className="mr-1 inline"/> Guardar entrega</button>
       </form>}
       </>}
+      {rol === 'tecnico' && <section className="card p-4 sm:p-5">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="text-base font-black">Mis entregas de viáticos</h2><span className="text-xs font-bold text-amber-700">{entregas.filter(item => !item.recibido_en).length} por confirmar</span></div>
+        {!entregas.length && <p className="text-sm text-slate-600">Todavía no tienes entregas registradas.</p>}
+        <div className="grid gap-3 sm:grid-cols-2">{[...entregas].sort((a, b) => Number(Boolean(a.recibido_en)) - Number(Boolean(b.recibido_en)) || String(b.fecha).localeCompare(String(a.fecha))).map(item => <article key={item.id} className="rounded-xl border-2 border-slate-300 bg-white p-4">
+          <div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-xs font-bold text-slate-500">{fechaVisible(item.fecha)} · {item.medio}</p><p className="mt-1 text-xl font-black text-slate-900">{quetzales(item.monto)}</p></div><span className={`rounded-lg px-2 py-1 text-xs font-bold ${item.recibido_en ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>{estadoRecepcion(item)}</span></div>
+          {item.referencia && <p className="mt-2 text-xs text-slate-600">Referencia: {item.referencia}</p>}
+          {item.observaciones && <p className="mt-1 text-xs text-slate-600">{item.observaciones}</p>}
+          {item.comprobante_ruta && <button type="button" onClick={() => abrirComprobanteEntrega(item)} className="mt-2 text-xs font-bold text-sky-700 underline">Ver foto de la transferencia</button>}
+          {item.recibido_en ? <p className="mt-3 flex items-center gap-1 text-xs font-semibold text-emerald-700"><CheckCircle size={14}/> Confirmado el {new Date(item.recibido_en).toLocaleString('es-GT', { timeZone: 'America/Guatemala' })}</p> : <button type="button" disabled={ocupado} onClick={() => confirmarEntrega(item)} className="btn-primary mt-3 w-full disabled:opacity-50">Confirmar que recibí {quetzales(item.monto)}</button>}
+          {item.medio === 'Efectivo' && <button type="button" onClick={() => obtenerReciboEfectivo(item)} className="btn-ghost mt-2 w-full"><FileDown size={14} className="mr-1 inline"/> Descargar recibo</button>}
+        </article>)}</div>
+      </section>}
       {rol === 'tecnico' && <p className="text-sm text-slate-600">Completa los datos del gasto y adjunta una foto clara de la factura o un PDF.</p>}
       {(rol === 'tecnico' || vista === 'factura') && <form onSubmit={guardarGasto} className="card grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-3">
         <h2 className="sm:col-span-2 lg:col-span-3 text-lg font-black">Registrar factura o gasto</h2>
@@ -332,7 +398,7 @@ export default function Viaticos({ portal = false }) {
       </form>}
       {rol === 'admin' && <>
       <section className="card-section overflow-x-auto"><div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-300 p-4"><h2 className="font-black">Gastos y facturas ({gastosVisibles.length})</h2>{sinFoto.length > 0 && <span className="text-xs font-bold text-amber-700">{sinFoto.length} sin foto</span>}</div><table className="w-full min-w-[900px] text-left text-sm"><thead className="bg-slate-100"><tr>{['Fecha','Técnico','Negocio','Concepto','Ubicación','Monto','Comprobante'].map(h => <th key={h} className="p-3">{h}</th>)}</tr></thead><tbody>{gastosVisibles.map(item => <tr key={item.id} className="border-t border-slate-300"><td className="p-3">{fechaVisible(item.fecha)}</td><td className="p-3">{nombres[item.empleado_id] || '—'}</td><td className="p-3 font-bold">{item.negocio}</td><td className="p-3">{item.concepto}</td><td className="p-3">{item.municipio}, {item.departamento}</td><td className="p-3 font-bold">{quetzales(item.monto)}</td><td className="p-3">{item.foto_ruta ? <button type="button" onClick={() => abrirFoto(item)} className="text-sky-700 underline">{item.foto_nombre || 'Ver factura'}</button> : <label className="cursor-pointer text-amber-700 underline">Adjuntar foto<input type="file" accept="image/*,application/pdf" className="sr-only" disabled={ocupado} onChange={e => { adjuntarPendiente(item, e.target.files?.[0]); e.target.value = '' }}/></label>}</td></tr>)}</tbody></table>{!gastosVisibles.length && <p className="p-5 text-sm text-slate-500">Aún no hay gastos para este filtro.</p>}</section>
-      <section className="card-section overflow-x-auto"><h2 className="border-b border-slate-300 p-4 font-black">Dinero entregado ({entregasVisibles.length})</h2><table className="w-full min-w-[650px] text-left text-sm"><thead className="bg-slate-100"><tr>{['Fecha','Técnico','Medio','Referencia','Monto','Observaciones'].map(h => <th key={h} className="p-3">{h}</th>)}</tr></thead><tbody>{entregasVisibles.map(item => <tr key={item.id} className="border-t border-slate-300"><td className="p-3">{fechaVisible(item.fecha)}</td><td className="p-3">{nombres[item.empleado_id] || '—'}</td><td className="p-3">{item.medio}</td><td className="p-3">{item.referencia || '—'}</td><td className="p-3 font-bold">{quetzales(item.monto)}</td><td className="p-3">{item.observaciones || '—'}</td></tr>)}</tbody></table>{!entregasVisibles.length && <p className="p-5 text-sm text-slate-500">Aún no hay entregas para este filtro.</p>}</section>
+      <section className="card-section overflow-x-auto"><h2 className="border-b border-slate-300 p-4 font-black">Dinero entregado ({entregasVisibles.length})</h2><table className="w-full min-w-[1000px] text-left text-sm"><thead className="bg-slate-100"><tr>{['Fecha','Técnico','Medio','Referencia','Monto','Comprobante','Recepción','Recibo','Observaciones'].map(h => <th key={h} className="p-3">{h}</th>)}</tr></thead><tbody>{entregasVisibles.map(item => <tr key={item.id} className="border-t border-slate-300"><td className="p-3">{fechaVisible(item.fecha)}</td><td className="p-3">{nombres[item.empleado_id] || '—'}</td><td className="p-3">{item.medio}</td><td className="p-3">{item.referencia || '—'}</td><td className="p-3 font-bold">{quetzales(item.monto)}</td><td className="p-3">{item.comprobante_ruta ? <button type="button" onClick={() => abrirComprobanteEntrega(item)} className="text-sky-700 underline">{item.comprobante_nombre || 'Ver foto'}</button> : item.medio === 'Transferencia' ? <span className="font-semibold text-amber-700">Sin foto (registro anterior)</span> : '—'}</td><td className="p-3"><span className={item.recibido_en ? 'font-bold text-emerald-700' : 'font-bold text-amber-700'}>{estadoRecepcion(item)}</span>{item.recibido_en && <span className="block text-xs text-slate-600">{item.recibido_nombre || 'Técnico'} · {new Date(item.recibido_en).toLocaleString('es-GT', { timeZone: 'America/Guatemala' })}</span>}</td><td className="p-3">{item.medio === 'Efectivo' ? <button type="button" onClick={() => obtenerReciboEfectivo(item)} className="text-sky-700 underline">Descargar PDF</button> : '—'}</td><td className="p-3">{item.observaciones || '—'}</td></tr>)}</tbody></table>{!entregasVisibles.length && <p className="p-5 text-sm text-slate-500">Aún no hay entregas para este filtro.</p>}</section>
       </>}
       {portal && <p className="text-center text-xs text-slate-500">Portal de viáticos · {sesion.user.email}</p>}
     </>}
