@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import JSZip from 'jszip'
 import { supabase } from '../supabase.jsx'
 import { claveReferenciaParticular, idParticularReferencia, leerParticularesExistentes } from '../utils/particulares.js'
+import { DOCS_PARTICULAR, buscarDocumento, descargarAdjunto, leerAdjunto } from '../utils/adjuntosParticulares.js'
 import EstadoParticulares from './EstadoParticulares'
 import Dialogo from './Dialogo'
 import ExpedientesGarantia from './ExpedientesGarantia'
@@ -14,8 +15,6 @@ import {
 const PRIORIDADES = ['Baja', 'Media', 'Alta']
 const ESTADOS_TAREA = ['Pendiente', 'En proceso', 'Realizado', 'Cancelado']
 const ESTADOS_PARTICULAR = ['Pendiente de pago', 'Pagado', 'En Proceso', 'Completada', 'Cancelado']
-
-const DOCS_PARTICULAR = ['Cotizacion', 'Voucher de Pago', 'Recibo de caja', 'Orden de servicio fisica', 'Orden de servicio SRS']
 
 const VACIO_TAREA = { tipo: 'Tarea', titulo: '', descripcion: '', fecha: '', prioridad: 'Media', estado: 'Pendiente' }
 const VACIO_PARTICULAR = { tipo: 'Particular', titulo: '', descripcion: '', fecha: '', prioridad: 'Media', estado: 'Pendiente de pago', orden: '', correlativo: '', negocio: '', nit: '', direccion: '' }
@@ -226,6 +225,14 @@ export default function ModuloPendientes({ vista = 'Tarea', importacionParticula
     link.click()
   }
 
+  async function descargarArchivo(archivo) {
+    try {
+      await descargarAdjunto(archivo)
+    } catch (e) {
+      setError(`No se pudo descargar ${archivo.nombre || 'el archivo'}: ${e.message}`)
+    }
+  }
+
   const itemsFiltrados = vistaActual === 'Tarea' ? items.filter(i => i.tipo === 'Tarea') : items.filter(i => i.tipo === 'Particular')
   const baseFiltrada = filtro === 'Todos' ? itemsFiltrados : itemsFiltrados.filter(i => i.estado === filtro)
   const prioridadEstado = estado => {
@@ -389,11 +396,16 @@ export default function ModuloPendientes({ vista = 'Tarea', importacionParticula
                     <div className="space-y-2 border-t border-slate-200 pt-3">
                       <p className="text-sm font-bold text-slate-700">Documentos del servicio</p>
                       <div className="record-fields">
-                        {DOCS_PARTICULAR.map((doc, indice) => (
-                          <button key={doc} type="button" onClick={() => abrirEditar(item, indice)} className="btn-ghost flex items-center justify-start gap-2 text-left" aria-label={`Subir o revisar ${doc} de ${item.correlativo || item.titulo}`}>
-                            <Paperclip size={15} className="shrink-0" /><span>Subir / revisar · {doc}</span>
-                          </button>
-                        ))}
+                        {DOCS_PARTICULAR.map((doc, indice) => {
+                          const cargado = Boolean(buscarDocumento(item.archivos, doc))
+                          return (
+                            <button key={doc} type="button" onClick={() => abrirEditar(item, indice)} className={`btn-ghost flex items-center justify-start gap-2 text-left ${cargado ? 'border-emerald-300 bg-emerald-50' : ''}`} aria-label={`${cargado ? 'Revisar' : 'Subir'} ${doc} de ${item.correlativo || item.titulo}`}>
+                              {cargado ? <CheckCircle size={15} className="shrink-0 text-emerald-700" /> : <Paperclip size={15} className="shrink-0" />}
+                              <span>{doc}</span>
+                              <span className={`ml-auto text-[10px] font-bold ${cargado ? 'text-emerald-700' : 'text-slate-500'}`}>{cargado ? 'Cargado' : 'Subir'}</span>
+                            </button>
+                          )
+                        })}
                       </div>
                       {!item.archivos?.length && <p className="text-sm text-slate-500">Sin archivos cargados. Selecciona un documento para subirlo.</p>}
                     </div>
@@ -406,7 +418,8 @@ export default function ModuloPendientes({ vista = 'Tarea', importacionParticula
                       </div>
                       <div className="flex flex-wrap gap-1.5">
                         {item.archivos.map((arch, idx) => {
-                          const archObj = typeof arch === 'string' ? JSON.parse(arch) : arch
+                          const archObj = leerAdjunto(arch)
+                          if (!archObj?.url) return null
                           const url = archObj.url, nombre = archObj.nombre, tipoDoc = archObj.tipoDoc || 'Adjunto'
                           const isImage = url.match(/\.(jpeg|jpg|gif|png|webp)$/i) || nombre.match(/\.(jpeg|jpg|gif|png|webp)$/i)
                           return (
@@ -417,7 +430,7 @@ export default function ModuloPendientes({ vista = 'Tarea', importacionParticula
                               ) : (
                                 <a href={url} target="_blank" rel="noopener noreferrer" className={`text-slate-600 hover:text-slate-800 font-semibold ${item.tipo === 'Particular' ? 'break-all' : 'truncate max-w-[120px]'}`}>{nombre}</a>
                               )}
-                              <a href={url} target="_blank" rel="noopener noreferrer" download={nombre} className="text-sky-500 hover:text-sky-700"><Download size={10} /></a>
+                              <button type="button" onClick={() => descargarArchivo(archObj)} aria-label={`Descargar ${nombre}`} title={`Descargar ${nombre}`} className="text-sky-500 hover:text-sky-700"><Download size={10} /></button>
                             </div>
                           )
                         })}
@@ -488,16 +501,13 @@ export default function ModuloPendientes({ vista = 'Tarea', importacionParticula
                     <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Documentos del Servicio</label>
                     <div className="space-y-2">
                       {DOCS_PARTICULAR.map(doc => {
-                        const existente = form.archivos?.findIndex(a => {
-                          const obj = typeof a === 'string' ? JSON.parse(a) : a
-                          return obj.tipoDoc === doc || obj.nombre.includes(doc)
-                        })
+                        const existente = form.archivos?.findIndex(a => Boolean(buscarDocumento([a], doc))) ?? -1
                         return (
                           <div key={doc} id={`documento-particular-${DOCS_PARTICULAR.indexOf(doc)}`} tabIndex={-1} className="space-y-1 scroll-mt-4">
                             <span className="text-[10px] font-bold text-sky-800">{doc}</span>
-                            {existente !== undefined && existente !== -1 ? (
+                            {existente !== -1 ? (
                               <div className="flex items-center justify-between bg-white border border-emerald-200 rounded-md px-2.5 py-1.5">
-                                <span className="text-sm text-emerald-600 font-semibold break-all">✓ {typeof form.archivos[existente] === 'string' ? JSON.parse(form.archivos[existente]).nombre : form.archivos[existente].nombre}</span>
+                                <span className="text-sm text-emerald-600 font-semibold break-all">✓ {leerAdjunto(form.archivos[existente])?.nombre || 'Archivo cargado'}</span>
                                 <button type="button" onClick={() => eliminarArchivoExistente(existente)} className="text-rose-500 hover:text-rose-700 p-0.5"><Trash2 size={12}/></button>
                               </div>
                             ) : archivosParticular[doc] ? (

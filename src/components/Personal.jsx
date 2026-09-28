@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertCircle, CalendarDays, ChevronDown, Loader2, Pencil, Plus, Search, Trash2, Users, X } from 'lucide-react'
 import Dialogo from './Dialogo'
 import { supabase, crearAccesoViaticos } from '../supabase'
+import { resultadoAltaViaticos } from '../utils/accesoViaticos.js'
 
 const JORNADAS = [
   { valor: '0,6', etiqueta: 'Lunes a viernes (descansa sábado y domingo)' },
@@ -16,6 +17,7 @@ export default function Personal() {
   const [cargando, setCargando] = useState(true)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
+  const [aviso, setAviso] = useState('')
   const [busqueda, setBusqueda] = useState('')
   const [modalAbierto, setModalAbierto] = useState(false)
   const [editando, setEditando] = useState(null)
@@ -66,6 +68,7 @@ export default function Personal() {
       <p className="flex-1 text-[11px] text-red-700">{error}</p>
       <button type="button" onClick={() => setError('')} aria-label="Cerrar aviso" className="text-red-500"><X size={13} /></button>
     </div>}
+    {aviso && <div role="status" className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800">{aviso}</div>}
 
     <div className="card flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="relative w-full sm:max-w-sm">
@@ -104,7 +107,7 @@ export default function Personal() {
       guardando={guardando}
       setGuardando={setGuardando}
       onCerrar={cerrarModal}
-      onGuardado={() => { cerrarModal(); cargar() }}
+      onGuardado={mensaje => { cerrarModal(); setAviso(mensaje || 'Personal guardado.'); cargar() }}
       onError={setError}
     />}
   </div>
@@ -112,6 +115,7 @@ export default function Personal() {
 
 function ModalEmpleado({ empleado, guardando, setGuardando, onCerrar, onGuardado, onError }) {
   const [personalGuardado, setPersonalGuardado] = useState(false)
+  const [errorModal, setErrorModal] = useState('')
   const [codigo, setCodigo] = useState(empleado?.codigo || '')
   const [nombre, setNombre] = useState(empleado?.nombre || '')
   const [puesto, setPuesto] = useState(empleado?.puesto || '')
@@ -121,8 +125,10 @@ function ModalEmpleado({ empleado, guardando, setGuardando, onCerrar, onGuardado
   const [jornada, setJornada] = useState(empleado?.dias_descanso?.join(',') || '0,6')
 
   async function guardar() {
+    setErrorModal('')
     if (!nombre.trim()) return
-    if (claveViaticos && !correoViaticos.trim()) { onError('Agrega el correo antes de crear el acceso a Viáticos.'); return }
+    const mostrarError = mensaje => { setErrorModal(mensaje); onError(mensaje) }
+    if (claveViaticos && !correoViaticos.trim()) { mostrarError('Agrega el correo antes de crear el acceso a Viáticos.'); return }
     setGuardando(true)
     const datos = {
       codigo: codigo.trim() || null,
@@ -137,18 +143,22 @@ function ModalEmpleado({ empleado, guardando, setGuardando, onCerrar, onGuardado
         ? await supabase.from('vac_empleados').update(datos).eq('id', empleado.id)
         : await supabase.from('vac_empleados').insert(datos)
       if (fallo) {
-        onError(fallo.code === '23505' ? 'Ya existe un compañero con ese nombre, código o correo de Viáticos.' : fallo.message)
+        mostrarError(fallo.code === '23505' ? 'Ya existe un compañero con ese nombre, código o correo de Viáticos.' : fallo.message)
         return
       }
+      let avisoAcceso = ''
       if (claveViaticos) {
         setPersonalGuardado(true)
-        const { error: errorAcceso } = await crearAccesoViaticos(datos.correo_viaticos, claveViaticos)
-        if (errorAcceso) {
-          onError(`El personal se guardó, pero no se pudo crear el acceso: ${errorAcceso.message}. Puedes reintentar aquí o cerrar y editar a esta persona.`)
+        const resultado = resultadoAltaViaticos(await crearAccesoViaticos(datos.correo_viaticos, claveViaticos))
+        if (resultado.error) {
+          mostrarError(`El personal se guardó, pero ${resultado.error}`)
           return
         }
+        avisoAcceso = resultado.aviso
       }
-      onGuardado()
+      onGuardado(avisoAcceso)
+    } catch (fallo) {
+      mostrarError(`No se pudo completar el acceso: ${fallo.message}`)
     } finally { setGuardando(false) }
   }
 
@@ -158,6 +168,7 @@ function ModalEmpleado({ empleado, guardando, setGuardando, onCerrar, onGuardado
     <div className="app-dialog-panel">
       <div className="app-dialog-header"><h3 className="text-xs font-bold text-slate-800">{titulo}</h3><button type="button" aria-label="Cerrar formulario" onClick={onCerrar} className="text-slate-500"><X size={20} /></button></div>
       <div className="app-dialog-body space-y-4">
+        {errorModal && <p role="alert" className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-800">{errorModal}</p>}
         <div className="grid gap-3 sm:grid-cols-3">
           <Campo etiqueta="Código"><input value={codigo} onChange={e => setCodigo(e.target.value)} placeholder="T-01" title="Opcional, pero no se puede repetir" className={campo} /></Campo>
           <div className="sm:col-span-2"><Campo etiqueta="Nombre"><input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Nombre completo" className={campo} /></Campo></div>
@@ -171,7 +182,7 @@ function ModalEmpleado({ empleado, guardando, setGuardando, onCerrar, onGuardado
           <Campo etiqueta="Correo para Viáticos"><input type="email" autoComplete="off" value={correoViaticos} onChange={e => setCorreoViaticos(e.target.value)} placeholder="tecnico@empresa.com" className={campo} /></Campo>
           <Campo etiqueta="Contraseña de acceso"><input type="password" autoComplete="new-password" value={claveViaticos} onChange={e => setClaveViaticos(e.target.value)} placeholder="Solo para crear la cuenta" className={campo} /></Campo>
         </div>
-        <p className="text-xs text-slate-500">La contraseña crea la cuenta en Supabase Auth y no se guarda en Personal. Déjala vacía si la cuenta ya existe. El técnico debe confirmar su correo si Supabase lo solicita.</p>
+        <p className="text-xs text-slate-500">Esta contraseña solo crea una cuenta nueva en Supabase Auth; no cambia la contraseña de una cuenta existente ni se guarda en Personal. Si la cuenta ya existe, déjala vacía. El técnico debe confirmar su correo si Supabase lo solicita.</p>
         {personalGuardado && <p className="text-xs font-bold text-amber-700">El personal ya quedó guardado. Este intento solo volverá a crear el acceso; para cambiar otros datos, edita la persona después.</p>}
         <div className="flex gap-2 pt-1">
           <button type="button" onClick={onCerrar} className="flex-1 rounded-lg border border-slate-300 py-2 text-xs font-semibold text-slate-600">Cancelar</button>

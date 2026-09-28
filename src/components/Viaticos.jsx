@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDownToLine, FileDown, LogOut, Plus, ReceiptText, Wallet } from 'lucide-react'
 import { supabase } from '../supabase.jsx'
 import { comprimirFactura, CONCEPTOS_VIATICOS, quetzales, resumenViaticos } from '../utils/viaticos.js'
+import { mensajeErrorIngresoViaticos } from '../utils/accesoViaticos.js'
 
 const hoy = () => {
   const fecha = new Date()
@@ -131,7 +132,7 @@ export default function Viaticos({ portal = false }) {
     evento.preventDefault()
     setOcupado(true); setError('')
     const { error: fallo } = await supabase.auth.signInWithPassword({ email: correo.trim(), password: clave })
-    if (fallo) setError('No se pudo iniciar sesión. Comprueba el correo, la contraseña y la confirmación del correo.')
+    if (fallo) setError(mensajeErrorIngresoViaticos(fallo))
     setClave('')
     setOcupado(false)
   }
