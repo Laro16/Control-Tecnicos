@@ -1,12 +1,12 @@
 # Activar Viáticos
 
-1. En Supabase → Authentication → Users, crea la cuenta administradora con el correo indicado para administración y la contraseña que elegiste. Confirma el correo si Auth lo solicita.
-2. En SQL Editor, pega y ejecuta **completo** `activar_viaticos.sql`. La última consulta agrega esa cuenta a `viaticos_admins`.
-3. Si creaste la cuenta administradora después de ejecutar el script, ejecuta nuevamente solamente el `insert into public.viaticos_admins ...` que aparece al final.
-4. En Vacaciones → Por persona → Editar, agrega el correo de cada técnico. Si introduces contraseña, al guardar se crea su cuenta mediante Supabase Auth. Deja la contraseña vacía cuando la cuenta ya exista.
+1. En Supabase → Authentication → Users, crea las dos cuentas administradoras (`jogomez@fogel-group.com` y `luis21aro@gmail.com`) con sus contraseñas elegidas allí. Confirma ambos correos si Auth lo solicita. Nunca guardes las contraseñas en este repositorio ni en SQL.
+2. Si Viáticos aún no existe en Supabase, ejecuta **completo** `activar_viaticos.sql`. La última consulta agrega las dos cuentas a `viaticos_admins` si ya existen en Authentication.
+3. Si Viáticos ya estaba activado, o creaste alguna cuenta después, ejecuta solamente `autorizar_administradores.sql`. Revisa el resultado: para ambos correos, `existe_en_auth`, `correo_confirmado` y `acceso_general` deben ser `true`.
+4. En Personal → Editar, agrega el correo de cada técnico. Si introduces contraseña, al guardar se crea su cuenta mediante Supabase Auth. Deja la contraseña vacía cuando la cuenta ya exista.
 5. El administrador entra en el menú **Viáticos**. El botón **Copiar enlace para técnicos** genera el acceso directo `#viaticos` para compartir.
 
-El acceso al panel principal ahora requiere iniciar sesión con una cuenta incluida en `viaticos_admins`. Una cuenta de técnico asociada a Personal queda dirigida al formulario de facturas; no ve el panel principal. Si el administrador todavía no está creado en Authentication o no está incluido en `viaticos_admins`, hay que completar los pasos 1 a 3 antes de desplegar este cambio.
+El acceso al panel principal ahora requiere iniciar sesión con una cuenta incluida en `viaticos_admins`. Ambas cuentas indicadas arriba tendrán acceso general y de administración de Viáticos. Una cuenta de técnico asociada a Personal queda dirigida al formulario de facturas; no ve el panel principal. Si una cuenta administradora todavía no está creada en Authentication o no está incluida en `viaticos_admins`, hay que completar los pasos 1 a 3 antes de usarla.
 
 Los comprobantes se guardan en un bucket privado. El módulo no funciona hasta ejecutar el SQL; el código no contiene ninguna contraseña. Los gastos sin foto se muestran al administrador por separado y él puede adjuntar el comprobante más adelante. El técnico solo ve el formulario de ingreso, sin saldos, entregas, listas ni reportes.
 

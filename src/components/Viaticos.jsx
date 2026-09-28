@@ -90,7 +90,7 @@ export default function Viaticos({ portal = false }) {
       if (!esAdmin && propios.length !== 1) {
         setRol('sin-personal')
         setUsuarioRolId(actual.user.id)
-        setError('Este correo no está asociado a una persona en Vacaciones. Revisa el correo registrado en Personal.')
+        setError('Este correo no está asociado a una persona en Personal. Revisa el correo registrado allí.')
         return
       }
       setRol(esAdmin ? 'admin' : 'tecnico')
@@ -113,7 +113,7 @@ export default function Viaticos({ portal = false }) {
       if (consulta === cargaActual.current) setError(`No se pudieron cargar Viáticos: ${fallo.message}. Comprueba que activaste el script de Supabase.`)
     }
   }, [])
-  useEffect(() => { cargar(sesion) }, [sesion, cargar])
+  useEffect(() => { cargar(sesion) }, [sesion?.user?.id, cargar])
 
   const empleadosActivos = empleados.filter(e => e.activo !== false && (rol === 'admin' || e.id === persona?.id))
   const empleadoFormulario = rol === 'admin' ? '' : persona?.id || ''

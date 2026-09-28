@@ -110,11 +110,12 @@ using (bucket_id = 'facturas-viaticos' and (
 
 commit;
 
--- Después de crear al administrador en Authentication > Users:
+-- Después de crear ambas cuentas administradoras en Authentication > Users:
 insert into public.viaticos_admins(user_id)
-select id from auth.users where lower(email) = 'jogomez@fogel-group.com'
+select id from auth.users
+where lower(email) in ('jogomez@fogel-group.com', 'luis21aro@gmail.com')
 on conflict (user_id) do nothing;
--- Si este INSERT afectó 0 filas, primero crea y confirma ese usuario en
--- Authentication > Users, y luego ejecuta de nuevo solo el INSERT anterior.
+-- Para agregar administradores después de la activación inicial, ejecuta
+-- autorizar_administradores.sql; no vuelvas a ejecutar todo este archivo.
 -- Crear cada cuenta de técnico en Authentication > Users con el correo que se
 -- registra en Personal. El correo debe estar confirmado para poder iniciar sesión.

@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import Dialogo from './Dialogo';
-import { supabase, crearAccesoViaticos } from '../supabase';
+import { supabase } from '../supabase';
 import {
-  CalendarDays, Plus, Trash2, Users, Download, X, Pencil,
-  AlertCircle, Loader2, Search, ChevronDown
+  CalendarDays, Plus, Trash2, Users, Download, X,
+  AlertCircle, Loader2, Search
 } from 'lucide-react';
 
 /* ------------------------------------------------------------------ */
@@ -43,18 +43,11 @@ const calcularHabiles = (inicio, fin, setAsuetos) => {
   return n;
 };
 
-const JORNADAS = [
-  { valor: '0,6', etiqueta: 'Lunes a viernes (descansa sábado y domingo)' },
-  { valor: '0',   etiqueta: 'Lunes a sábado (descansa solo domingo)' },
-];
-
-const JORNADA_DEFECTO = '0,6';
-
 const jornadaTexto = (arr) => (arr || []).join(',') === '0' ? 'Lun–Sáb' : 'Lun–Vie';
 
 /* ================================================================== */
 
-export default function Vacaciones() {
+export default function Vacaciones({ activa = true, onNavigate }) {
   const [pestana, setPestana] = useState('registro');
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
@@ -67,8 +60,6 @@ export default function Vacaciones() {
   const [asuetos, setAsuetos] = useState([]);
 
   const [modalGoce, setModalGoce] = useState(false);
-  const [modalEmpleado, setModalEmpleado] = useState(false);
-  const [editandoEmpleado, setEditandoEmpleado] = useState(null);
 
   const [filtroEmpleado, setFiltroEmpleado] = useState('');
   const [filtroAnio, setFiltroAnio] = useState('');
@@ -103,7 +94,7 @@ export default function Vacaciones() {
     }
   }, []);
 
-  useEffect(() => { cargar(); }, [cargar]);
+  useEffect(() => { if (activa) cargar(); }, [activa, cargar]);
 
   /* --------------------------- filtros --------------------------- */
   const anios = useMemo(() => {
@@ -127,13 +118,6 @@ export default function Vacaciones() {
   const borrarGoce = async (id) => {
     if (!window.confirm('¿Eliminar este registro de vacaciones?')) return;
     const { error: e } = await supabase.from('vac_goces').delete().eq('id', id);
-    if (e) return setError(e.message);
-    cargar();
-  };
-
-  const borrarEmpleado = async (id, nombre) => {
-    if (!window.confirm(`Eliminar a ${nombre} borra también todos sus registros de vacaciones. ¿Continuar?`)) return;
-    const { error: e } = await supabase.from('vac_empleados').delete().eq('id', id);
     if (e) return setError(e.message);
     cargar();
   };
@@ -387,7 +371,7 @@ export default function Vacaciones() {
         <div className="relative z-10 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="mb-3 flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.18em] text-sky-300">
-              <CalendarDays size={13} /> Gestión de personal
+              <CalendarDays size={13} /> Historial de descansos
             </div>
             <h1 className="text-2xl font-black tracking-tight sm:text-3xl">Control de vacaciones</h1>
             <p className="mt-2 max-w-xl text-xs leading-relaxed text-slate-300 sm:text-sm">Registra períodos, consulta el historial y mantén una visión clara de los días gozados por persona.</p>
@@ -396,9 +380,6 @@ export default function Vacaciones() {
             <button onClick={exportarExcel} disabled={!gocesFiltrados.length || exportando} className="flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 text-[10px] font-extrabold text-white transition hover:bg-white/15 disabled:opacity-40" title="Descargar reporte en Excel">
               {exportando ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
               {exportando ? 'Generando…' : 'Exportar Excel'}
-            </button>
-            <button onClick={() => { setEditandoEmpleado(null); setModalEmpleado(true); }} className="flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 text-[10px] font-extrabold text-white transition hover:bg-white/15">
-              <Users size={13} /> Personal
             </button>
             <button onClick={() => setModalGoce(true)} disabled={!empleados.length} className="flex items-center gap-1.5 rounded-xl bg-white px-3.5 py-2.5 text-[10px] font-extrabold text-slate-900 shadow-lg transition hover:bg-sky-50 disabled:opacity-40">
               <Plus size={13} /> Registrar vacaciones
@@ -426,12 +407,12 @@ export default function Vacaciones() {
 
       {!empleados.length && (
         <div className="border border-dashed border-slate-300 rounded-lg p-6 text-center">
-          <p className="text-xs text-slate-500 mb-3">Todavía no hay personal registrado.</p>
+          <p className="text-xs text-slate-500 mb-3">Todavía no hay personal registrado. Agrégalo desde el menú Personal para comenzar a registrar vacaciones.</p>
           <button
-            onClick={() => { setEditandoEmpleado(null); setModalEmpleado(true); }}
+            onClick={() => onNavigate?.('personal')}
             className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-slate-800 text-white hover:bg-slate-700"
           >
-            Agregar al primer compañero
+            Abrir Personal
           </button>
         </div>
       )}
@@ -585,25 +566,6 @@ export default function Vacaciones() {
                           {r.puesto || 'Sin puesto'} · {jornadaTexto(r.dias_descanso)}
                         </p>
                       </div>
-                      <div className="flex gap-1 shrink-0">
-                        <button
-                          onClick={() => {
-                            setEditandoEmpleado(empleados.find((e) => e.id === r.id));
-                            setModalEmpleado(true);
-                          }}
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-300 transition-colors hover:border-slate-300 hover:text-slate-600"
-                          title="Editar"
-                        >
-                          <Pencil size={12} />
-                        </button>
-                        <button
-                          onClick={() => borrarEmpleado(r.id, r.nombre)}
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-300 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-500"
-                          title="Eliminar"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
                     </div>
 
                     <div className="grid grid-cols-3 divide-x divide-slate-300 border-b border-slate-300 text-center">
@@ -646,16 +608,6 @@ export default function Vacaciones() {
         />
       )}
 
-      {modalEmpleado && (
-        <ModalEmpleado
-          empleado={editandoEmpleado}
-          guardando={guardando}
-          setGuardando={setGuardando}
-          onCerrar={() => { setModalEmpleado(false); setEditandoEmpleado(null); }}
-          onGuardado={() => { setModalEmpleado(false); setEditandoEmpleado(null); cargar(); }}
-          onError={setError}
-        />
-      )}
     </div>
   );
 }
@@ -769,132 +721,6 @@ function ModalGoce({ empleados, setAsuetos, guardando, setGuardando, onCerrar, o
         >
           {guardando && <Loader2 size={13} className="animate-spin" />}
           Guardar registro
-        </button>
-      </div>
-    </Marco>
-  );
-}
-
-/* ================================================================== */
-/*  Modal: alta / edición de personal                                  */
-/* ================================================================== */
-function ModalEmpleado({ empleado, guardando, setGuardando, onCerrar, onGuardado, onError }) {
-  const [personalGuardado, setPersonalGuardado] = useState(false);
-  const [codigo, setCodigo] = useState(empleado?.codigo || '');
-  const [nombre, setNombre] = useState(empleado?.nombre || '');
-  const [puesto, setPuesto] = useState(empleado?.puesto || '');
-  const [ingreso, setIngreso] = useState(empleado?.fecha_ingreso || '');
-  const [correoViaticos, setCorreoViaticos] = useState(empleado?.correo_viaticos || '');
-  const [claveViaticos, setClaveViaticos] = useState('');
-  const [jornada, setJornada] = useState(
-    empleado?.dias_descanso ? empleado.dias_descanso.join(',') : JORNADA_DEFECTO
-  );
-
-  const guardar = async () => {
-    if (!nombre.trim()) return;
-    if (claveViaticos && !correoViaticos.trim()) { onError('Agrega el correo antes de crear el acceso a Viáticos.'); return; }
-    setGuardando(true);
-    const datos = {
-      codigo: codigo.trim() || null,
-      nombre: nombre.trim(),
-      puesto: puesto.trim() || null,
-      fecha_ingreso: ingreso || null,
-      dias_descanso: jornada.split(',').map(Number),
-      correo_viaticos: correoViaticos.trim().toLowerCase() || null,
-    };
-    const { error } = personalGuardado ? { error: null } : empleado
-      ? await supabase.from('vac_empleados').update(datos).eq('id', empleado.id)
-      : await supabase.from('vac_empleados').insert(datos);
-    if (error) {
-      setGuardando(false);
-      onError(
-        error.code === '23505'
-          ? 'Ya existe un compañero con ese nombre, código o correo de Viáticos.'
-          : error.message
-      );
-      return;
-    }
-    if (claveViaticos) {
-      setPersonalGuardado(true);
-      const { error: errorAcceso } = await crearAccesoViaticos(datos.correo_viaticos, claveViaticos);
-      if (errorAcceso) {
-        setGuardando(false);
-        onError(`El personal se guardó, pero no se pudo crear el acceso: ${errorAcceso.message}. Puedes reintentar aquí o cerrar y editar a esta persona.`);
-        return;
-      }
-    }
-    setGuardando(false);
-    onGuardado();
-  };
-
-  return (
-    <Marco titulo={empleado ? 'Editar compañero' : 'Agregar compañero'} onCerrar={onCerrar}>
-      <div className="form-fields gap-2">
-        <Campo etiqueta="Código">
-          <input
-            value={codigo}
-            onChange={(e) => setCodigo(e.target.value)}
-            placeholder="T-01"
-            title="Opcional, pero no se puede repetir entre compañeros"
-            className="w-full text-xs font-mono border border-slate-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-slate-400"
-          />
-        </Campo>
-        <div className="col-span-2">
-          <Campo etiqueta="Nombre">
-            <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre completo"
-              className="w-full text-xs border border-slate-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-slate-400" />
-          </Campo>
-        </div>
-      </div>
-
-      <div className="form-fields gap-2">
-        <Campo etiqueta="Puesto">
-          <input value={puesto} onChange={(e) => setPuesto(e.target.value)} placeholder="Ej. Técnico"
-            className="w-full text-xs border border-slate-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-slate-400" />
-        </Campo>
-        <Campo etiqueta="Ingreso">
-          <input type="date" value={ingreso} onChange={(e) => setIngreso(e.target.value)}
-            className="w-full text-xs border border-slate-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-slate-400" />
-        </Campo>
-      </div>
-
-      <Campo etiqueta="Jornada">
-        <div className="relative">
-          <select
-            value={jornada}
-            onChange={(e) => setJornada(e.target.value)}
-            className="w-full appearance-none text-xs border border-slate-200 rounded-lg px-2 py-2 pr-7 bg-white focus:outline-none focus:ring-1 focus:ring-slate-400"
-          >
-            {JORNADAS.map((j) => <option key={j.valor} value={j.valor}>{j.etiqueta}</option>)}
-          </select>
-          <ChevronDown size={13} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-        </div>
-      </Campo>
-
-      <div className="form-fields gap-2">
-        <Campo etiqueta="Correo para Viáticos">
-          <input type="email" autoComplete="off" value={correoViaticos} onChange={e => setCorreoViaticos(e.target.value)} placeholder="tecnico@empresa.com"
-            className="w-full text-xs border border-slate-200 rounded-lg px-2 py-2" />
-        </Campo>
-        <Campo etiqueta="Contraseña de acceso">
-          <input type="password" autoComplete="new-password" value={claveViaticos} onChange={e => setClaveViaticos(e.target.value)} placeholder="Solo para crear la cuenta"
-            className="w-full text-xs border border-slate-200 rounded-lg px-2 py-2" />
-        </Campo>
-      </div>
-      <p className="text-xs text-slate-500">La contraseña crea la cuenta en Supabase Auth y no se guarda en Personal. Déjala vacía si la cuenta ya existe. El técnico debe confirmar su correo si Supabase lo solicita.</p>
-      {personalGuardado && <p className="text-xs font-bold text-amber-700">El personal ya quedó guardado. Este intento solo volverá a crear el acceso; para cambiar otros datos, edita la persona después.</p>}
-
-      <div className="form-actions flex gap-2 pt-1">
-        <button onClick={onCerrar} className="flex-1 text-xs font-semibold py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">
-          Cancelar
-        </button>
-        <button
-          onClick={guardar}
-          disabled={guardando || !nombre.trim()}
-          className="flex-1 text-xs font-semibold py-2 rounded-lg bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-40 flex items-center justify-center gap-1.5"
-        >
-          {guardando && <Loader2 size={13} className="animate-spin" />}
-          Guardar
         </button>
       </div>
     </Marco>

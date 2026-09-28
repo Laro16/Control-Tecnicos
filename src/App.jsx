@@ -6,6 +6,7 @@ import ModuloPendientes from './components/Gestion'
 import ModuloTablas from './components/Tablas'
 import Dashboard from './components/Dashboard'
 import Vacaciones from './components/Vacaciones'
+import Personal from './components/Personal'
 import Viaticos from './components/Viaticos'
 import Notificaciones from './components/Notificaciones'
 import { obtenerControlAlertas } from './utils/alertas'
@@ -13,7 +14,7 @@ import useHistorialSeries from './hooks/useHistorialSeries'
 import useVencimientosGarantia from './hooks/useVencimientosGarantia'
 import useImportacionParticulares from './hooks/useImportacionParticulares'
 import garantiasUrl from './Garantias.xlsx?url'
-import { Wrench, ClipboardList, BarChart3, Briefcase, Cloud, CloudOff, Copy, Loader2, LayoutDashboard, CalendarDays, Menu, Moon, MoreHorizontal, PanelLeftClose, PanelLeftOpen, ShieldAlert, ShieldCheck, Sun, X, Wallet } from 'lucide-react'
+import { Wrench, ClipboardList, BarChart3, Briefcase, Cloud, CloudOff, Copy, Loader2, LayoutDashboard, CalendarDays, Menu, Moon, MoreHorizontal, PanelLeftClose, PanelLeftOpen, ShieldAlert, ShieldCheck, Sun, X, Wallet, Users } from 'lucide-react'
 
 function normalizarTexto(texto) {
   if (!texto) return ''
@@ -41,6 +42,7 @@ export default function App() {
   useEffect(() => {
     let vigente = true
     let ultimaConsulta = 0
+    let usuarioSolicitado
     async function enviarTecnicoAlPortal(sesion) {
       const consulta = ++ultimaConsulta
       if (!vigente) return
@@ -56,10 +58,16 @@ export default function App() {
       setAcceso(esTecnico ? 'tecnico' : 'sin-rol')
       if (esTecnico && window.location.hash !== '#viaticos') window.location.hash = '#viaticos'
     }
-    supabase.auth.getSession().then(({ data }) => enviarTecnicoAlPortal(data.session))
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_evento, sesion) => {
+    function recibirSesion(sesion) {
+      const usuario = sesion?.user?.id || null
+      if (usuario === usuarioSolicitado) return
+      usuarioSolicitado = usuario
       setAcceso('comprobando')
       window.setTimeout(() => enviarTecnicoAlPortal(sesion), 0)
+    }
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_evento, sesion) => recibirSesion(sesion))
+    supabase.auth.getSession().then(({ data }) => {
+      if (vigente && usuarioSolicitado === undefined) recibirSesion(data?.session)
     })
     return () => { vigente = false; subscription.unsubscribe() }
   }, [])
@@ -93,9 +101,8 @@ function AplicacionPrincipal() {
     document.documentElement.classList.toggle('dark', oscuro)
     localStorage.setItem('ticketmanager_theme', tema)
   }, [tema])
-  // Vacaciones se monta hasta la primera vez que se abre la pestaña, para no
-  // pegarle a Supabase en cada arranque de la app. Una vez montado se queda,
-  // conservando filtros y datos al cambiar de pestaña.
+  // Vacaciones se monta al abrir su pestaña y conserva los filtros al volver.
+  // Recarga sus datos cuando se activa para reflejar cambios hechos en Personal.
   const [vacacionesMontado, setVacacionesMontado] = useState(false)
   useEffect(() => { if (tab === 'vacaciones') setVacacionesMontado(true) }, [tab])
   const nubeCargada = useRef(false)
@@ -266,9 +273,9 @@ function AplicacionPrincipal() {
   }, [baseMunicipios, allTickets])
 
   // ── Supabase sync ──
-  const cargarDesdeNube = useCallback(async (esRecarga = false) => {
+  const cargarDesdeNube = useCallback(async (esRecarga = false, silenciosa = false) => {
     try {
-      setSyncStatus('cargando')
+      if (!silenciosa) setSyncStatus('cargando')
       const { data, error } = await supabase.from('excel_sync').select('*').eq('id', 1).single()
       if (data && !error) {
         const ticketsNube = JSON.parse(data.tickets_json || '[]')
@@ -297,11 +304,11 @@ function AplicacionPrincipal() {
   // Cargar al montar
   useEffect(() => { cargarDesdeNube(false) }, [cargarDesdeNube])
 
-  // Re-sync cuando la app vuelve a primer plano (cambio de tab, desbloqueo, etc.)
+  // Re-sync en segundo plano al volver, sin reemplazar la vista abierta.
   useEffect(() => {
     function onVisible() {
       if (document.visibilityState === 'visible' && nubeCargada.current) {
-        cargarDesdeNube(true)
+        cargarDesdeNube(true, true)
       }
     }
     document.addEventListener('visibilitychange', onVisible)
@@ -346,6 +353,7 @@ function AplicacionPrincipal() {
     { id: 'garantias', label: 'Garantías', icon: ShieldCheck },
     { id: 'tablas', label: 'Reportes', icon: BarChart3 },
     { id: 'pendientes', label: 'Gestión', icon: ClipboardList },
+    { id: 'personal', label: 'Personal', icon: Users },
     { id: 'vacaciones', label: 'Vacaciones', icon: CalendarDays },
     { id: 'viaticos', label: 'Viáticos', icon: Wallet },
   ]
@@ -583,8 +591,9 @@ function AplicacionPrincipal() {
           <ModuloPendientes vista={tab === 'particulares' ? 'Particular' : tab === 'garantias' ? 'Garantia' : 'Tarea'} importacionParticulares={importacionParticulares} vencimientosGarantia={vencimientosGarantia} allTickets={allTickets} controlAlertas={controlAlertas} />
         </div>
         <div className={tab === 'vacaciones' ? 'block fade-in' : 'hidden'}>
-          {vacacionesMontado && <Vacaciones />}
+          {vacacionesMontado && <Vacaciones activa={tab === 'vacaciones'} onNavigate={setTab} />}
         </div>
+        {tab === 'personal' && <Personal />}
         {tab === 'viaticos' && <Viaticos />}
           </main>
         </section>
