@@ -6,13 +6,14 @@ import ModuloPendientes from './components/Gestion'
 import ModuloTablas from './components/Tablas'
 import Dashboard from './components/Dashboard'
 import Vacaciones from './components/Vacaciones'
+import Viaticos from './components/Viaticos'
 import Notificaciones from './components/Notificaciones'
 import { obtenerControlAlertas } from './utils/alertas'
 import useHistorialSeries from './hooks/useHistorialSeries'
 import useVencimientosGarantia from './hooks/useVencimientosGarantia'
 import useImportacionParticulares from './hooks/useImportacionParticulares'
 import garantiasUrl from './Garantias.xlsx?url'
-import { Wrench, ClipboardList, BarChart3, Briefcase, Cloud, CloudOff, Copy, Loader2, LayoutDashboard, CalendarDays, Menu, Moon, MoreHorizontal, PanelLeftClose, PanelLeftOpen, ShieldAlert, ShieldCheck, Sun, X } from 'lucide-react'
+import { Wrench, ClipboardList, BarChart3, Briefcase, Cloud, CloudOff, Copy, Loader2, LayoutDashboard, CalendarDays, Menu, Moon, MoreHorizontal, PanelLeftClose, PanelLeftOpen, ShieldAlert, ShieldCheck, Sun, X, Wallet } from 'lucide-react'
 
 function normalizarTexto(texto) {
   if (!texto) return ''
@@ -30,6 +31,46 @@ function esEstadoActivoRuta(ticket) {
 }
 
 export default function App() {
+  const [portalViaticos, setPortalViaticos] = useState(() => window.location.hash === '#viaticos')
+  const [acceso, setAcceso] = useState('comprobando')
+  useEffect(() => {
+    const actualizar = () => setPortalViaticos(window.location.hash === '#viaticos')
+    window.addEventListener('hashchange', actualizar)
+    return () => window.removeEventListener('hashchange', actualizar)
+  }, [])
+  useEffect(() => {
+    let vigente = true
+    let ultimaConsulta = 0
+    async function enviarTecnicoAlPortal(sesion) {
+      const consulta = ++ultimaConsulta
+      if (!vigente) return
+      if (!sesion) { setAcceso('login'); return }
+      const { data: admin, error: errorAdmin } = await supabase.from('viaticos_admins').select('user_id').eq('user_id', sesion.user.id).maybeSingle()
+      if (!vigente || consulta !== ultimaConsulta) return
+      if (errorAdmin) { setAcceso('sin-rol'); return }
+      if (admin) { setAcceso('admin'); return }
+      const { data: personal, error: errorPersonal } = await supabase.from('vac_empleados').select('id').ilike('correo_viaticos', sesion.user.email || '').limit(1)
+      if (!vigente || consulta !== ultimaConsulta) return
+      if (errorPersonal) { setAcceso('sin-rol'); return }
+      const esTecnico = Boolean(personal?.length)
+      setAcceso(esTecnico ? 'tecnico' : 'sin-rol')
+      if (esTecnico && window.location.hash !== '#viaticos') window.location.hash = '#viaticos'
+    }
+    supabase.auth.getSession().then(({ data }) => enviarTecnicoAlPortal(data.session))
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_evento, sesion) => {
+      setAcceso('comprobando')
+      window.setTimeout(() => enviarTecnicoAlPortal(sesion), 0)
+    })
+    return () => { vigente = false; subscription.unsubscribe() }
+  }, [])
+  return portalViaticos || acceso !== 'admin' && acceso !== 'comprobando'
+    ? <div className="min-h-screen bg-slate-50 p-4 sm:p-8"><div className="mx-auto max-w-6xl"><Viaticos portal /></div></div>
+    : acceso === 'comprobando'
+      ? <div className="min-h-screen bg-slate-50 p-6 text-sm text-slate-700">Preparando Ticket Manager…</div>
+      : <AplicacionPrincipal />
+}
+
+function AplicacionPrincipal() {
   const [tab, setTab] = useState('dashboard')
   const [menuMovilAbierto, setMenuMovilAbierto] = useState(false)
   const [esVistaMovil, setEsVistaMovil] = useState(() => window.matchMedia('(max-width: 1023px)').matches)
@@ -306,6 +347,7 @@ export default function App() {
     { id: 'tablas', label: 'Reportes', icon: BarChart3 },
     { id: 'pendientes', label: 'Gestión', icon: ClipboardList },
     { id: 'vacaciones', label: 'Vacaciones', icon: CalendarDays },
+    { id: 'viaticos', label: 'Viáticos', icon: Wallet },
   ]
 
   const hoy = new Date()
@@ -388,7 +430,7 @@ export default function App() {
               <Wrench size={18} strokeWidth={2.5} />
             </div>
             <div className="app-brand-copy">
-              <p>TicketManager</p>
+              <p>Ticket Manager</p>
               <small>Control de operación</small>
             </div>
             <button ref={botonCerrarMenuRef} type="button" className="app-sidebar-close" aria-label="Cerrar menú" onClick={() => setMenuMovilAbierto(false)}>
@@ -543,6 +585,7 @@ export default function App() {
         <div className={tab === 'vacaciones' ? 'block fade-in' : 'hidden'}>
           {vacacionesMontado && <Vacaciones />}
         </div>
+        {tab === 'viaticos' && <Viaticos />}
           </main>
         </section>
       </div>

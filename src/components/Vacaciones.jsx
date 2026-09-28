@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import Dialogo from './Dialogo';
-import { supabase } from '../supabase';
+import { supabase, crearAccesoViaticos } from '../supabase';
 import {
   CalendarDays, Plus, Trash2, Users, Download, X, Pencil,
   AlertCircle, Loader2, Search, ChevronDown
@@ -779,16 +779,20 @@ function ModalGoce({ empleados, setAsuetos, guardando, setGuardando, onCerrar, o
 /*  Modal: alta / edición de personal                                  */
 /* ================================================================== */
 function ModalEmpleado({ empleado, guardando, setGuardando, onCerrar, onGuardado, onError }) {
+  const [personalGuardado, setPersonalGuardado] = useState(false);
   const [codigo, setCodigo] = useState(empleado?.codigo || '');
   const [nombre, setNombre] = useState(empleado?.nombre || '');
   const [puesto, setPuesto] = useState(empleado?.puesto || '');
   const [ingreso, setIngreso] = useState(empleado?.fecha_ingreso || '');
+  const [correoViaticos, setCorreoViaticos] = useState(empleado?.correo_viaticos || '');
+  const [claveViaticos, setClaveViaticos] = useState('');
   const [jornada, setJornada] = useState(
     empleado?.dias_descanso ? empleado.dias_descanso.join(',') : JORNADA_DEFECTO
   );
 
   const guardar = async () => {
     if (!nombre.trim()) return;
+    if (claveViaticos && !correoViaticos.trim()) { onError('Agrega el correo antes de crear el acceso a Viáticos.'); return; }
     setGuardando(true);
     const datos = {
       codigo: codigo.trim() || null,
@@ -796,19 +800,30 @@ function ModalEmpleado({ empleado, guardando, setGuardando, onCerrar, onGuardado
       puesto: puesto.trim() || null,
       fecha_ingreso: ingreso || null,
       dias_descanso: jornada.split(',').map(Number),
+      correo_viaticos: correoViaticos.trim().toLowerCase() || null,
     };
-    const { error } = empleado
+    const { error } = personalGuardado ? { error: null } : empleado
       ? await supabase.from('vac_empleados').update(datos).eq('id', empleado.id)
       : await supabase.from('vac_empleados').insert(datos);
-    setGuardando(false);
     if (error) {
+      setGuardando(false);
       onError(
         error.code === '23505'
-          ? 'Ya existe un compañero con ese nombre o con ese código.'
+          ? 'Ya existe un compañero con ese nombre, código o correo de Viáticos.'
           : error.message
       );
       return;
     }
+    if (claveViaticos) {
+      setPersonalGuardado(true);
+      const { error: errorAcceso } = await crearAccesoViaticos(datos.correo_viaticos, claveViaticos);
+      if (errorAcceso) {
+        setGuardando(false);
+        onError(`El personal se guardó, pero no se pudo crear el acceso: ${errorAcceso.message}. Puedes reintentar aquí o cerrar y editar a esta persona.`);
+        return;
+      }
+    }
+    setGuardando(false);
     onGuardado();
   };
 
@@ -855,6 +870,19 @@ function ModalEmpleado({ empleado, guardando, setGuardando, onCerrar, onGuardado
           <ChevronDown size={13} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
         </div>
       </Campo>
+
+      <div className="form-fields gap-2">
+        <Campo etiqueta="Correo para Viáticos">
+          <input type="email" autoComplete="off" value={correoViaticos} onChange={e => setCorreoViaticos(e.target.value)} placeholder="tecnico@empresa.com"
+            className="w-full text-xs border border-slate-200 rounded-lg px-2 py-2" />
+        </Campo>
+        <Campo etiqueta="Contraseña de acceso">
+          <input type="password" autoComplete="new-password" value={claveViaticos} onChange={e => setClaveViaticos(e.target.value)} placeholder="Solo para crear la cuenta"
+            className="w-full text-xs border border-slate-200 rounded-lg px-2 py-2" />
+        </Campo>
+      </div>
+      <p className="text-xs text-slate-500">La contraseña crea la cuenta en Supabase Auth y no se guarda en Personal. Déjala vacía si la cuenta ya existe. El técnico debe confirmar su correo si Supabase lo solicita.</p>
+      {personalGuardado && <p className="text-xs font-bold text-amber-700">El personal ya quedó guardado. Este intento solo volverá a crear el acceso; para cambiar otros datos, edita la persona después.</p>}
 
       <div className="form-actions flex gap-2 pt-1">
         <button onClick={onCerrar} className="flex-1 text-xs font-semibold py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">

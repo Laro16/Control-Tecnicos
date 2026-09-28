@@ -86,7 +86,7 @@ export function dibujarPaginaRuta(canvas, pagina, { generado }) {
   ctx.font = 'bold 12px Arial'
   ctx.fillText(`Total operativo: ${pagina.totalGeneral} tickets`, margen, y + 62)
   ctx.font = '11px Arial'
-  ctx.fillText('TicketManager · Rutas del reporte cargado', margen, y + 84)
+  ctx.fillText('Ticket Manager · Rutas del reporte cargado', margen, y + 84)
   return canvas
 }
 

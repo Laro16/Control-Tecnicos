@@ -532,7 +532,7 @@ export default function ModuloTecnicos({
       margin: { left: 14, right: 14 },
       didDrawPage: (data) => {
         doc.setFontSize(7).setTextColor(150)
-        doc.text(`TicketManager — ${tecnico}`, 14, doc.internal.pageSize.height - 8)
+        doc.text(`Ticket Manager — ${tecnico}`, 14, doc.internal.pageSize.height - 8)
         doc.text(`Pág. ${doc.internal.getCurrentPageInfo().pageNumber}`, doc.internal.pageSize.width - 25, doc.internal.pageSize.height - 8)
       }
     })

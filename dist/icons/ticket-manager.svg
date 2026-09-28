@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Ticket Manager">
+  <rect width="512" height="512" rx="112" fill="#0b1424"/>
+  <circle cx="400" cy="112" r="54" fill="#0d8a96" opacity=".28"/>
+  <path d="M142 159h228c24 0 43 19 43 43v31c-13 3-23 12-23 23s10 20 23 23v31c0 24-19 43-43 43H142c-24 0-43-19-43-43v-31c13-3 23-12 23-23s-10-20-23-23v-31c0-24 19-43 43-43Z" fill="#f8fafc"/>
+  <path d="M257 179v17m0 24v17m0 38v17m0 24v17" stroke="#cad5e2" stroke-width="9" stroke-linecap="round"/>
+  <path d="m300 256 24 24 47-51" fill="none" stroke="#0798a6" stroke-width="23" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M160 220h58m-58 35h43m-43 35h58" stroke="#15263d" stroke-width="17" stroke-linecap="round"/>
+</svg>
