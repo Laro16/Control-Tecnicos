@@ -10,7 +10,7 @@ La bóveda permite que un administrador asigne o cambie la contraseña de Viáti
    ```
 
 3. En Supabase → Edge Functions → Secrets, crea `PERSONAL_VAULT_KEY_B64` con ese valor. Consérvalo en un gestor de secretos: si se pierde, las contraseñas almacenadas no se podrán descifrar. Nunca lo pongas en GitHub, Vercel ni en una variable `VITE_`.
-4. Despliega la función `supabase/functions/personal-vault` en el mismo proyecto. Mantén habilitada la verificación de JWT. Con Supabase CLI: `supabase functions deploy personal-vault --project-ref TU_PROJECT_REF`.
+4. En Supabase → Edge Functions → Deploy a new function → Via Editor, nombra la función `personal-vault`. Sustituye el código de ejemplo por **todo** el contenido de `supabase/functions/personal-vault/index.ts` y pulsa Deploy function. Mantén habilitada la verificación de JWT. El archivo es autosuficiente para pegarlo desde el panel web; no requiere CLI.
 5. Publica la versión actualizada de la aplicación. Ingresa con una cuenta incluida en `viaticos_admins`.
 
 Para una cuenta ya creada, edita su ficha y asígnale una **nueva** contraseña. La clave anterior de Supabase Auth no se puede leer. La nueva reemplaza la contraseña de acceso del técnico y queda disponible en Personal como asteriscos; «Ver» exige la contraseña del administrador y la muestra durante 30 segundos.
