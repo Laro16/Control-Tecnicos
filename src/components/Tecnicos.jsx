@@ -15,6 +15,8 @@ import './garantiasExpedientes.css'
 import { crearLibroTecnicos, descargarArchivo, fechaArchivo, prepararInformeTecnicos } from '../utils/exportacionesTecnicos'
 import { crearPDFGarantias } from '../utils/pdfGarantias'
 import EstadoParticulares from './EstadoParticulares'
+import { marcaDesdeCliente } from '../utils/preventivos.js'
+import { importarPreventivos } from '../utils/preventivosPersistencia.js'
 
 const TODAY = () => {
   const d = new Date()
@@ -200,6 +202,7 @@ export default function ModuloTecnicos({
   const [ticketVencimiento, setTicketVencimiento] = useState(null)
   const [duplicadosAbierta, setDuplicadosAbierta] = useState(false)
   const [toast, setToast] = useState('')
+  const [estadoPreventivos, setEstadoPreventivos] = useState('')
   const [exportando, setExportando] = useState('')
   const fileRef = useRef()
   const leyendoExcel = useRef(false)
@@ -272,6 +275,7 @@ export default function ModuloTecnicos({
 
         const listaTemporal = []
         const filasParticulares = []
+        const filasPreventivos = []
         for (let i = headerRowIndex + 1; i < rawMatrix.length; i++) {
           const row = rawMatrix[i]
           const fila = {}
@@ -279,6 +283,7 @@ export default function ModuloTecnicos({
           // Particulares se revisa antes de filtrar estados. También se crean
           // fichas de órdenes finalizadas: su pago y documentos son manuales.
           if (normalizarTexto(fila.CLIENTE) === 'PARTICULAR') filasParticulares.push(fila)
+          if (marcaDesdeCliente(fila.CLIENTE)) filasPreventivos.push(fila)
           let estadoOriginal = String(fila['ESTADO'] || '').trim()
           let estadoLimpio = normalizarTexto(estadoOriginal)
           const esAsignadoTecnico = estadoLimpio.includes('ASIGNAD') && estadoLimpio.includes('TECNICO')
@@ -359,6 +364,15 @@ export default function ModuloTecnicos({
           setRutasTecnicos(nuevasRutas)
           const ahora = new Date()
           setFechaSubidaExcel(`${ahora.toLocaleDateString()} a las ${ahora.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`)
+        }
+        // Este historial es independiente de los estados y de la última base cargada.
+        try {
+          const resultado = await importarPreventivos(filasPreventivos)
+          setEstadoPreventivos(resultado.ordenes.length || resultado.sinOrden
+            ? `${resultado.ordenes.length} órdenes de preventivos guardadas sin duplicar.${resultado.sinOrden ? ` ${resultado.sinOrden} filas sin N° ORDEN no se contaron.` : ''}`
+            : '')
+        } catch (fallo) {
+          setEstadoPreventivos(`${fallo.message}. Activa activar_preventivos.sql en Supabase y vuelve a subir este Excel. Los demás datos sí se cargaron.`)
         }
         await importacionParticulares?.importar(filasParticulares, file.name)
       } catch {
@@ -661,6 +675,7 @@ export default function ModuloTecnicos({
 
       {vistaTecnicos && procesandoExcel && importacionParticulares?.estado !== 'importando' && <p className="text-sm text-slate-600" role="status">Leyendo el archivo…</p>}
       {vistaTecnicos && <EstadoParticulares importacion={importacionParticulares} />}
+      {vistaTecnicos && estadoPreventivos && <p role="status" className="rounded-xl border border-slate-700 p-3 text-sm">{estadoPreventivos}</p>}
 
       {vistaAlertas && allTickets.length === 0 && <HistorialSeries datos={historialSeries} reincidencias={controlAlertas.reincidencias} solicitudAlerta={solicitudAlerta} />}
       {allTickets.length > 0 && (

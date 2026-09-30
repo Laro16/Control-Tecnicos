@@ -7,6 +7,7 @@ import ModuloTablas from './components/Tablas'
 import Dashboard from './components/Dashboard'
 import Vacaciones from './components/Vacaciones'
 import Personal from './components/Personal'
+import Preventivos from './components/Preventivos'
 import Viaticos from './components/Viaticos'
 import Notificaciones from './components/Notificaciones'
 import { obtenerControlAlertas } from './utils/alertas'
@@ -352,6 +353,7 @@ function AplicacionPrincipal() {
     { id: 'particulares', label: 'Particulares', icon: Briefcase },
     { id: 'garantias', label: 'Garantías', icon: ShieldCheck },
     { id: 'tablas', label: 'Reportes', icon: BarChart3 },
+    { id: 'preventivos', label: 'Preventivos', icon: CalendarDays },
     { id: 'pendientes', label: 'Gestión', icon: ClipboardList },
     { id: 'personal', label: 'Personal', icon: Users },
     { id: 'vacaciones', label: 'Vacaciones', icon: CalendarDays },
@@ -594,6 +596,7 @@ function AplicacionPrincipal() {
           {vacacionesMontado && <Vacaciones activa={tab === 'vacaciones'} onNavigate={setTab} />}
         </div>
         {tab === 'personal' && <Personal />}
+        {tab === 'preventivos' && <Preventivos />}
         {tab === 'viaticos' && <Viaticos />}
           </main>
         </section>
