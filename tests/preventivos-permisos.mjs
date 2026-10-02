@@ -1,0 +1,74 @@
+// Verifica el SQL en PostgreSQL embebido, con usuarios ficticios y sin red/Supabase.
+// Uso: node tests/preventivos-permisos.mjs <ruta a pglite/dist/index.js>
+import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
+import { pathToFileURL } from 'node:url'
+import XLSX from 'xlsx'
+import { catalogoDesdeMatriz } from '../src/utils/preventivos.js'
+const { PGlite } = await import(pathToFileURL(process.argv[2]).href)
+const db = new PGlite()
+const admin='00000000-0000-0000-0000-000000000001',t1='00000000-0000-0000-0000-000000000002',t2='00000000-0000-0000-0000-000000000003',ajeno='00000000-0000-0000-0000-000000000004'
+await db.exec(`
+create role anon; create role authenticated; create schema auth;
+create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+create function auth.jwt() returns jsonb language sql stable as $$select coalesce(nullif(current_setting('request.jwt.claims',true),''),'{}')::jsonb$$;
+grant usage on schema auth to authenticated,anon;
+create table public.viaticos_admins(user_id uuid primary key);
+insert into public.viaticos_admins values ('${admin}');
+alter table public.viaticos_admins enable row level security;
+grant select on public.viaticos_admins to authenticated;
+create policy rol_propio on public.viaticos_admins for select to authenticated using(user_id=auth.uid());
+create table public.vac_empleados(id uuid primary key,nombre text,correo_viaticos text,activo boolean);
+insert into public.vac_empleados values ('${t1}','Técnico Uno','uno@example.test',true),('${t2}','Técnico Dos','dos@example.test',true);
+`)
+const base = await readFile('datos de supabase/activar_preventivos.sql','utf8')
+const cambios = await readFile('datos de supabase/activar_preventivos_tecnicos.sql','utf8')
+await db.exec(base)
+await db.exec(cambios)
+await db.exec(cambios) // idempotencia
+async function usuario(id,email) {
+  await db.exec('reset role')
+  await db.query("select set_config('request.jwt.claim.sub',$1,false),set_config('request.jwt.claims',$2,false)",[id,JSON.stringify({sub:id,email})])
+  await db.exec('set role authenticated')
+}
+const libro=XLSX.readFile('src/Mantenimientos.xlsx')
+const catalogo=catalogoDesdeMatriz(XLSX.utils.sheet_to_json(libro.Sheets[libro.SheetNames[0]],{header:1,defval:''}))
+await usuario(admin,'admin@example.test')
+await db.query('select public.sincronizar_catalogo_preventivos($1)',[JSON.stringify(catalogo.map(({marca,codigo,nombre,meses,activo})=>({marca,codigo,nombre,meses,activo})))])
+const local=catalogo.find(l=>l.activo)
+const fecha=(await db.query("select (now() at time zone 'America/Guatemala')::date::text fecha")).rows[0].fecha
+const anio=Number(fecha.slice(0,4)),mes=local.meses[0]
+async function marcar(revision,realizado=true,fechaReal=fecha) {
+  return (await db.query('select public.marcar_realizado_preventivo($1,$2,$3,$4,$5,$6,$7,$8,$9) resultado',[local.marca,local.codigo,anio,mes,realizado,fechaReal,3,'Nota de prueba',revision])).rows[0].resultado
+}
+await usuario(t1,'uno@example.test')
+assert.equal((await marcar(0)).realizado_nombre,'Técnico Uno')
+assert.equal((await db.query('select * from public.preventivos_realizados')).rows.length,1)
+await assert.rejects(()=>db.query("update public.preventivos_realizados set realizado=false"),/permission denied/)
+await assert.rejects(()=>db.query("insert into public.preventivos_ordenes(numero_orden,marca) values('TECNICO-INSERT','GRANJERO')"),/row-level security/)
+await assert.rejects(()=>marcar(0),/Otro usuario actualizó/)
+await assert.rejects(()=>db.query('select public.sincronizar_catalogo_preventivos($1)',[JSON.stringify([])]),/Sólo el administrador/)
+await usuario(t2,'dos@example.test')
+await assert.rejects(()=>marcar(1),/Sólo quien lo registró/)
+await usuario(t1,'uno@example.test')
+assert.equal((await marcar(1,false,null)).revision,2)
+assert.equal((await marcar(2)).revision,3)
+await assert.rejects(()=>marcar(3,true,'2999-01-01'),/no puede ser futura/)
+await usuario(admin,'admin@example.test')
+assert.equal((await marcar(3)).revision,4)
+assert.equal((await db.query('select * from public.preventivos_realizados_historial')).rows.length,4)
+await db.exec("insert into public.preventivos_ordenes(numero_orden,marca,codigo,negocio,estado) values('EXCEL-1','GRANJERO','267','Negocio','Asignada a Técnico')")
+await usuario(t1,'uno@example.test')
+const lectura=(await db.query('select * from public.consultar_ordenes_preventivos()')).rows
+assert.equal(lectura.length,1)
+assert.ok(!('tecnico' in lectura[0]) && !('estado' in lectura[0]))
+assert.equal((await db.query('select * from public.preventivos_ordenes')).rows.length,0)
+assert.equal((await db.query('select * from public.preventivos_realizados_historial')).rows.length,0)
+await usuario(ajeno,'ajeno@example.test')
+await assert.rejects(()=>marcar(4),/No tienes acceso/)
+await assert.rejects(()=>db.query('select * from public.consultar_ordenes_preventivos()'),/No tienes acceso/)
+assert.equal((await db.query('select * from public.preventivos_realizados')).rows.length,0)
+await db.exec('reset role; set role anon')
+await assert.rejects(()=>db.query('select * from public.consultar_ordenes_preventivos()'),/permission denied/)
+await db.close()
+console.log('SQL verificado: calendario real, scripts repetibles, autor y revisiones, corrección, administrador, técnico, ajeno y anónimo. Sin cambios en Supabase.')

@@ -1,0 +1,108 @@
+import { useEffect, useRef, useState } from 'react'
+import { Check, ChevronDown, Clock3, MapPin, Phone, X } from 'lucide-react'
+import { MESES_PREVENTIVOS } from '../utils/preventivos.js'
+import { claveSeguimiento, validarRealizado, tipoRestaurantePreventivo, TIPOS_RESTAURANTE_PREVENTIVO } from '../utils/seguimientoPreventivos.js'
+
+const estados = { pendiente: 'Pendiente de realizar', 'por-liquidar': 'Realizado · por liquidar', liquidado: 'Liquidado en Excel' }
+const colores = { pendiente: 'bg-slate-100 text-slate-800', 'por-liquidar': 'bg-amber-100 text-amber-900', liquidado: 'bg-emerald-100 text-emerald-900' }
+const campo = 'control-field w-full'
+
+export default function ProgramacionPreventivos({ registros, declaraciones, anio, mes, tecnico, usuarioId, listo, ocupado, hoy, guardar, recargar, cambiarMes }) {
+  const [filtro, setFiltro] = useState('sin-liquidar')
+  const [busqueda, setBusqueda] = useState('')
+  const [marca, setMarca] = useState('')
+  const [seleccion, setSeleccion] = useState(null)
+  const [expandido, setExpandido] = useState(null)
+  const [form, setForm] = useState({ fecha: hoy, equipos: '', observaciones: '' })
+  const [error, setError] = useState('')
+  const [enviando, setEnviando] = useState(false)
+  const dialogo = useRef(null)
+  useEffect(() => { if (seleccion) dialogo.current?.showModal() }, [seleccion])
+  useEffect(() => { setSeleccion(null); setExpandido(null); dialogo.current?.close() }, [anio, mes])
+  const revision = local => declaraciones.find(d => Number(d.anio) === Number(anio) && Number(d.mes) === Number(mes) && claveSeguimiento(d, anio, mes) === claveSeguimiento(local, anio, mes))
+  const visibles = registros.filter(r => (!marca || tipoRestaurantePreventivo(r.local) === marca) && (filtro === 'todos' || (filtro === 'sin-liquidar' ? !r.liquidado : r.estado === filtro))
+    && `${r.local.codigo} ${r.local.nombre} ${r.local.direccion}`.toLocaleLowerCase('es').includes(busqueda.toLocaleLowerCase('es')))
+  function abrir(registro, deshacer = false) {
+    const anterior = revision(registro.local)
+    setError(''); setForm({ fecha: anterior?.fecha_realizado || hoy, equipos: anterior?.equipos_declarados ?? '', observaciones: deshacer ? '' : anterior?.observaciones || '' })
+    setSeleccion({ ...registro, deshacer, anterior, anio, mes })
+  }
+  function cerrar() { if (!enviando) { dialogo.current?.close(); setSeleccion(null) } }
+  async function enviar(e) {
+    e.preventDefault(); setError(''); setEnviando(true)
+    try {
+      const datos = seleccion.deshacer ? { fecha: null, equipos: null, observaciones: form.observaciones.trim() } : validarRealizado(form, hoy)
+      if (seleccion.deshacer && !datos.observaciones) throw new Error('Indica por qué deshaces la marca para conservar el seguimiento.')
+      await guardar(seleccion.local, seleccion.anio, seleccion.mes, { ...datos, realizado: !seleccion.deshacer }, seleccion.anterior?.revision || 0)
+      dialogo.current?.close(); setSeleccion(null)
+    } catch (fallo) { setError(fallo.message || 'No se pudo guardar. Actualiza e intenta de nuevo.') }
+    finally { setEnviando(false) }
+  }
+  return <section className="space-y-4" aria-label="Seguimiento de los mantenimientos">
+    <div className="grid grid-cols-3 gap-2 sm:gap-4">{[['pendiente','Por hacer'],['por-liquidar','Por liquidar'],['liquidado','Liquidados']].map(([estado, titulo]) => <button key={estado} type="button" aria-pressed={filtro === estado} onClick={() => setFiltro(estado)} className={`card min-h-20 p-3 text-left ${filtro === estado ? 'ring-2 ring-sky-500' : ''}`}><span className="block text-[11px] font-bold text-slate-600">{titulo}</span><span className="mt-1 block text-2xl font-black">{registros.filter(r => r.estado === estado).length}</span></button>)}</div>
+    <div className="card grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
+      <label className="text-xs font-bold">Mes programado<select className={`${campo} mt-1`} value={mes} onChange={e => cambiarMes(Number(e.target.value))}>{MESES_PREVENTIVOS.map((nombre, i) => <option key={nombre} value={i+1}>{nombre}</option>)}</select></label>
+      <label className="text-xs font-bold">Restaurantes<select className={`${campo} mt-1`} value={marca} onChange={e => setMarca(e.target.value)}><option value="">Todas las marcas</option>{Object.entries(TIPOS_RESTAURANTE_PREVENTIVO).map(([id, nombre]) => <option key={id} value={id}>{nombre}</option>)}</select></label>
+      <label className="text-xs font-bold">Mostrar<select className={`${campo} mt-1`} value={filtro} onChange={e => setFiltro(e.target.value)}><option value="sin-liquidar">Faltan por liquidar</option><option value="pendiente">Pendientes de realizar</option><option value="por-liquidar">Realizados · por liquidar</option><option value="liquidado">Liquidados</option><option value="todos">Todos</option></select></label>
+      <label className="text-xs font-bold">Buscar<input className={`${campo} mt-1`} value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder="Código, nombre o dirección"/></label>
+      <p className="text-xs leading-relaxed text-slate-600 sm:col-span-2 lg:col-span-4">Realizado: lo informa el técnico. Liquidado: hay órdenes únicas del restaurante en el Excel para este mes. Detectar órdenes no confirma que estén todos los equipos; las cantidades declaradas se muestran separadas.</p>
+    </div>
+    <p className="text-xs font-semibold text-slate-600">{visibles.length} {visibles.length === 1 ? 'restaurante' : 'restaurantes'} · {MESES_PREVENTIVOS[mes-1]} {anio} · Pendientes primero</p>
+    <div className="card overflow-hidden">
+      <div aria-hidden="true" className="hidden grid-cols-[5.5rem_minmax(0,1fr)_8.5rem_7rem_7rem_12rem] gap-3 border-b-2 border-slate-900 bg-slate-100 px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-600 xl:grid">
+        <span>Código</span><span>Restaurante</span><span>Mes / semana</span><span>Realizado</span><span>Liquidado</span><span>Acciones</span>
+      </div>
+      <div className="divide-y divide-slate-800">{visibles.map(registro => {
+      const { local, declaracion, realizado, liquidado } = registro
+      const corregible = declaracion && (!tecnico || declaracion.realizado_por === usuarioId)
+      const abierto = expandido === local.id
+      const idDetalle = `detalle-preventivo-${local.marca}-${local.codigo}`
+      const alternar = () => setExpandido(abierto ? null : local.id)
+      return <article className="min-w-0 bg-white" data-restaurante-tipo={tipoRestaurantePreventivo(local)} key={local.id}>
+        <div className="grid grid-cols-2 items-center gap-x-3 gap-y-3 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_7rem_7rem] xl:grid-cols-[5.5rem_minmax(0,1fr)_8.5rem_7rem_7rem_12rem]">
+          <p className="hidden text-sm font-black text-sky-700 xl:block">#{local.codigo}</p>
+          <div className="col-span-2 min-w-0 sm:col-span-1">
+            <p className="mb-1 text-[11px] font-bold text-sky-700"><span className="xl:hidden">#{local.codigo} · </span>{TIPOS_RESTAURANTE_PREVENTIVO[tipoRestaurantePreventivo(local)]}</p>
+            <h3><button type="button" aria-expanded={abierto} aria-controls={idDetalle} onClick={alternar} className="min-h-7 text-left text-sm font-black leading-snug hover:text-sky-700">{local.nombre}</button></h3>
+            <p className="mt-1 text-[11px] text-slate-600 xl:hidden">{MESES_PREVENTIVOS[mes-1]} · {local.semana || 'Sin semana asignada'}</p>
+          </div>
+          <p className="hidden text-xs text-slate-600 xl:block"><span className="block font-bold">{MESES_PREVENTIVOS[mes-1]}</span><span className="mt-1 block">{local.semana || 'Sin semana asignada'}</span></p>
+          <Indicador activo={realizado} titulo="Realizado" detalle={declaracion ? 'Por el técnico' : liquidado ? 'En Excel' : 'Por hacer'}/>
+          <Indicador activo={liquidado} titulo="Liquidado" detalle={liquidado ? `${registro.ordenes.length} ${registro.ordenes.length === 1 ? 'orden' : 'órdenes'}` : realizado ? 'Por liquidar' : 'Sin Excel'}/>
+          <div className="col-span-2 flex flex-wrap items-center justify-end gap-2 sm:col-span-3 xl:col-span-1">
+            {!realizado && <button type="button" aria-label="Marcar realizado" className="btn-primary min-h-11" disabled={!listo || ocupado} onClick={() => abrir(registro)}><Check size={14} className="mr-1 inline"/><span className="xl:hidden">Marcar realizado</span><span className="hidden xl:inline">Realizado</span></button>}
+            <button type="button" className="btn-ghost inline-flex min-h-11 items-center gap-1" aria-expanded={abierto} aria-controls={idDetalle} onClick={alternar}>Detalle<ChevronDown size={14} className={abierto ? 'rotate-180' : ''}/></button>
+          </div>
+        </div>
+        <div id={idDetalle} hidden={!abierto} className="border-t border-slate-300 bg-slate-50 px-4 py-4 sm:px-6">
+        <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-bold">{TIPOS_RESTAURANTE_PREVENTIVO[tipoRestaurantePreventivo(local)]} · #{local.codigo} · {MESES_PREVENTIVOS[mes-1]} {anio}</p><span className={`rounded-lg px-2 py-1 text-xs font-bold ${colores[registro.estado]}`}>{estados[registro.estado]}</span></div>
+        <p className="mt-3 break-words text-xs text-slate-600">{local.direccion || 'Sin dirección en calendario'}</p>
+        <p className="mt-2 text-xs font-semibold text-slate-600">{local.semana || 'Sin semana asignada'} · {local.equipos == null ? 'Sin cantidad prevista' : `${local.equipos} equipos previstos`}</p>
+        {declaracion && <div className="mt-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-950"><p className="font-bold">{declaracion.realizado_nombre}</p><p className="mt-1">Realizado: {declaracion.fecha_realizado.split('-').reverse().join('/')}{declaracion.equipos_declarados ? ` · ${declaracion.equipos_declarados} equipos declarados` : ''}</p>{declaracion.actualizado_en && <p className="mt-1 text-[11px]">Registro: {new Date(declaracion.actualizado_en).toLocaleString('es-GT',{timeZone:'America/Guatemala',dateStyle:'short',timeStyle:'short'})}</p>}{declaracion.observaciones && <p className="mt-2 whitespace-pre-wrap break-words">{declaracion.observaciones}</p>}</div>}
+        {liquidado && <p className="mt-3 break-words text-xs"><span className="font-bold">Órdenes detectadas: </span>{registro.ordenes.map(o => `#${o.numero_orden}`).join(' · ')}</p>}
+        <div className="flex flex-wrap gap-2 pt-4">
+          {corregible && <button type="button" className="btn-ghost min-h-11" disabled={!listo || ocupado} onClick={() => abrir(registro)}>Editar reporte</button>}
+          {corregible && !liquidado && <button type="button" className="btn-ghost min-h-11" disabled={!listo || ocupado} onClick={() => abrir(registro, true)}>Deshacer marca</button>}
+          {local.direccion && <a className="btn-ghost inline-flex min-h-11 items-center gap-1" target="_blank" rel="noopener noreferrer" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(local.direccion)}`}><MapPin size={14}/> Mapa</a>}
+          {local.telefono && <a className="btn-ghost inline-flex min-h-11 items-center gap-1" href={`tel:${local.telefono.replace(/[^+\d]/g,'')}`}><Phone size={14}/> Llamar</a>}
+        </div>
+        </div>
+      </article>
+    })}</div></div>
+    {!visibles.length && <p className="card p-5 text-sm text-slate-600">No hay restaurantes con estos filtros. Puedes cambiar «Mostrar» para ver los demás.</p>}
+    <dialog ref={dialogo} onCancel={e => { if (enviando) e.preventDefault(); else setSeleccion(null) }} className="m-auto w-[calc(100%_-_2rem)] max-w-lg rounded-2xl border-2 border-slate-900 bg-white p-0 text-slate-900 backdrop:bg-slate-950/60" aria-labelledby="titulo-realizado">
+      {seleccion && <form onSubmit={enviar} className="grid max-h-[85dvh] gap-4 overflow-y-auto p-5">
+        <div className="flex items-start justify-between gap-3"><div><h2 id="titulo-realizado" className="text-lg font-black">{seleccion.deshacer ? 'Deshacer realizado' : 'Reportar preventivo realizado'}</h2><p className="mt-1 text-sm">#{seleccion.local.codigo} · {seleccion.local.nombre}</p><p className="mt-1 text-xs text-slate-600">{MESES_PREVENTIVOS[seleccion.mes-1]} {seleccion.anio}</p></div><button type="button" aria-label="Cerrar" disabled={enviando} onClick={cerrar} className="btn-ghost"><X size={17}/></button></div>
+        {!seleccion.deshacer && <><label className="grid gap-1 text-xs font-bold">Fecha en que se realizó<input required type="date" max={hoy} value={form.fecha} onChange={e => setForm(p => ({ ...p, fecha: e.target.value }))} className={campo}/></label><label className="grid gap-1 text-xs font-bold">Equipos trabajados (opcional)<input type="number" min="1" max="500" step="1" value={form.equipos} onChange={e => setForm(p => ({ ...p, equipos: e.target.value }))} className={campo}/></label></>}
+        <label className="grid gap-1 text-xs font-bold">{seleccion.deshacer ? 'Motivo de la corrección' : 'Observación (opcional)'}<textarea required={seleccion.deshacer} rows={3} maxLength={1500} value={form.observaciones} onChange={e => setForm(p => ({ ...p, observaciones: e.target.value }))} className={campo} placeholder="Equipos pendientes, acceso al negocio o detalles para administración…"/></label>
+        <p className="flex gap-2 text-xs text-slate-600"><Clock3 size={16} className="shrink-0"/> Esta declaración no modifica el Excel ni suma equipos al reporte oficial. Se guardan tu nombre y la fecha del registro.</p>
+        {error && <div role="alert" className="text-sm text-rose-700">{error}<button type="button" disabled={enviando} onClick={()=>{cerrar();recargar()}} className="btn-ghost mt-2 block">Actualizar datos</button></div>}
+        <div className="flex justify-end gap-2"><button type="button" disabled={enviando} className="btn-ghost min-h-11" onClick={cerrar}>Cancelar</button><button type="submit" disabled={enviando} className="btn-primary min-h-11">{enviando ? 'Guardando…' : seleccion.deshacer ? 'Confirmar corrección' : 'Guardar realizado'}</button></div>
+      </form>}
+    </dialog>
+  </section>
+}
+
+function Indicador({ activo, titulo, detalle }) {
+  return <div className="flex items-start gap-2"><span aria-hidden="true" className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded border-2 ${activo ? 'border-emerald-700 bg-emerald-600 text-white' : 'border-slate-500'}`}>{activo && <Check size={14}/>}</span><div><p className="text-xs font-black">{titulo}<span className="sr-only">{activo ? ': sí' : ': no'}</span></p><p className="mt-1 text-[11px] text-slate-600">{detalle}</p></div></div>
+}

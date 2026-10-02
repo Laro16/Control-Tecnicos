@@ -317,7 +317,7 @@ export default function Viaticos({ portal = false }) {
   if (!sesion) return <section className="mx-auto max-w-md card p-6 sm:p-8">
     <img src="/icons/ticket-manager.svg" alt="" className="mb-4 h-14 w-14" />
     <h1 className="text-2xl font-black">Ticket Manager</h1>
-    <p className="mt-2 text-sm text-slate-600">Inicia sesión. La cuenta administradora abre el panel completo; los técnicos pueden registrar facturas y confirmar sus entregas de viáticos.</p>
+    <p className="mt-2 text-sm text-slate-600">Inicia sesión. La cuenta administradora abre el panel completo; los técnicos tienen acceso a Viáticos y Preventivos.</p>
     <form onSubmit={entrar} className="mt-6 grid gap-4">
       <label className={etiqueta}>Correo<input type="email" required autoComplete="username" className={campo} value={correo} onChange={e => setCorreo(e.target.value)} /></label>
       <label className={etiqueta}>Contraseña<input type="password" required autoComplete="current-password" className={campo} value={clave} onChange={e => setClave(e.target.value)} /></label>

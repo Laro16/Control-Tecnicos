@@ -8,6 +8,7 @@ import Dashboard from './components/Dashboard'
 import Vacaciones from './components/Vacaciones'
 import Personal from './components/Personal'
 import Preventivos from './components/Preventivos'
+import PortalTecnico from './components/PortalTecnico'
 import Viaticos from './components/Viaticos'
 import Notificaciones from './components/Notificaciones'
 import { obtenerControlAlertas } from './utils/alertas'
@@ -34,6 +35,8 @@ function esEstadoActivoRuta(ticket) {
 
 export default function App() {
   const [portalViaticos, setPortalViaticos] = useState(() => window.location.hash === '#viaticos')
+  const [perfilTecnico, setPerfilTecnico] = useState(null)
+  const [usuarioPortalId, setUsuarioPortalId] = useState(null)
   const [acceso, setAcceso] = useState('comprobando')
   useEffect(() => {
     const actualizar = () => setPortalViaticos(window.location.hash === '#viaticos')
@@ -47,17 +50,19 @@ export default function App() {
     async function enviarTecnicoAlPortal(sesion) {
       const consulta = ++ultimaConsulta
       if (!vigente) return
-      if (!sesion) { setAcceso('login'); return }
+      if (!sesion) { setPerfilTecnico(null); setUsuarioPortalId(null); setAcceso('login'); return }
+      setUsuarioPortalId(sesion.user.id)
       const { data: admin, error: errorAdmin } = await supabase.from('viaticos_admins').select('user_id').eq('user_id', sesion.user.id).maybeSingle()
       if (!vigente || consulta !== ultimaConsulta) return
       if (errorAdmin) { setAcceso('sin-rol'); return }
       if (admin) { setAcceso('admin'); return }
-      const { data: personal, error: errorPersonal } = await supabase.from('vac_empleados').select('id').ilike('correo_viaticos', sesion.user.email || '').limit(1)
+      const { data: personal, error: errorPersonal } = await supabase.from('vac_empleados').select('id,nombre,activo').ilike('correo_viaticos', sesion.user.email || '').limit(2)
       if (!vigente || consulta !== ultimaConsulta) return
       if (errorPersonal) { setAcceso('sin-rol'); return }
-      const esTecnico = Boolean(personal?.length)
+      const esTecnico = personal?.length === 1 && personal[0].activo !== false
+      setPerfilTecnico(esTecnico ? personal[0] : null)
       setAcceso(esTecnico ? 'tecnico' : 'sin-rol')
-      if (esTecnico && window.location.hash !== '#viaticos') window.location.hash = '#viaticos'
+      if (esTecnico && !['#viaticos', '#preventivos'].includes(window.location.hash)) window.location.hash = '#viaticos'
     }
     function recibirSesion(sesion) {
       const usuario = sesion?.user?.id || null
@@ -72,6 +77,7 @@ export default function App() {
     })
     return () => { vigente = false; subscription.unsubscribe() }
   }, [])
+  if (acceso === 'tecnico') return <PortalTecnico key={usuarioPortalId} persona={perfilTecnico} usuarioId={usuarioPortalId} inicial={window.location.hash === '#preventivos' ? 'preventivos' : 'viaticos'}/>
   return portalViaticos || acceso !== 'admin' && acceso !== 'comprobando'
     ? <div className="min-h-screen bg-slate-50 p-4 sm:p-8"><div className="mx-auto max-w-6xl"><Viaticos portal /></div></div>
     : acceso === 'comprobando'
@@ -80,7 +86,7 @@ export default function App() {
 }
 
 function AplicacionPrincipal() {
-  const [tab, setTab] = useState('dashboard')
+  const [tab, setTab] = useState(() => window.location.hash === '#preventivos' ? 'preventivos' : 'dashboard')
   const [menuMovilAbierto, setMenuMovilAbierto] = useState(false)
   const [esVistaMovil, setEsVistaMovil] = useState(() => window.matchMedia('(max-width: 1023px)').matches)
   const [barraLateralOculta, setBarraLateralOculta] = useState(() => localStorage.getItem('ticketmanager_sidebar_hidden') === 'true')
