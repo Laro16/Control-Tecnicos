@@ -227,7 +227,7 @@ function ModalEmpleado({ empleado, guardando, setGuardando, onCerrar, onGuardado
       let avisoAcceso = ''
       if (claveViaticos) {
         const resultado = await usarBovedaPersonal('set', { empleado_id: id, password: claveViaticos, admin_password: claveAdmin })
-        avisoAcceso = resultado.creada ? 'Personal y acceso de Viáticos creados. La contraseña quedó guardada en la bóveda.' : 'Personal y contraseña de Viáticos actualizados.'
+        avisoAcceso = `${resultado.creada ? 'Personal y acceso del técnico creados.' : 'Personal y contraseña del técnico actualizados.'} Ya puede ingresar con el correo y la contraseña asignados. No se envía una invitación por correo; compártele el enlace de Ticket Manager y sus datos de acceso. La contraseña quedó guardada en la bóveda.`
       }
       onGuardado(avisoAcceso)
     } catch (fallo) {
@@ -256,7 +256,8 @@ function ModalEmpleado({ empleado, guardando, setGuardando, onCerrar, onGuardado
           <Campo etiqueta="Nueva contraseña de Viáticos"><input type="password" autoComplete="new-password" value={claveViaticos} onChange={e => setClaveViaticos(e.target.value)} placeholder={tieneClaveGuardada ? 'Dejar vacía para conservarla' : 'Asignar nueva contraseña'} className={campo} /></Campo>
         </div>
         {claveViaticos && <Campo etiqueta="Tu contraseña de administrador"><input type="password" autoComplete="current-password" value={claveAdmin} onChange={e => setClaveAdmin(e.target.value)} placeholder="Confirma para asignar la clave" className={campo} required /></Campo>}
-        <p className="text-xs text-slate-500">La nueva contraseña actualizará la cuenta de acceso y quedará cifrada para poder consultarla desde Personal. Las contraseñas anteriores no se pueden recuperar: asígnales una nueva para guardarlas aquí.</p>
+        <p className="text-xs text-slate-500">Al guardar una nueva contraseña, se crea o actualiza la cuenta y el técnico ya puede ingresar. No se envía una invitación por correo: debes compartirle el enlace de Ticket Manager, su correo y la contraseña asignada.</p>
+        <p className="text-xs text-slate-500">La contraseña quedará cifrada para poder consultarla desde Personal. Las contraseñas anteriores no se pueden recuperar: asígnales una nueva para guardarlas aquí.</p>
         {personalGuardado && <p className="text-xs font-bold text-amber-700">Los datos del personal ya quedaron guardados. Corrige el acceso y vuelve a pulsar Guardar; no se creará otra ficha.</p>}
         <div className="flex gap-2 pt-1">
           <button type="button" onClick={onCerrar} className="flex-1 rounded-lg border border-slate-300 py-2 text-xs font-semibold text-slate-600">Cancelar</button>

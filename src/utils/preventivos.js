@@ -55,7 +55,7 @@ export function extraerOrdenesPreventivas(filas) {
 }
 export function atribuirOrden(orden, catalogo) {
   const codigo = orden.codigo || codigoDesdeNegocio(orden.negocio, orden.marca, catalogo)
-  const local = catalogo.find(l => l.marca === orden.marca && l.codigo === codigo && l.activo)
+  const local = catalogo.find(l => l.marca === orden.marca && l.codigo === codigo)
   if (!local) return { ...orden, codigo, local: null }
   const fecha = fechaPreventivo(orden.fecha_realizada)
   if (orden.anio_programado && orden.mes_programado) return { ...orden, codigo, local, programado: { anio: orden.anio_programado, mes: orden.mes_programado, vuelta: Math.floor((orden.mes_programado-1)/4)+1 }, tarde: Boolean(fecha && fecha.slice(0,7) > `${orden.anio_programado}-${String(orden.mes_programado).padStart(2,'0')}`) }
@@ -68,7 +68,7 @@ export function atribuirOrden(orden, catalogo) {
 }
 export function prepararAvance(catalogo, ordenes, anio, vuelta, corte) {
   const atribuidas = ordenes.map(o => atribuirOrden(o,catalogo))
-  const incluidas = atribuidas.filter(o => o.programado?.anio === anio && o.programado?.vuelta === vuelta && (!corte || !o.fecha_realizada || o.fecha_realizada <= corte))
+  const incluidas = atribuidas.filter(o => o.local?.activo && o.programado?.anio === anio && o.programado?.vuelta === vuelta && (!corte || !o.fecha_realizada || o.fecha_realizada <= corte))
   const resumen = Object.entries(MARCAS_PREVENTIVOS).map(([marca,nombre]) => {
     const locales = catalogo.filter(l => l.activo && l.marca === marca)
     const registros = incluidas.filter(o => o.marca === marca)

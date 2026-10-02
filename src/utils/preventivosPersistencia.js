@@ -37,6 +37,38 @@ export async function sincronizarCatalogoPreventivos(catalogo) {
   if (error) throw error
 }
 
+export async function leerLocalesPreventivos() {
+  const filas = []
+  for (let inicio = 0; ; inicio += 1000) {
+    const { data, error } = await supabase.from('preventivos_locales').select('*')
+      .order('marca').order('codigo').range(inicio, inicio + 999)
+    if (error) throw error
+    filas.push(...(data || []))
+    if ((data || []).length < 1000) return filas
+  }
+}
+
+export async function leerHistorialCierres() {
+  const filas = []
+  for (let inicio = 0; ; inicio += 1000) {
+    const { data, error } = await supabase.from('preventivos_cierres_historial').select('*')
+      .order('registrado_en', { ascending: false }).order('id').range(inicio, inicio + 999)
+    if (error) throw error
+    filas.push(...(data || []))
+    if ((data || []).length < 1000) return filas
+  }
+}
+
+export async function guardarEstadoLocalPreventivo(local, datos) {
+  const { data, error } = await supabase.rpc('cambiar_estado_local_preventivo', {
+    p_marca: local.marca, p_codigo: local.codigo, p_cerrado: datos.cerrado,
+    p_fecha: datos.fecha, p_motivo: datos.motivo, p_revision: local.revision_estado ?? 0,
+  })
+  if (error) throw error
+  if (!data?.revision_estado) throw new Error('No se recibió la confirmación del cambio. Actualiza antes de intentar de nuevo.')
+  return data
+}
+
 export async function guardarRealizadoPreventivo(local, anio, mes, datos, revision) {
   const { data, error } = await supabase.rpc('marcar_realizado_preventivo', {
     p_marca: local.marca, p_codigo: local.codigo, p_anio: Number(anio), p_mes: Number(mes),
