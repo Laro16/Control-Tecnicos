@@ -5,13 +5,15 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { createServer } from 'vite'
 import { prepararSeguimiento } from '../src/utils/seguimientoPreventivos.js'
 
-let servidor, Programacion, Preventivos, PortalTecnico, DetalleOrdenes
+let servidor, Programacion, Preventivos, PortalTecnico, DetalleOrdenes, Persistencia, supabasePrueba
 before(async()=>{
   servidor=await createServer({server:{middlewareMode:true,hmr:false,watch:null},appType:'custom',plugins:[{name:'sin-red',enforce:'pre',load(id){if(id.replace(/\\/g,'/').endsWith('/src/supabase.jsx'))return "export const supabase={from(){throw Error('Sin red en prueba')},auth:{}}"}}]})
   Programacion=(await servidor.ssrLoadModule('/src/components/ProgramacionPreventivos.jsx')).default
   Preventivos=(await servidor.ssrLoadModule('/src/components/Preventivos.jsx')).default
   PortalTecnico=(await servidor.ssrLoadModule('/src/components/PortalTecnico.jsx')).default
   DetalleOrdenes=(await servidor.ssrLoadModule('/src/components/DetalleOrdenesPreventivos.jsx')).default
+  Persistencia=await servidor.ssrLoadModule('/src/utils/preventivosPersistencia.js')
+  supabasePrueba=(await servidor.ssrLoadModule('/src/supabase.jsx')).supabase
 })
 after(()=>servidor?.close())
 const local={id:'GRANJERO:1',marca:'GRANJERO',codigo:'1',nombre:'Granjero de prueba',direccion:'Ciudad',meses:[2,6,10],semana:'1',activo:true}
@@ -51,8 +53,28 @@ test('las órdenes conservan técnico y fecha sin inventar datos faltantes',()=>
 })
 test('el técnico no ve reportes administrativos ni asignación manual de órdenes',()=>{
   const html=renderToStaticMarkup(React.createElement(Preventivos,{tecnico:true,usuarioId:'t1'}))
-  assert.doesNotMatch(html,/Descargar avance|Actividad semanal|Por ubicar|Semana del reporte/)
+  assert.doesNotMatch(html,/Descargar avance|Actividad semanal|Por ubicar|Semana del reporte|Órdenes excluidas/)
   assert.match(html,/Consulta lo que falta/)
+})
+
+test('sólo administración recibe el botón individual para excluir',()=>{
+  const orden={numero_orden:'O1',marca:'GRANJERO',codigo:'1',fecha_realizada:'2026-10-01'}
+  const props={registros:prepararSeguimiento([local],[orden],[],2026,10),declaraciones:[],anio:2026,mes:10,usuarioId:'t1',listo:true,hoy:'2026-10-02',excluirOrden:()=>{},exclusionesListas:true}
+  assert.match(renderToStaticMarkup(React.createElement(Programacion,{...props,tecnico:false})),/aria-label="Excluir orden O1"/)
+  assert.doesNotMatch(renderToStaticMarkup(React.createElement(Programacion,{...props,tecnico:true})),/Excluir orden/)
+})
+
+test('sin migración avisa; una falla de conexión nunca se trata como lista vacía de exclusiones',async()=>{
+  const anterior=supabasePrueba.from
+  try {
+    let error={code:'PGRST205',message:'Could not find public.preventivos_ordenes_exclusiones'}
+    supabasePrueba.from=()=>({select(){return this},order(){return this},async range(){return {data:null,error}}})
+    assert.equal((await Persistencia.leerExclusionesPreventivos()).disponible,false)
+    error={code:'NETWORK',message:'Error de conexión'}
+    await assert.rejects(()=>Persistencia.leerExclusionesPreventivos(),e=>e.message==='Error de conexión')
+    error={code:'42P01',message:'public.preventivos_exclusiones_historial does not exist'}
+    await assert.rejects(()=>Persistencia.leerExclusionesPreventivos(),e=>e.code==='42P01')
+  } finally {supabasePrueba.from=anterior}
 })
 test('el portal sólo ofrece Viáticos y Preventivos, no el panel general',()=>{
   const html=renderToStaticMarkup(React.createElement(PortalTecnico,{persona:{nombre:'Ana'},usuarioId:'t1',inicial:'preventivos'}))

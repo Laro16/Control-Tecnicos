@@ -15,17 +15,20 @@ const local=catalogo.find(l=>l.activo&&l.marca==='GRANJERO'&&l.meses.includes(10
 const backend=`
 const usuario='00000000-0000-0000-0000-000000000002';
 let ordenes=JSON.parse(sessionStorage.getItem('ordenes')||'[]'),declaraciones=[],fallar=false;
+let exclusiones=JSON.parse(sessionStorage.getItem('exclusiones')||'[]'),historialExclusiones=JSON.parse(sessionStorage.getItem('historialExclusiones')||'[]');
 let locales=JSON.parse(sessionStorage.getItem('locales')||'null')||${JSON.stringify(catalogo.map(l=>({...l,activo_calendario:l.activo,activo_manual:null,revision_estado:0})))},cierres=JSON.parse(sessionStorage.getItem('cierres')||'[]');
 const copiar=d=>JSON.parse(JSON.stringify(d));
 export function setOrdenes(d){ordenes=d;sessionStorage.setItem('ordenes',JSON.stringify(d))}
 export function setFallar(d){fallar=d}
 function query(datos){return {select(){return this},order(){return this},eq(){return this},ilike(){return this},limit(){return this},async maybeSingle(){return {data:datos[0]||null,error:null}},async range(i,f){return {data:copiar(datos.slice(i,f+1)),error:null}},then(resolve,reject){return Promise.resolve({data:copiar(datos),error:null}).then(resolve,reject)}}}
 export const supabase={auth:{async getSession(){return {data:{session:{user:{id:usuario,email:'ana@example.test'}}}}},onAuthStateChange(){return {data:{subscription:{unsubscribe(){}}}}},async signOut(){}},
-from(tabla){if(tabla==='viaticos_admins')return query([]);if(tabla==='vac_empleados')return query([{id:usuario,nombre:'Ana Técnica',activo:true}]);if(tabla==='preventivos_realizados')return query(declaraciones);if(tabla==='preventivos_locales')return query(locales);if(tabla==='preventivos_cierres_historial')return query(cierres);if(tabla==='preventivos_ordenes')return query(ordenes);throw Error('Tabla inesperada: '+tabla)},
+from(tabla){if(tabla==='preventivos_ordenes_exclusiones')return query(exclusiones);if(tabla==='preventivos_exclusiones_historial')return query(historialExclusiones);if(tabla==='viaticos_admins')return query([]);if(tabla==='vac_empleados')return query([{id:usuario,nombre:'Ana Técnica',activo:true}]);if(tabla==='preventivos_realizados')return query(declaraciones);if(tabla==='preventivos_locales')return query(locales);if(tabla==='preventivos_cierres_historial')return query(cierres);if(tabla==='preventivos_ordenes')return query(ordenes);throw Error('Tabla inesperada: '+tabla)},
 rpc(nombre,p){
+if(nombre==='cambiar_exclusion_orden_preventivo'){if(fallar)return Promise.resolve({error:{message:'Conexión de prueba falló'}});const anterior=exclusiones.find(e=>e.numero_orden===p.p_numero_orden);if((anterior?.revision||0)!==p.p_revision)return Promise.resolve({error:{message:'La exclusión cambió'}});const data={numero_orden:p.p_numero_orden,excluida:p.p_excluida,motivo:p.p_motivo,autor_nombre:'Administrador de prueba',actualizado_en:'2026-10-02T14:00:00Z',revision:p.p_revision+1};exclusiones=exclusiones.filter(e=>e!==anterior);exclusiones.push(data);historialExclusiones.push({...data,id:String(historialExclusiones.length+1),registrado_en:data.actualizado_en});sessionStorage.setItem('exclusiones',JSON.stringify(exclusiones));sessionStorage.setItem('historialExclusiones',JSON.stringify(historialExclusiones));return Promise.resolve({data:copiar(data),error:null})}
+if(nombre==='consultar_ordenes_preventivos')return query(ordenes.filter(o=>!exclusiones.some(e=>e.numero_orden===o.numero_orden&&e.excluida)));
 if(nombre==='sincronizar_catalogo_preventivos'){for(const l of p.p_locales){const actual=locales.find(a=>a.codigo===l.codigo&&a.marca===l.marca);if(actual)Object.assign(actual,{...l,activo_calendario:l.activo,activo:actual.activo_manual??l.activo});}return Promise.resolve({error:null})}
 if(nombre==='cambiar_estado_local_preventivo'){if(fallar)return Promise.resolve({data:null,error:{message:'Conexión de prueba falló'}});const actual=locales.find(l=>l.codigo===p.p_codigo&&l.marca===p.p_marca);if(actual.revision_estado!==p.p_revision)return Promise.resolve({error:{message:'Revisión desactualizada'}});Object.assign(actual,{activo:!p.p_cerrado,activo_manual:!p.p_cerrado,fecha_cierre:p.p_cerrado?p.p_fecha:null,motivo_cierre:p.p_motivo,revision_estado:p.p_revision+1});cierres.push({id:String(cierres.length+1),marca:p.p_marca,codigo:p.p_codigo,cerrado:p.p_cerrado,fecha_cierre:actual.fecha_cierre,motivo:p.p_motivo,registrado_en:'2026-10-02T14:00:00Z'});sessionStorage.setItem('locales',JSON.stringify(locales));sessionStorage.setItem('cierres',JSON.stringify(cierres));return Promise.resolve({data:copiar(actual),error:null})}
-if(nombre==='consultar_ordenes_preventivos')return query(ordenes);if(nombre==='marcar_realizado_preventivo'){if(fallar)return Promise.resolve({data:null,error:{message:'Conexión de prueba falló'}});const anterior=declaraciones.find(d=>d.codigo===p.p_codigo&&d.marca===p.p_marca&&d.anio===p.p_anio&&d.mes===p.p_mes);if((anterior?.revision||0)!==p.p_revision)return Promise.resolve({error:{message:'Revisión desactualizada'}});const data={marca:p.p_marca,codigo:p.p_codigo,anio:p.p_anio,mes:p.p_mes,realizado:p.p_realizado,fecha_realizado:p.p_fecha,equipos_declarados:p.p_equipos,observaciones:p.p_observaciones,realizado_nombre:'Ana Técnica',realizado_por:usuario,revision:p.p_revision+1,actualizado_en:'2026-10-02T14:00:00Z'};declaraciones=declaraciones.filter(d=>d!==anterior);declaraciones.push(data);return Promise.resolve({data:copiar(data),error:null})}throw Error('RPC inesperada: '+nombre)}};
+if(nombre==='marcar_realizado_preventivo'){if(fallar)return Promise.resolve({data:null,error:{message:'Conexión de prueba falló'}});const anterior=declaraciones.find(d=>d.codigo===p.p_codigo&&d.marca===p.p_marca&&d.anio===p.p_anio&&d.mes===p.p_mes);if((anterior?.revision||0)!==p.p_revision)return Promise.resolve({error:{message:'Revisión desactualizada'}});const data={marca:p.p_marca,codigo:p.p_codigo,anio:p.p_anio,mes:p.p_mes,realizado:p.p_realizado,fecha_realizado:p.p_fecha,equipos_declarados:p.p_equipos,observaciones:p.p_observaciones,realizado_nombre:'Ana Técnica',realizado_por:usuario,revision:p.p_revision+1,actualizado_en:'2026-10-02T14:00:00Z'};declaraciones=declaraciones.filter(d=>d!==anterior);declaraciones.push(data);return Promise.resolve({data:copiar(data),error:null})}throw Error('RPC inesperada: '+nombre)}};
 `
 const compilado=await build({stdin:{contents:'import React from "react";import{createRoot}from"react-dom/client";import App from"./src/App.jsx";import Preventivos from"./src/components/Preventivos.jsx";import*as backend from"./src/supabase.jsx";window.__preventivosTest=backend;createRoot(document.getElementById("root")).render(location.search.includes("modo=admin")?React.createElement("main",{className:"mx-auto max-w-7xl p-4"},React.createElement(Preventivos)):React.createElement(App));',resolveDir:process.cwd(),loader:'jsx'},bundle:true,write:false,outdir:'prueba-en-memoria',jsx:'automatic',format:'iife',define:{'process.env.NODE_ENV':'"production"'},plugins:[{name:'prueba-sin-red',setup(api){
   api.onLoad({filter:/supabase\.jsx$/},()=>({contents:backend,loader:'js'}))
@@ -89,6 +92,8 @@ try {
   assert.equal(await ficha.getByText('Realizado',{exact:true}).count(),1)
   assert.doesNotMatch(await page.locator('body').innerText(),/liquida/i)
   assert.equal(await ficha.getByRole('button',{name:'Deshacer marca'}).count(),0)
+  assert.equal(await page.getByRole('button',{name:/^Excluir orden/}).count(),0,'El técnico no puede excluir órdenes')
+  assert.equal(await page.getByRole('button',{name:/^Órdenes excluidas/}).count(),0,'El archivo de exclusiones sólo es administrativo')
   await page.setViewportSize({width:1440,height:1000})
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth),true,'Sin desbordamiento PC')
   await page.screenshot({path:join(process.argv[3],'preventivos-pc.png'),fullPage:true})
@@ -155,6 +160,66 @@ try {
   await page.getByLabel(/^Mostrar/).selectOption('todos')
   await page.getByLabel('Buscar',{exact:true}).fill(local.codigo)
   await ficha.getByText('Realizado',{exact:true}).waitFor()
+  // Exclusión individual desde el detalle; quitar la última orden devuelve a Pendiente.
+  await ficha.getByRole('button',{name:'Detalle',exact:true}).click()
+  await ficha.getByRole('button',{name:'Excluir orden ORD-123',exact:true}).click()
+  await page.getByLabel('Motivo de la exclusión').fill('Orden cargada de más; no se realizó.')
+  await page.getByRole('button',{name:'Confirmar exclusión'}).click()
+  await ficha.getByText('1 orden registrada en el Excel',{exact:true}).waitFor()
+  await ficha.getByText('Realizado',{exact:true}).waitFor()
+  await ficha.getByRole('button',{name:'Excluir orden ORD-124',exact:true}).click()
+  await page.evaluate(()=>window.__preventivosTest.setFallar(true))
+  await page.getByRole('button',{name:'Confirmar exclusión'}).click()
+  await page.getByRole('alert').filter({hasText:'Conexión de prueba falló'}).waitFor()
+  assert.equal(await page.getByRole('dialog').count(),1,'La exclusión fallida mantiene el formulario')
+  await page.evaluate(()=>window.__preventivosTest.setFallar(false))
+  await page.getByRole('button',{name:'Confirmar exclusión'}).click()
+  await ficha.getByText('Pendiente',{exact:true}).waitFor()
+  await page.getByRole('button',{name:'Órdenes excluidas (2)',exact:true}).click()
+  const excluida=page.locator('[data-orden-excluida="ORD-123"]')
+  await excluida.getByText('Orden cargada de más; no se realizó.',{exact:true}).first().waitFor()
+  await excluida.locator('summary').click()
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'Archivo de exclusiones sin desbordamiento móvil')
+  await page.screenshot({path:join(process.argv[3],'preventivos-excluidas-movil.png'),fullPage:true})
+  await page.reload({waitUntil:'domcontentloaded'})
+  await page.getByLabel(/^Mes programado/).waitFor()
+  // Simula importar de nuevo exactamente las mismas órdenes del archivo antiguo.
+  await page.evaluate(()=>window.__preventivosTest.setOrdenes(JSON.parse(sessionStorage.getItem('ordenes'))))
+  await page.getByRole('button',{name:'Actualizar',exact:true}).click()
+  await page.getByLabel('Buscar',{exact:true}).fill(local.codigo)
+  await ficha.getByText('Pendiente',{exact:true}).waitFor()
+  await page.getByRole('button',{name:'Órdenes excluidas (2)',exact:true}).click()
+  await excluida.getByRole('button',{name:'Restaurar orden ORD-123',exact:true}).click()
+  await page.getByRole('button',{name:'Confirmar restauración'}).click()
+  await excluida.waitFor({state:'detached'})
+  await page.getByRole('button',{name:'Programación y seguimiento',exact:true}).click()
+  await page.getByLabel('Buscar',{exact:true}).fill(local.codigo)
+  await ficha.getByText('Realizado',{exact:true}).waitFor()
+  // Las dos órdenes del caso original, sin fecha, se pueden excluir desde Por ubicar.
+  await page.evaluate(()=>window.__preventivosTest.setOrdenes([...JSON.parse(sessionStorage.getItem('ordenes')),
+    ...['407456','407457'].map(numero_orden=>({numero_orden,marca:'CAMPERO',codigo:'632',negocio:'CAMPERO 632',fecha_realizada:null,tecnico:'Técnico de prueba'})),
+  ]))
+  await page.getByRole('button',{name:'Actualizar',exact:true}).click()
+  await page.getByRole('button',{name:'Por ubicar (2)',exact:true}).click()
+  await page.getByRole('button',{name:'Excluir orden 407456',exact:true}).click()
+  await page.getByRole('button',{name:'Confirmar exclusión'}).click()
+  await page.getByRole('button',{name:'Por ubicar (1)',exact:true}).waitFor()
+  assert.equal(await page.getByRole('button',{name:'Excluir orden 407456',exact:true}).count(),0)
+  await page.getByRole('button',{name:'Excluir orden 407457',exact:true}).click()
+  await page.getByRole('button',{name:'Confirmar exclusión'}).click()
+  await page.getByText('No hay órdenes pendientes de ubicar.',{exact:true}).waitFor()
+  await page.getByRole('button',{name:/^Órdenes excluidas/}).click()
+  await page.locator('[data-orden-excluida="407456"]').getByRole('button',{name:'Restaurar orden 407456',exact:true}).click()
+  await page.getByRole('button',{name:'Confirmar restauración'}).click()
+  await page.getByRole('button',{name:'Por ubicar (1)',exact:true}).click()
+  await page.getByRole('button',{name:'Excluir orden 407456',exact:true}).waitFor()
+  // El portal técnico ve únicamente la orden restaurada del mes, sin botones administrativos.
+  await page.goto(`http://127.0.0.1:${puerto}/__preventivos_test#preventivos`,{waitUntil:'domcontentloaded'})
+  await page.getByLabel('Buscar',{exact:true}).fill(local.codigo)
+  await ficha.getByRole('button',{name:'Detalle',exact:true}).click()
+  await ficha.getByText('Orden #ORD-123',{exact:true}).waitFor()
+  assert.equal(await ficha.getByText('Orden #ORD-124',{exact:true}).count(),0)
+  assert.equal(await page.getByRole('button',{name:/Excluir orden|Restaurar orden|Órdenes excluidas/}).count(),0)
   assert.deepEqual(errores,[])
   console.log('UI verificada: portal técnico, seguimiento, fichas en PC/móvil, archivo Cerrados, permisos de interfaz, cierre con reintento, persistencia al recargar y reactivación. Backend simulado, sin usar Supabase.')
 } catch(error) {
