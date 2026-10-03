@@ -9,7 +9,7 @@ import ProgramacionPreventivos from './ProgramacionPreventivos'
 import CierresPreventivos, { DialogoEstadoLocal } from './CierresPreventivos'
 import { combinarCatalogoLocales } from '../utils/cierresPreventivos.js'
 import { catalogoDesdeMatriz, prepararAvance, rangoSemana, MESES_PREVENTIVOS, MARCAS_PREVENTIVOS } from '../utils/preventivos.js'
-import { datosImagenAvance, descargarImagenPreventivos } from '../utils/preventivosImagen.js'
+import { datosImagenAvance, datosImagenProgramacion, descargarImagenPreventivos } from '../utils/preventivosImagen.js'
 
 const hoy = () => new Intl.DateTimeFormat('en-CA',{timeZone:'America/Guatemala',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date())
 const fechaVisible = fecha => fecha ? fecha.split('-').reverse().join('/') : 'Sin fecha realizada'
@@ -58,10 +58,8 @@ export default function Preventivos({ tecnico = false, usuarioId: usuarioPortalI
   // Sin recargar la página ni reaccionar al cambio de pestaña del navegador.
   useEffect(()=>{const id=setInterval(()=>{if(!ocupado&&!seleccionEstado&&document.visibilityState==='visible')cargar(true)},60000);return()=>clearInterval(id)},[ocupado,seleccionEstado,tecnico,usuarioPortalId])
   const semana=useMemo(()=>rangoSemana(fechaSemana),[fechaSemana])
-  const avance=useMemo(()=>prepararAvance(catalogo,ordenes,Number(anio),Number(vuelta),semana.fin),[catalogo,ordenes,anio,vuelta,semana.fin])
+  const avance=useMemo(()=>prepararAvance(catalogo,ordenes,Number(anio),Number(vuelta),semana.fin,declaraciones),[catalogo,ordenes,anio,vuelta,semana.fin,declaraciones])
   const seguimiento=useMemo(()=>prepararSeguimiento(catalogo,ordenes,declaraciones,anio,mes),[catalogo,ordenes,declaraciones,anio,mes])
-  const ordenesDelMes=avance.atribuidas.filter(o=>o.programado?.anio===Number(anio)&&o.programado?.mes===Number(mes))
-  const cuentaLocal=id=>ordenesDelMes.filter(o=>o.local?.id===id).length
   const deSemana=avance.atribuidas.filter(o=>o.fecha_realizada>=semana.inicio&&o.fecha_realizada<=semana.fin)
   const porUbicar=avance.atribuidas.filter(o=>!o.local||(o.local.activo&&!o.programado))
   const cerrados=catalogo.filter(l=>!l.activo)
@@ -70,7 +68,7 @@ export default function Preventivos({ tecnico = false, usuarioId: usuarioPortalI
     setOcupado(true)
     try{
       await guardarRealizadoPreventivo(local,y,m,datos,revision)
-      setAviso(datos.realizado?`Preventivo #${local.codigo} marcado como realizado. Liquidado se confirma únicamente con el Excel.`:`Se corrigió la marca de #${local.codigo}.`)
+      setAviso(datos.realizado?`Preventivo #${local.codigo} marcado como realizado.`:`Se corrigió la marca de #${local.codigo}.`)
       await cargar(true)
     }finally{setOcupado(false)}
   }
@@ -87,8 +85,7 @@ export default function Preventivos({ tecnico = false, usuarioId: usuarioPortalI
   }
   async function exportarAvance(){setOcupado(true);setError('');try{await descargarImagenPreventivos(datosImagenAvance(avance.resumen,{anio,vuelta,semana}),`Preventivos_Avance_${anio}_Vuelta_${vuelta}_${semana.fin}.png`)}catch(e){setError(e.message)}finally{setOcupado(false)}}
   async function exportarMes(tipo){setOcupado(true);setError('');try{
-    const locales=catalogo.filter(l=>l.activo&&l.marca===tipo&&l.meses.includes(Number(mes))).sort((a,b)=>(a.semana||'ZZ').localeCompare(b.semana||'ZZ')||a.codigo.localeCompare(b.codigo,'es',{numeric:true}))
-    await descargarImagenPreventivos({titulo:`${MARCAS_PREVENTIVOS[tipo].toUpperCase()} · ${MESES_PREVENTIVOS[mes-1].toUpperCase()} ${anio}`,subtitulo:`Occidente · ${locales.length} restaurantes programados`,secciones:[{titulo:'PROGRAMACIÓN MENSUAL',anchos:[105,655,160,150,170],encabezados:['Código','Restaurante','Semana','Equipos previstos','Avance'],filas:locales.map(l=>[l.codigo,l.nombre,l.semana||'—',l.equipos??'—',cuentaLocal(l.id)?`${cuentaLocal(l.id)} equipos`:'Pendiente'])}],pie:'La cantidad atendida cuenta órdenes únicas. Los locales cerrados están excluidos.'},`Preventivos_${tipo}_${anio}_${String(mes).padStart(2,'0')}.png`)
+    await descargarImagenPreventivos(datosImagenProgramacion(seguimiento,{tipo,anio,mes}),`Preventivos_${tipo}_${anio}_${String(mes).padStart(2,'0')}.png`)
   }catch(e){setError(e.message)}finally{setOcupado(false)}}
   async function ubicar(grupo){setOcupado(true);setError('');try{
     const codigo=grupo.local?.codigo||localManual[grupo.clave]
@@ -99,7 +96,7 @@ export default function Preventivos({ tecnico = false, usuarioId: usuarioPortalI
     setAviso(`${grupo.ordenes.length} órdenes ubicadas en ${MESES_PREVENTIVOS[m-1]} ${y}.`);await cargar()
   }catch(e){setError(e.message)}finally{setOcupado(false)}}
   return <div className="space-y-5 fade-in">
-    <section className="workspace-hero"><div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-sky-300"><CalendarCheck size={15}/> Mantenimientos programados</p><h1 className="text-3xl font-black">Preventivos</h1><p className="mt-2 max-w-xl text-sm text-slate-300">{tecnico?'Consulta lo que falta y reporta los preventivos que ya realizaste. El Excel confirma la liquidación.':'Calendario de restaurantes, seguimiento del técnico y avance por vuelta. Cada orden conserva su registro entre cargas del Excel.'}</p></div><button className="btn-ghost bg-white text-slate-900" onClick={()=>cargar()} disabled={cargando||ocupado}><RefreshCw size={14} className="mr-1 inline"/> Actualizar</button></div></section>
+    <section className="workspace-hero"><div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-sky-300"><CalendarCheck size={15}/> Mantenimientos programados</p><h1 className="text-3xl font-black">Preventivos</h1><p className="mt-2 max-w-xl text-sm text-slate-300">{tecnico?'Consulta lo que falta y reporta los preventivos que ya realizaste. Las órdenes del Excel también cuentan como realizadas.':'Calendario de restaurantes, seguimiento del técnico y avance por vuelta. Cada orden conserva su registro entre cargas del Excel.'}</p></div><button className="btn-ghost bg-white text-slate-900" onClick={()=>cargar()} disabled={cargando||ocupado}><RefreshCw size={14} className="mr-1 inline"/> Actualizar</button></div></section>
     {error&&<div role="alert" className="rounded-xl border-2 border-rose-500 bg-rose-50 p-4 text-sm text-rose-900">{error}<p className="mt-1">{tecnico?'Pide al administrador que revise la activación de Preventivos para técnicos.':'Si aún no está activado, ejecuta activar_preventivos.sql y activar_preventivos_tecnicos.sql en Supabase. Después vuelve a cargar el Excel diario.'}</p></div>}
     {avisoSeguimiento&&<p role="alert" className="card border-amber-700 bg-amber-50 p-4 text-sm text-amber-950">{avisoSeguimiento}</p>}
     {!tecnico&&seguimientoListo&&!cierresListos&&<p role="status" className="card bg-amber-50 p-4 text-sm text-amber-950">Para guardar cierres y reactivaciones, ejecuta activar_cierres_preventivos.sql en Supabase y pulsa Actualizar.</p>}
@@ -109,10 +106,10 @@ export default function Preventivos({ tecnico = false, usuarioId: usuarioPortalI
       {!tecnico&&<><label className="text-xs font-bold">Vuelta<select value={vuelta} onChange={e=>setVuelta(Number(e.target.value))} className="control-field mt-1 w-full">{[1,2,3].map(v=><option key={v} value={v}>{MESES_PREVENTIVOS[(v-1)*4]} – {MESES_PREVENTIVOS[v*4-1]}</option>)}</select></label>
       <label className="text-xs font-bold">Semana del reporte<input type="date" value={fechaSemana} onChange={e=>e.target.value&&setFechaSemana(e.target.value)} className="control-field mt-1 w-full"/></label>
       <button onClick={exportarAvance} disabled={ocupado||cargando||Boolean(error)||!catalogo.length} className="btn-primary self-end disabled:opacity-50"><Download size={14} className="mr-1 inline"/> Descargar avance PNG</button>
-      <p className="text-xs text-slate-500 sm:col-span-3 lg:col-span-4">Corte: {fechaVisible(semana.inicio)} al {fechaVisible(semana.fin)}. Los porcentajes corresponden a la vuelta y al mes programado.</p></>}
+      <p className="text-xs text-slate-500 sm:col-span-3 lg:col-span-4">Corte: {fechaVisible(semana.inicio)} al {fechaVisible(semana.fin)}. Realizados por marca manual o Excel, según la vuelta y el mes programado. Los equipos cuentan órdenes únicas del Excel.</p></>}
       {tecnico&&<p className="self-center text-sm text-slate-600 sm:col-span-2 lg:col-span-3">Calendario compartido · se conservan las marcas por restaurante, mes y año.</p>}
     </section>}
-    {!tecnico&&vista!=='cerrados'&&<section className="grid gap-4 md:grid-cols-2">{avance.resumen.map(r=><article className="card p-5" key={r.marca}><h2 className="text-base font-black">{r.nombre}</h2><div className="mt-4 grid grid-cols-3 gap-3"><Dato nombre="Asignados" valor={r.asignados}/><Dato nombre="Atendidos" valor={r.atendidos}/><Dato nombre="Equipos" valor={r.equipos}/></div><div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-200"><div className="h-full bg-emerald-500" style={{width:porcentaje(r.porcentaje)}}/></div><p className="mt-2 flex justify-between text-xs font-bold"><span className="text-emerald-700">{porcentaje(r.porcentaje)} atendido</span><span>{r.pendiente} pendientes · {porcentaje(100-r.porcentaje)}</span></p></article>)}</section>}
+    {!tecnico&&vista!=='cerrados'&&<section className="grid gap-4 md:grid-cols-2">{avance.resumen.map(r=><article className="card p-5" key={r.marca}><h2 className="text-base font-black">{r.nombre}</h2><div className="mt-4 grid grid-cols-3 gap-3"><Dato nombre="Asignados" valor={r.asignados}/><Dato nombre="Realizados" valor={r.atendidos}/><Dato nombre="Equipos en Excel" valor={r.equipos}/></div><div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-200"><div className="h-full bg-emerald-500" style={{width:porcentaje(r.porcentaje)}}/></div><p className="mt-2 flex justify-between text-xs font-bold"><span className="text-emerald-700">{porcentaje(r.porcentaje)} realizado</span><span>{r.pendiente} pendientes · {porcentaje(100-r.porcentaje)}</span></p></article>)}</section>}
     <div className="flex flex-wrap gap-2" aria-label="Vistas de preventivos">{[['programacion','Programación y seguimiento'],['cerrados',`Cerrados (${cerrados.length})`],...(!tecnico?[['semana',`Actividad semanal (${deSemana.length})`],['revision',`Por ubicar (${porUbicar.length})`]]:[])].map(([id,nombre])=><button type="button" aria-pressed={vista===id} className={vista===id?'btn-primary':'btn-ghost'} key={id} onClick={()=>setVista(id)}>{nombre}</button>)}</div>
     {cargando&&<p role="status" className="text-sm text-slate-500">Consultando calendario e historial…</p>}
     {!cargando&&!error&&!ordenes.length&&vista!=='cerrados'&&<p className="card p-4 text-sm text-slate-600">{tecnico?'Aún no se han detectado órdenes en el Excel; puedes consultar el calendario y reportar lo realizado.':'Todavía no hay órdenes registradas. Vuelve a cargar tu Excel diario en Técnicos para iniciar el historial.'}</p>}

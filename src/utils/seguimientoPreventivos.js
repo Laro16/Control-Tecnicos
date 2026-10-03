@@ -12,7 +12,7 @@ export function tipoRestaurantePreventivo(local) {
 }
 
 // La declaración del técnico y las órdenes del Excel nunca se suman entre sí.
-// Una orden sólo liquida el mes al que ya fue atribuida por la lógica existente.
+// Una orden acredita el mes al que ya fue atribuida, sin filtrar su estado.
 export function prepararSeguimiento(catalogo, ordenes, declaraciones, anio, mes) {
   const declarados = new Map(declaraciones.filter(d => d.realizado && Number(d.anio) === Number(anio) && Number(d.mes) === Number(mes))
     .map(d => [claveSeguimiento(d, anio, mes), d]))
@@ -27,10 +27,11 @@ export function prepararSeguimiento(catalogo, ordenes, declaraciones, anio, mes)
   return catalogo.filter(l => l.activo && l.meses.includes(Number(mes))).map(local => {
     const declaracion = declarados.get(claveSeguimiento(local, anio, mes)) || null
     const registros = [...(porLocal.get(local.id)?.values() || [])]
-    const liquidado = registros.length > 0
-    return { local, declaracion, ordenes: registros, liquidado, realizado: Boolean(declaracion) || liquidado,
-      estado: liquidado ? 'liquidado' : declaracion ? 'por-liquidar' : 'pendiente' }
-  }).sort((a, b) => ({ pendiente: 0, 'por-liquidar': 1, liquidado: 2 }[a.estado] - { pendiente: 0, 'por-liquidar': 1, liquidado: 2 }[b.estado])
+    const enExcel = registros.length > 0
+    const realizado = Boolean(declaracion) || enExcel
+    return { local, declaracion, ordenes: registros, enExcel, realizado,
+      estado: realizado ? 'realizado' : 'pendiente' }
+  }).sort((a, b) => Number(a.realizado) - Number(b.realizado)
     || a.local.semana.localeCompare(b.local.semana, 'es', { numeric: true }) || a.local.codigo.localeCompare(b.local.codigo, 'es', { numeric: true }))
 }
 

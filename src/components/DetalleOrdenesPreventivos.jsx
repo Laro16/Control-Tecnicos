@@ -3,8 +3,8 @@ import { fechaPreventivo, MESES_PREVENTIVOS } from '../utils/preventivos.js'
 export default function DetalleOrdenesPreventivos({ ordenes, mostrarPeriodo = false }) {
   if (!ordenes.length) return null
   return <div className="space-y-2 text-xs">
-    <p className="font-bold">Liquidaciones detectadas en Excel</p>
-    <ul className="divide-y divide-slate-300" aria-label="Órdenes liquidadas">
+    <p className="font-bold">Órdenes registradas en Excel</p>
+    <ul className="divide-y divide-slate-300" aria-label="Órdenes registradas">
       {ordenes.map(orden => {
         const fecha = fechaPreventivo(orden.fecha_realizada)
         return <li key={orden.numero_orden} className="space-y-1 break-words py-3 first:pt-0 last:pb-0">

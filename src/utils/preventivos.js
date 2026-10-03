@@ -66,13 +66,20 @@ export function atribuirOrden(orden, catalogo) {
   const anioPlan = anteriores.length ? anio : anio-1
   return { ...orden, codigo, local, programado: { anio: anioPlan, mes: mesPlan, vuelta: Math.floor((mesPlan-1)/4)+1 }, tarde: anio !== anioPlan || mes !== mesPlan }
 }
-export function prepararAvance(catalogo, ordenes, anio, vuelta, corte) {
-  const atribuidas = ordenes.map(o => atribuirOrden(o,catalogo))
+export function prepararAvance(catalogo, ordenes, anio, vuelta, corte, declaraciones = []) {
+  const atribuidas = [...new Map(ordenes.map(o => [o.numero_orden, atribuirOrden(o,catalogo)])).values()]
   const incluidas = atribuidas.filter(o => o.local?.activo && o.programado?.anio === anio && o.programado?.vuelta === vuelta && (!corte || !o.fecha_realizada || o.fecha_realizada <= corte))
+  const declaradas = declaraciones.filter(d => d.realizado && Number(d.anio) === anio
+    && Math.floor((Number(d.mes)-1)/4)+1 === vuelta && (!corte || d.fecha_realizado <= corte))
   const resumen = Object.entries(MARCAS_PREVENTIVOS).map(([marca,nombre]) => {
     const locales = catalogo.filter(l => l.activo && l.marca === marca)
     const registros = incluidas.filter(o => o.marca === marca)
-    const atendidos = new Set(registros.map(o => o.local.id)).size
+    // Un negocio cuenta una sola vez, aunque tenga marca manual y órdenes del Excel.
+    const realizados = new Set(registros.map(o => o.local.id))
+    for (const local of locales) {
+      if (declaradas.some(d => d.marca === marca && d.codigo === local.codigo && local.meses.includes(Number(d.mes)))) realizados.add(local.id)
+    }
+    const atendidos = realizados.size
     return { marca, nombre, asignados: locales.length, atendidos, equipos: registros.length, pendiente: locales.length-atendidos, porcentaje: locales.length ? atendidos/locales.length*100 : 0 }
   })
   return { resumen, incluidas, atribuidas, sinFecha: atribuidas.filter(o => !o.fecha_realizada), sinLocal: atribuidas.filter(o => !o.local) }
