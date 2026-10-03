@@ -8,7 +8,7 @@ const estados = { pendiente: 'Pendiente', realizado: 'Realizado' }
 const colores = { pendiente: 'bg-slate-100 text-slate-800', realizado: 'bg-emerald-100 text-emerald-900' }
 const campo = 'control-field w-full'
 
-export default function ProgramacionPreventivos({ registros, declaraciones, anio, mes, tecnico, usuarioId, listo, ocupado, hoy, guardar, recargar, cambiarMes, cerrarLocal, cierresListos }) {
+export default function ProgramacionPreventivos({ registros, declaraciones, anio, mes, tecnico, usuarioId, listo, ocupado, hoy, guardar, recargar, cambiarMes, cerrarLocal, cierresListos, excluirOrden, exclusionesListas }) {
   const [filtro, setFiltro] = useState('todos')
   const [busqueda, setBusqueda] = useState('')
   const [marca, setMarca] = useState('')
@@ -85,7 +85,7 @@ export default function ProgramacionPreventivos({ registros, declaraciones, anio
         <p className="mt-3 break-words text-xs text-slate-600">{local.direccion || 'Sin dirección en calendario'}</p>
         <p className="mt-2 text-xs font-semibold text-slate-600">{local.semana || 'Sin semana asignada'} · {local.equipos == null ? 'Sin cantidad prevista' : `${local.equipos} equipos previstos`}</p>
         {declaracion && <div className="mt-3 rounded-lg bg-emerald-50 p-3 text-xs text-emerald-950"><p className="font-bold">{declaracion.realizado_nombre}</p><p className="mt-1">Realizado: {declaracion.fecha_realizado.split('-').reverse().join('/')}{declaracion.equipos_declarados ? ` · ${declaracion.equipos_declarados} equipos declarados` : ''}</p>{declaracion.actualizado_en && <p className="mt-1 text-[11px]">Registro: {new Date(declaracion.actualizado_en).toLocaleString('es-GT',{timeZone:'America/Guatemala',dateStyle:'short',timeStyle:'short'})}</p>}{declaracion.observaciones && <p className="mt-2 whitespace-pre-wrap break-words">{declaracion.observaciones}</p>}</div>}
-        {enExcel && <div className="mt-3 rounded-lg border border-slate-300 bg-white p-3"><DetalleOrdenesPreventivos ordenes={registro.ordenes}/></div>}
+        {enExcel && <div className="mt-3 rounded-lg border border-slate-300 bg-white p-3"><DetalleOrdenesPreventivos ordenes={registro.ordenes} excluirOrden={tecnico ? undefined : excluirOrden} deshabilitado={!exclusionesListas||ocupado}/></div>}
         <div className="flex flex-wrap gap-2 pt-4">
           {corregible && <button type="button" className="btn-ghost min-h-11" disabled={!listo || ocupado} onClick={() => abrir(registro)}>Editar reporte</button>}
           {corregible && !enExcel && <button type="button" className="btn-ghost min-h-11" disabled={!listo || ocupado} onClick={() => abrir(registro, true)}>Deshacer marca</button>}

@@ -35,7 +35,7 @@ export function DialogoEstadoLocal({ local, hoy, guardar, cerrar }) {
   </Dialogo>
 }
 
-export default function CierresPreventivos({ locales, ordenes, declaraciones, historial, tecnico, listo, ocupado, reactivar }) {
+export default function CierresPreventivos({ locales, ordenes, declaraciones, historial, tecnico, listo, ocupado, reactivar, excluirOrden, exclusionesListas }) {
   const [marca, setMarca] = useState('')
   const [busqueda, setBusqueda] = useState('')
   const termino = busqueda.trim().toLocaleLowerCase('es')
@@ -69,7 +69,7 @@ export default function CierresPreventivos({ locales, ordenes, declaraciones, hi
           <summary className="cursor-pointer py-2 font-bold">Ver historial · {trabajos.length} órdenes · {reportes.length} reportes</summary>
           <div className="max-h-80 space-y-3 overflow-y-auto pt-2">
             {!trabajos.length && !reportes.length && <p className="text-slate-600">No hay órdenes ni reportes registrados para este punto de venta.</p>}
-            <DetalleOrdenesPreventivos ordenes={trabajos} mostrarPeriodo/>
+            <DetalleOrdenesPreventivos ordenes={trabajos} mostrarPeriodo excluirOrden={tecnico?undefined:excluirOrden} deshabilitado={!exclusionesListas||ocupado}/>
             {reportes.map(d=><div className="border-b border-slate-300 pb-2" key={`${d.anio}:${d.mes}`}><p className="font-bold">Reporte de {d.realizado_nombre} · {MESES_PREVENTIVOS[d.mes-1]} {d.anio}</p><p className="mt-1 text-slate-600">{fechaVisible(d.fecha_realizado)}{d.equipos_declarados ? ` · ${d.equipos_declarados} equipos declarados` : ''}</p>{d.observaciones && <p className="mt-1 whitespace-pre-wrap break-words text-slate-600">{d.observaciones}</p>}</div>)}
             {movimientos.length>0 && <div className="space-y-2"><p className="font-bold">Cierres y reactivaciones</p>{movimientos.map(m=><p key={m.id} className="text-slate-600">{m.cerrado ? `Cierre: ${fechaVisible(m.fecha_cierre)}` : 'Reactivación'} · Registrado {new Date(m.registrado_en).toLocaleString('es-GT',{timeZone:'America/Guatemala',dateStyle:'short',timeStyle:'short'})}{m.motivo && <span className="block whitespace-pre-wrap break-words">{m.motivo}</span>}</p>)}</div>}
           </div>

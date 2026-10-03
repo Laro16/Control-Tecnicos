@@ -1,5 +1,6 @@
 import { supabase } from '../supabase.jsx'
 import { extraerOrdenesPreventivas } from './preventivos.js'
+import { validarExclusionOrden } from './exclusionesPreventivos.js'
 export async function importarPreventivos(filas) {
   const resultado = extraerOrdenesPreventivas(filas)
   for (let inicio=0; inicio<resultado.ordenes.length; inicio+=200) {
@@ -77,5 +78,38 @@ export async function guardarRealizadoPreventivo(local, anio, mes, datos, revisi
   })
   if (error) throw error
   if (!data?.revision) throw new Error('No se recibió la confirmación del guardado. Actualiza antes de intentar de nuevo.')
+  return data
+}
+
+export async function leerExclusionesPreventivos() {
+  async function leerTabla(tabla, campo) {
+    const filas=[]
+    for(let inicio=0;;inicio+=1000) {
+      const {data,error}=await supabase.from(tabla).select('*').order(campo).range(inicio,inicio+999)
+      if(error) throw error
+      filas.push(...data)
+      if(data.length<1000) return filas
+    }
+  }
+  try {
+    const exclusiones=await leerTabla('preventivos_ordenes_exclusiones','numero_orden')
+    const historial=await leerTabla('preventivos_exclusiones_historial','id')
+    return { disponible:true, exclusiones, historial }
+  } catch(error) {
+    if(['42P01','PGRST205'].includes(error.code) && String(error.message).includes('preventivos_ordenes_exclusiones')) {
+      return { disponible:false, exclusiones:[], historial:[] }
+    }
+    // Un fallo de conexión no debe hacer que las órdenes excluidas vuelvan a contarse.
+    throw error
+  }
+}
+
+export async function guardarExclusionPreventivo(orden, excluida, motivo) {
+  const {data,error}=await supabase.rpc('cambiar_exclusion_orden_preventivo',{
+    p_numero_orden:orden.numero_orden, p_excluida:excluida,
+    p_motivo:validarExclusionOrden(motivo), p_revision:orden.exclusion?.revision ?? 0,
+  })
+  if(error) throw error
+  if(!data?.revision) throw new Error('No se recibió confirmación. Actualiza antes de intentar de nuevo.')
   return data
 }

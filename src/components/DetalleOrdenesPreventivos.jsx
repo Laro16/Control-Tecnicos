@@ -1,6 +1,6 @@
 import { fechaPreventivo, MESES_PREVENTIVOS } from '../utils/preventivos.js'
 
-export default function DetalleOrdenesPreventivos({ ordenes, mostrarPeriodo = false }) {
+export default function DetalleOrdenesPreventivos({ ordenes, mostrarPeriodo = false, excluirOrden, deshabilitado = false }) {
   if (!ordenes.length) return null
   return <div className="space-y-2 text-xs">
     <p className="font-bold">Órdenes registradas en Excel</p>
@@ -12,6 +12,7 @@ export default function DetalleOrdenesPreventivos({ ordenes, mostrarPeriodo = fa
           <p className="text-slate-600"><span className="font-semibold">Técnico: </span>{String(orden.tecnico ?? '').trim() || 'No informado'}</p>
           <p className="text-slate-600"><span className="font-semibold">Fecha realizada: </span>{fecha ? fecha.split('-').reverse().join('/') : 'Sin fecha en el Excel'}</p>
           {mostrarPeriodo && orden.programado && <p className="text-slate-600">Mes programado: {MESES_PREVENTIVOS[orden.programado.mes-1]} {orden.programado.anio}</p>}
+          {excluirOrden && !orden.exclusion?.excluida && <button type="button" className="btn-ghost mt-2 min-h-11" disabled={deshabilitado} onClick={()=>excluirOrden(orden)} aria-label={`Excluir orden ${orden.numero_orden}`}>Excluir orden</button>}
         </li>
       })}
     </ul>

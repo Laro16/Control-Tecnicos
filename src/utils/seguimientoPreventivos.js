@@ -18,6 +18,7 @@ export function prepararSeguimiento(catalogo, ordenes, declaraciones, anio, mes)
     .map(d => [claveSeguimiento(d, anio, mes), d]))
   const porLocal = new Map()
   for (const orden of ordenes) {
+    if (orden.exclusion?.excluida) continue
     const o = atribuirOrden(orden, catalogo)
     if (!o.local || o.programado?.anio !== Number(anio) || o.programado?.mes !== Number(mes)) continue
     const registros = porLocal.get(o.local.id) || new Map()

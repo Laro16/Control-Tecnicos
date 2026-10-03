@@ -67,7 +67,7 @@ export function atribuirOrden(orden, catalogo) {
   return { ...orden, codigo, local, programado: { anio: anioPlan, mes: mesPlan, vuelta: Math.floor((mesPlan-1)/4)+1 }, tarde: anio !== anioPlan || mes !== mesPlan }
 }
 export function prepararAvance(catalogo, ordenes, anio, vuelta, corte, declaraciones = []) {
-  const atribuidas = [...new Map(ordenes.map(o => [o.numero_orden, atribuirOrden(o,catalogo)])).values()]
+  const atribuidas = [...new Map(ordenes.filter(o => !o.exclusion?.excluida).map(o => [o.numero_orden, atribuirOrden(o,catalogo)])).values()]
   const incluidas = atribuidas.filter(o => o.local?.activo && o.programado?.anio === anio && o.programado?.vuelta === vuelta && (!corte || !o.fecha_realizada || o.fecha_realizada <= corte))
   const declaradas = declaraciones.filter(d => d.realizado && Number(d.anio) === anio
     && Math.floor((Number(d.mes)-1)/4)+1 === vuelta && (!corte || d.fecha_realizado <= corte))
