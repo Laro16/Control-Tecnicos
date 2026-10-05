@@ -25,7 +25,7 @@ test('la exclusión se une por N° ORDEN y sobrevive a una nueva carga sin alter
 test('excluir una orden no quita otra del mismo restaurante ni duplica equipos',()=>{
   const revisadas=combinarExclusionesOrdenes([orden,otra,otra],[exclusion])
   const [r]=prepararSeguimiento([local],revisadas,[],2026,9)
-  assert.equal(r.estado,'realizado');assert.deepEqual(r.ordenes.map(o=>o.numero_orden),['407457'])
+  assert.equal(r.estado,'finalizado');assert.deepEqual(r.ordenes.map(o=>o.numero_orden),['407457'])
   const avance=prepararAvance([local],revisadas,2026,3,'2026-10-04')
   assert.equal(avance.resumen[1].atendidos,1);assert.equal(avance.resumen[1].equipos,1)
   assert.equal(avance.atribuidas.length,1)
@@ -38,7 +38,7 @@ test('sin órdenes válidas vuelve a pendiente, salvo que exista una marca manua
   const avance=prepararAvance([local],revisadas,2026,3,'2026-10-04')
   assert.equal(avance.resumen[1].atendidos,0);assert.equal(avance.resumen[1].equipos,0);assert.equal(avance.resumen[1].pendiente,1)
   assert.equal(datosImagenProgramacion(seguimiento,{tipo:'CAMPERO',anio:2026,mes:9}).secciones[0].filas[0][4],'Pendiente')
-  assert.equal(prepararSeguimiento([local],revisadas,[declaracion],2026,9)[0].estado,'realizado')
+  assert.equal(prepararSeguimiento([local],revisadas,[declaracion],2026,9)[0].estado,'por-liquidar')
   const manual=prepararAvance([local],revisadas,2026,3,'2026-10-04',[declaracion]).resumen[1]
   assert.equal(manual.atendidos,1);assert.equal(manual.equipos,0)
 })
@@ -49,7 +49,7 @@ test('excluidas sin fecha o sin restaurante no aparecen en Por ubicar; restaurar
     assert.equal(avance.atribuidas.length,0);assert.equal(avance.sinLocal.length,0);assert.equal(avance.sinFecha.length,0)
   }
   const restauradas=combinarExclusionesOrdenes([orden],[{...exclusion,excluida:false,revision:2}])
-  assert.equal(prepararSeguimiento([local],restauradas,[],2026,9)[0].estado,'realizado')
+  assert.equal(prepararSeguimiento([local],restauradas,[],2026,9)[0].estado,'finalizado')
   assert.equal(prepararSeguimiento([local],restauradas,[],2026,5)[0].estado,'pendiente')
   assert.equal(restauradas[0].exclusion.revision,2)
 })

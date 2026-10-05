@@ -29,7 +29,7 @@ test('retiene puntos retirados del archivo, separa marcas con el mismo código y
   const resultado=combinarCatalogoLocales([local,campero],[cierre])
   assert.equal(resultado.find(l=>l.marca==='CAMPERO').activo,true)
   const reactivado=combinarCatalogoLocales(resultado,[{...guardado,activo:true,activo_manual:true,revision_estado:2}])
-  assert.equal(prepararSeguimiento(reactivado,[orden],[],2026,10).find(r=>r.local.id===local.id).estado,'realizado')
+  assert.equal(prepararSeguimiento(reactivado,[orden],[],2026,10).find(r=>r.local.id===local.id).estado,'finalizado')
 })
 test('valida fecha del cierre y permite reactivación sin inventar una fecha de cierre',()=>{
   assert.deepEqual(validarEstadoLocal({cerrado:true,fecha:'2026-10-02',motivo:' Cerró '},'2026-10-02'),{cerrado:true,fecha:'2026-10-02',motivo:'Cerró'})

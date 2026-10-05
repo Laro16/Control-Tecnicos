@@ -20,18 +20,18 @@ test('clasifica el prefijo 7 como Siciliana sólo dentro de Granjero', () => {
   assert.equal(original.codigo,'745')
 })
 
-test('sólo dos estados: pendiente sin registro; realizado por marca manual o Excel', () => {
+test('tres estados: pendiente, marca manual por liquidar y finalizado por Excel', () => {
   const [pendiente] = prepararSeguimiento([local],[],[],2026,10)
   assert.equal(pendiente.realizado,false);assert.equal(pendiente.enExcel,false);assert.equal(pendiente.estado,'pendiente')
   const [declarado] = prepararSeguimiento([local],[],[marca],2026,10)
-  assert.equal(declarado.realizado,true);assert.equal(declarado.enExcel,false);assert.equal(declarado.estado,'realizado')
+  assert.equal(declarado.realizado,true);assert.equal(declarado.enExcel,false);assert.equal(declarado.estado,'por-liquidar')
   const [detectado] = prepararSeguimiento([local],[orden],[marca],2026,10)
-  assert.equal(detectado.realizado,true);assert.equal(detectado.enExcel,true);assert.equal(detectado.estado,'realizado');assert.equal(detectado.ordenes.length,1)
+  assert.equal(detectado.realizado,true);assert.equal(detectado.enExcel,true);assert.equal(detectado.estado,'finalizado');assert.equal(detectado.ordenes.length,1)
 })
-test('el Excel marca realizado sin declaración y sin filtrar ningún estado', () => {
+test('el Excel finaliza sin declaración y sin filtrar ningún estado', () => {
   for (const estado of ['Asignada a Técnico','Asignada a Agencia','En Proceso','Orden Finalizada','Cancelada','',null]) {
     const [r] = prepararSeguimiento([local],[{...orden,estado}],[],2026,10)
-    assert.equal(r.realizado,true);assert.equal(r.enExcel,true);assert.equal(r.declaracion,null);assert.equal(r.estado,'realizado')
+    assert.equal(r.realizado,true);assert.equal(r.enExcel,true);assert.equal(r.declaracion,null);assert.equal(r.estado,'finalizado')
   }
 })
 test('las declaraciones nunca suman equipos oficiales ni duplican órdenes', () => {
@@ -49,7 +49,7 @@ test('no mezcla marcas, años o meses; declaración deshecha regresa a pendiente
 test('no inventa mes de órdenes sin fecha; conserva asignación manual y atención tardía', () => {
   assert.equal(prepararSeguimiento([local],[{...orden,fecha_realizada:null}],[marca],2026,10)[0].enExcel,false)
   const asignada = {...orden,fecha_realizada:null,anio_programado:2026,mes_programado:10}
-  assert.equal(prepararSeguimiento([local],[asignada],[],2026,10)[0].estado,'realizado')
+  assert.equal(prepararSeguimiento([local],[asignada],[],2026,10)[0].estado,'finalizado')
   const tardia = {...orden,fecha_realizada:'2026-11-01'}
   assert.equal(prepararSeguimiento([local],[tardia],[],2026,10)[0].enExcel,true)
   assert.equal(prepararSeguimiento([{...local,activo:false}],[orden],[marca],2026,10).length,0)
@@ -58,7 +58,7 @@ test('no inventa mes de órdenes sin fecha; conserva asignación manual y atenci
 test('deshacer marca no revierte una orden del Excel y los pendientes van primero', () => {
   const registros = prepararSeguimiento([local,otro],[orden],[{...marca,realizado:false}],2026,10)
   assert.equal(registros[0].estado,'pendiente')
-  assert.equal(registros[1].estado,'realizado')
+  assert.equal(registros[1].estado,'finalizado')
   assert.equal(registros[1].local.id,local.id)
 })
 
@@ -66,8 +66,10 @@ test('el resumen cuenta marcas manuales y Excel una vez sin sumar equipos declar
   const resumen = (ordenes,marcas,corte='2026-10-04') => prepararAvance([local,otro],ordenes,2026,3,corte,marcas).resumen
   const manual=resumen([],[{...marca,equipos_declarados:8}])[0]
   assert.equal(manual.atendidos,1);assert.equal(manual.pendiente,0);assert.equal(manual.equipos,0)
+  assert.equal(manual.porLiquidar,1);assert.equal(manual.finalizados,0)
   const combinado=resumen([orden,orden],[marca,marca])[0]
   assert.equal(combinado.atendidos,1);assert.equal(combinado.equipos,1);assert.equal(combinado.porcentaje,100)
+  assert.equal(combinado.porLiquidar,0);assert.equal(combinado.finalizados,1)
   assert.equal(resumen([],[marca])[1].atendidos,0,'No afecta a otra marca con el mismo código')
   for(const declaracion of [{...marca,realizado:false},{...marca,anio:2025},{...marca,mes:6},{...marca,mes:11},{...marca,fecha_realizado:'2026-10-05'}]) {
     assert.equal(resumen([],[declaracion])[0].atendidos,0,'Respeta correcciones, año, mes y corte')
@@ -75,21 +77,21 @@ test('el resumen cuenta marcas manuales y Excel una vez sin sumar equipos declar
   assert.equal(prepararAvance([{...local,activo:false}],[],2026,3,undefined,[marca]).resumen[0].atendidos,0)
 })
 
-test('las imágenes muestran realizado por marca o Excel sin estados de liquidación', () => {
+test('las imágenes distinguen marca manual por liquidar y finalizado por Excel', () => {
   for(const ordenes of [[],[orden]]) {
     const seguimiento=prepararSeguimiento([local,otro],ordenes,[marca],2026,10)
     const imagen=datosImagenProgramacion(seguimiento,{tipo:'GRANJERO',anio:2026,mes:10})
     assert.equal(imagen.secciones[0].filas.length,1)
-    assert.equal(imagen.secciones[0].filas[0][4],'Realizado')
+    assert.equal(imagen.secciones[0].filas[0][4],ordenes.length?'Finalizado':'Pendiente de liquidar')
     assert.equal(imagen.secciones[0].filas[0][5],ordenes.length||'—')
-    assert.doesNotMatch(JSON.stringify(imagen),/liquid/i)
   }
   const pendientes=datosImagenProgramacion(prepararSeguimiento([local],[],[],2026,10),{tipo:'GRANJERO',anio:2026,mes:10})
   assert.equal(pendientes.secciones[0].filas[0][4],'Pendiente')
   const avance=prepararAvance([local],[],2026,3,'2026-10-04',[marca])
   const imagen=datosImagenAvance(avance.resumen,{anio:2026,vuelta:3,semana:{inicio:'2026-09-28',fin:'2026-10-04'}})
-  assert.equal(imagen.secciones[0].filas[0][2],1)
-  assert.equal(imagen.secciones[0].filas[0][5],0)
+  assert.equal(imagen.secciones[0].filas[0][2],0,'Sin finalizados')
+  assert.equal(imagen.secciones[0].filas[0][3],1,'Una marca manual por liquidar')
+  assert.equal(imagen.secciones[0].filas[0][6],0,'Sin pendientes de realizar')
 })
 test('valida datos declarados sin fabricar cantidad de equipos', () => {
   assert.deepEqual(validarRealizado({fecha:'2026-10-02',equipos:'',observaciones:' Hecho '},'2026-10-02'),{fecha:'2026-10-02',equipos:null,observaciones:'Hecho'})
