@@ -75,12 +75,13 @@ export function prepararAvance(catalogo, ordenes, anio, vuelta, corte, declaraci
     const locales = catalogo.filter(l => l.activo && l.marca === marca)
     const registros = incluidas.filter(o => o.marca === marca)
     // Un negocio cuenta una sola vez, aunque tenga marca manual y órdenes del Excel.
-    const realizados = new Set(registros.map(o => o.local.id))
+    const finalizados = new Set(registros.map(o => o.local.id))
+    const realizados = new Set(finalizados)
     for (const local of locales) {
       if (declaradas.some(d => d.marca === marca && d.codigo === local.codigo && local.meses.includes(Number(d.mes)))) realizados.add(local.id)
     }
     const atendidos = realizados.size
-    return { marca, nombre, asignados: locales.length, atendidos, equipos: registros.length, pendiente: locales.length-atendidos, porcentaje: locales.length ? atendidos/locales.length*100 : 0 }
+    return { marca, nombre, asignados: locales.length, atendidos, finalizados: finalizados.size, porLiquidar: atendidos-finalizados.size, equipos: registros.length, pendiente: locales.length-atendidos, porcentaje: locales.length ? atendidos/locales.length*100 : 0 }
   })
   return { resumen, incluidas, atribuidas, sinFecha: atribuidas.filter(o => !o.fecha_realizada), sinLocal: atribuidas.filter(o => !o.local) }
 }

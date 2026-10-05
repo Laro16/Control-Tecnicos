@@ -1,4 +1,5 @@
 import { MESES_PREVENTIVOS, MARCAS_PREVENTIVOS } from './preventivos.js'
+import { ESTADOS_PREVENTIVOS } from './seguimientoPreventivos.js'
 const color = { oscuro: '#0f172a', azul: '#d9eef5', borde: '#172033', texto: '#172033' }
 function texto(ctx,valor,x,y,maximo) {
   let t=String(valor ?? '')
@@ -31,7 +32,7 @@ export async function descargarImagenPreventivos(datos,nombre) {
 }
 export function datosImagenAvance(resumen,{anio,vuelta,semana}) {
   const inicio=(vuelta-1)*4
-  return {titulo:`PREVENTIVOS · ${MESES_PREVENTIVOS[inicio].toUpperCase()} – ${MESES_PREVENTIVOS[inicio+3].toUpperCase()} ${anio}`,subtitulo:`Occidente · Corte semanal: ${semana.inicio} al ${semana.fin}`,secciones:resumen.map(r=>({titulo:r.nombre.toUpperCase(),anchos:[170,150,185,185,170,180,200],encabezados:['Agencia','Asignados','Realizados','Equipos en Excel','% realizado','Pendientes','% pendiente'],filas:[['OCCIDENTE',r.asignados,r.atendidos,r.equipos,`${r.porcentaje.toFixed(2)}%`,r.pendiente,`${(100-r.porcentaje).toFixed(2)}%`]]})),pie:'Realizados: marca manual o Excel, sin duplicar negocios. Equipos: órdenes únicas del Excel. Se respeta el mes programado.'}
+  return {titulo:`PREVENTIVOS · ${MESES_PREVENTIVOS[inicio].toUpperCase()} – ${MESES_PREVENTIVOS[inicio+3].toUpperCase()} ${anio}`,subtitulo:`Occidente · Corte semanal: ${semana.inicio} al ${semana.fin}`,secciones:resumen.map(r=>({titulo:r.nombre.toUpperCase(),anchos:[150,120,150,160,185,150,150,175],encabezados:['Agencia','Asignados','Finalizados','Por liquidar','Equipos en Excel','% realizado','Pendientes','% pendiente'],filas:[['OCCIDENTE',r.asignados,r.finalizados,r.porLiquidar,r.equipos,`${r.porcentaje.toFixed(2)}%`,r.pendiente,`${(100-r.porcentaje).toFixed(2)}%`]]})),pie:'Por liquidar: marca manual sin Excel. Finalizado: orden válida en Excel. % realizado: ambos. Equipos: órdenes únicas.'}
 }
 
 export function datosImagenProgramacion(seguimiento, { tipo, anio, mes }) {
@@ -40,10 +41,10 @@ export function datosImagenProgramacion(seguimiento, { tipo, anio, mes }) {
   return {
     titulo: `${MARCAS_PREVENTIVOS[tipo].toUpperCase()} · ${MESES_PREVENTIVOS[mes-1].toUpperCase()} ${anio}`,
     subtitulo: `Occidente · ${registros.length} restaurantes programados`,
-    secciones: [{ titulo: 'PROGRAMACIÓN MENSUAL', anchos: [90,460,150,160,150,230],
+    secciones: [{ titulo: 'PROGRAMACIÓN MENSUAL', anchos: [90,380,150,160,230,230],
       encabezados: ['Código','Restaurante','Semana','Equipos previstos','Estado','Equipos en Excel'],
-      filas: registros.map(({local,realizado,ordenes}) => [local.codigo,local.nombre,local.semana||'—',local.equipos??'—',realizado?'Realizado':'Pendiente',ordenes.length||'—']),
+      filas: registros.map(({local,estado,ordenes}) => [local.codigo,local.nombre,local.semana||'—',local.equipos??'—',ESTADOS_PREVENTIVOS[estado],ordenes.length||'—']),
     }],
-    pie: 'Realizado: marca manual o Excel, sin importar el estado de la orden. Equipos: órdenes únicas. Se excluyen los puntos cerrados.',
+    pie: 'Pendiente de liquidar: marca manual sin Excel. Finalizado: orden válida en Excel, sin importar su estado. Equipos: órdenes únicas.',
   }
 }

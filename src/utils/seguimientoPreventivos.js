@@ -1,6 +1,8 @@
 import { atribuirOrden } from './preventivos.js'
 
 export const claveSeguimiento = (local, anio, mes) => `${local.marca}:${local.codigo}:${Number(anio)}:${Number(mes)}`
+export const ESTADOS_PREVENTIVOS = { pendiente: 'Pendiente', 'por-liquidar': 'Pendiente de liquidar', finalizado: 'Finalizado' }
+const prioridadEstado = { pendiente: 0, 'por-liquidar': 1, finalizado: 2 }
 
 // Siciliana sigue almacenada bajo GRANJERO para conservar órdenes y declaraciones.
 // El prefijo 7 sólo clasifica restaurantes de esa marca, nunca los Campero.
@@ -31,8 +33,8 @@ export function prepararSeguimiento(catalogo, ordenes, declaraciones, anio, mes)
     const enExcel = registros.length > 0
     const realizado = Boolean(declaracion) || enExcel
     return { local, declaracion, ordenes: registros, enExcel, realizado,
-      estado: realizado ? 'realizado' : 'pendiente' }
-  }).sort((a, b) => Number(a.realizado) - Number(b.realizado)
+      estado: enExcel ? 'finalizado' : declaracion ? 'por-liquidar' : 'pendiente' }
+  }).sort((a, b) => prioridadEstado[a.estado] - prioridadEstado[b.estado]
     || a.local.semana.localeCompare(b.local.semana, 'es', { numeric: true }) || a.local.codigo.localeCompare(b.local.codigo, 'es', { numeric: true }))
 }
 

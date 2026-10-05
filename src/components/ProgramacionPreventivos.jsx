@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { Archive, Check, ChevronDown, Clock3, MapPin, Phone, X } from 'lucide-react'
 import { MESES_PREVENTIVOS, MARCAS_PREVENTIVOS } from '../utils/preventivos.js'
-import { claveSeguimiento, validarRealizado, tipoRestaurantePreventivo, TIPOS_RESTAURANTE_PREVENTIVO } from '../utils/seguimientoPreventivos.js'
+import { claveSeguimiento, validarRealizado, tipoRestaurantePreventivo, TIPOS_RESTAURANTE_PREVENTIVO, ESTADOS_PREVENTIVOS } from '../utils/seguimientoPreventivos.js'
 import DetalleOrdenesPreventivos from './DetalleOrdenesPreventivos'
 
-const estados = { pendiente: 'Pendiente', realizado: 'Realizado' }
-const colores = { pendiente: 'bg-slate-100 text-slate-800', realizado: 'bg-emerald-100 text-emerald-900' }
+const colores = { pendiente: 'bg-slate-100 text-slate-800', 'por-liquidar': 'bg-amber-100 text-amber-900', finalizado: 'bg-emerald-100 text-emerald-900' }
 const campo = 'control-field w-full'
 
 export default function ProgramacionPreventivos({ registros, declaraciones, anio, mes, tecnico, usuarioId, listo, ocupado, hoy, guardar, recargar, cambiarMes, cerrarLocal, cierresListos, excluirOrden, exclusionesListas }) {
@@ -41,13 +40,13 @@ export default function ProgramacionPreventivos({ registros, declaraciones, anio
     finally { setEnviando(false) }
   }
   return <section className="space-y-4" aria-label="Seguimiento de los mantenimientos">
-    <div className="grid grid-cols-2 gap-2 sm:gap-4">{[['pendiente','Pendientes'],['realizado','Realizados']].map(([estado, titulo]) => <button key={estado} type="button" aria-pressed={filtro === estado} onClick={() => setFiltro(estado)} className={`card min-h-20 p-3 text-left ${filtro === estado ? 'ring-2 ring-sky-500' : ''}`}><span className="block text-[11px] font-bold text-slate-600">{titulo}</span><span className="mt-1 block text-2xl font-black">{coincidentes.filter(r => r.estado === estado).length}</span></button>)}</div>
+    <div className="grid grid-cols-3 gap-2 sm:gap-4">{[['pendiente','Pendientes'],['por-liquidar','Pendientes de liquidar'],['finalizado','Finalizados']].map(([estado, titulo]) => <button key={estado} type="button" aria-pressed={filtro === estado} onClick={() => setFiltro(estado)} className={`card min-h-24 p-3 text-left ${filtro === estado ? 'ring-2 ring-sky-500' : ''}`}><span className="block text-[11px] font-bold text-slate-600">{titulo}</span><span className="mt-1 block text-2xl font-black">{coincidentes.filter(r => r.estado === estado).length}</span></button>)}</div>
     <div className="card grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
       <label className="text-xs font-bold">Mes programado<select className={`${campo} mt-1`} value={mes} onChange={e => cambiarMes(Number(e.target.value))}>{MESES_PREVENTIVOS.map((nombre, i) => <option key={nombre} value={i+1}>{nombre}</option>)}</select></label>
       <label className="text-xs font-bold">Restaurantes<select className={`${campo} mt-1`} value={marca} onChange={e => setMarca(e.target.value)}><option value="">Todas las marcas</option>{Object.entries(MARCAS_PREVENTIVOS).map(([id, nombre]) => <option key={id} value={id}>{nombre}</option>)}</select></label>
-      <label className="text-xs font-bold">Mostrar<select className={`${campo} mt-1`} value={filtro} onChange={e => setFiltro(e.target.value)}><option value="todos">Todos</option><option value="pendiente">Pendientes</option><option value="realizado">Realizados</option></select></label>
+      <label className="text-xs font-bold">Mostrar<select className={`${campo} mt-1`} value={filtro} onChange={e => setFiltro(e.target.value)}><option value="todos">Todos</option><option value="pendiente">Pendientes</option><option value="por-liquidar">Pendientes de liquidar</option><option value="finalizado">Finalizados</option></select></label>
       <label className="text-xs font-bold">Buscar<input className={`${campo} mt-1`} value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder="Código, nombre o dirección"/></label>
-      <p className="text-xs leading-relaxed text-slate-600 sm:col-span-2 lg:col-span-4">Realizado: lo marca un administrador o técnico, o se detecta una orden del mes programado en el Excel, sin importar su estado. Pendiente: no hay orden ni marca manual. Las cantidades declaradas y las del Excel se conservan por separado.</p>
+      <p className="text-xs leading-relaxed text-slate-600 sm:col-span-2 lg:col-span-4">Pendiente: aún no tiene marca ni orden. Pendiente de liquidar: lo marcó un administrador o técnico y falta su registro en el Excel. Finalizado: ya tiene una orden válida del mes programado en el Excel, sin importar el estado de la orden.</p>
     </div>
     <div className="flex flex-wrap items-center justify-between gap-2">
       <p className="text-xs font-semibold text-slate-600">{visibles.length} de {coincidentes.length} restaurantes · {MESES_PREVENTIVOS[mes-1]} {anio} · Pendientes primero</p>
@@ -64,7 +63,7 @@ export default function ProgramacionPreventivos({ registros, declaraciones, anio
           <div>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <p className="text-xs font-black text-sky-700">#{local.codigo} · {TIPOS_RESTAURANTE_PREVENTIVO[tipoRestaurantePreventivo(local)]}</p>
-              <span className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold ${colores[registro.estado]}`}>{realizado ? <Check size={13} aria-hidden="true"/> : <Clock3 size={13} aria-hidden="true"/>}{estados[registro.estado]}</span>
+              <span className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold ${colores[registro.estado]}`}>{enExcel ? <Check size={13} aria-hidden="true"/> : <Clock3 size={13} aria-hidden="true"/>}{ESTADOS_PREVENTIVOS[registro.estado]}</span>
             </div>
             <h3><button type="button" aria-expanded={abierto} aria-controls={idDetalle} onClick={alternar} className="min-h-7 text-left text-base font-black leading-snug hover:text-sky-700">{local.nombre}</button></h3>
             <p className="mt-2 text-xs font-semibold text-slate-600">{MESES_PREVENTIVOS[mes-1]} · {local.semana || 'Sin semana asignada'}</p>
@@ -84,7 +83,7 @@ export default function ProgramacionPreventivos({ registros, declaraciones, anio
         <p className="text-xs font-bold">{TIPOS_RESTAURANTE_PREVENTIVO[tipoRestaurantePreventivo(local)]} · #{local.codigo} · {MESES_PREVENTIVOS[mes-1]} {anio}</p>
         <p className="mt-3 break-words text-xs text-slate-600">{local.direccion || 'Sin dirección en calendario'}</p>
         <p className="mt-2 text-xs font-semibold text-slate-600">{local.semana || 'Sin semana asignada'} · {local.equipos == null ? 'Sin cantidad prevista' : `${local.equipos} equipos previstos`}</p>
-        {declaracion && <div className="mt-3 rounded-lg bg-emerald-50 p-3 text-xs text-emerald-950"><p className="font-bold">{declaracion.realizado_nombre}</p><p className="mt-1">Realizado: {declaracion.fecha_realizado.split('-').reverse().join('/')}{declaracion.equipos_declarados ? ` · ${declaracion.equipos_declarados} equipos declarados` : ''}</p>{declaracion.actualizado_en && <p className="mt-1 text-[11px]">Registro: {new Date(declaracion.actualizado_en).toLocaleString('es-GT',{timeZone:'America/Guatemala',dateStyle:'short',timeStyle:'short'})}</p>}{declaracion.observaciones && <p className="mt-2 whitespace-pre-wrap break-words">{declaracion.observaciones}</p>}</div>}
+        {declaracion && <div className={`mt-3 rounded-lg p-3 text-xs ${enExcel ? 'bg-emerald-50 text-emerald-950' : 'bg-amber-50 text-amber-950'}`}><p className="font-bold">{declaracion.realizado_nombre}</p><p className="mt-1">Realizado: {declaracion.fecha_realizado.split('-').reverse().join('/')}{declaracion.equipos_declarados ? ` · ${declaracion.equipos_declarados} equipos declarados` : ''}</p>{declaracion.actualizado_en && <p className="mt-1 text-[11px]">Registro: {new Date(declaracion.actualizado_en).toLocaleString('es-GT',{timeZone:'America/Guatemala',dateStyle:'short',timeStyle:'short'})}</p>}{declaracion.observaciones && <p className="mt-2 whitespace-pre-wrap break-words">{declaracion.observaciones}</p>}</div>}
         {enExcel && <div className="mt-3 rounded-lg border border-slate-300 bg-white p-3"><DetalleOrdenesPreventivos ordenes={registro.ordenes} excluirOrden={tecnico ? undefined : excluirOrden} deshabilitado={!exclusionesListas||ocupado}/></div>}
         <div className="flex flex-wrap gap-2 pt-4">
           {corregible && <button type="button" className="btn-ghost min-h-11" disabled={!listo || ocupado} onClick={() => abrir(registro)}>Editar reporte</button>}
@@ -102,7 +101,7 @@ export default function ProgramacionPreventivos({ registros, declaraciones, anio
         <div className="flex items-start justify-between gap-3"><div><h2 id="titulo-realizado" className="text-lg font-black">{seleccion.deshacer ? 'Deshacer realizado' : 'Reportar preventivo realizado'}</h2><p className="mt-1 text-sm">#{seleccion.local.codigo} · {seleccion.local.nombre}</p><p className="mt-1 text-xs text-slate-600">{MESES_PREVENTIVOS[seleccion.mes-1]} {seleccion.anio}</p></div><button type="button" aria-label="Cerrar" disabled={enviando} onClick={cerrar} className="btn-ghost"><X size={17}/></button></div>
         {!seleccion.deshacer && <><label className="grid gap-1 text-xs font-bold">Fecha en que se realizó<input required type="date" max={hoy} value={form.fecha} onChange={e => setForm(p => ({ ...p, fecha: e.target.value }))} className={campo}/></label><label className="grid gap-1 text-xs font-bold">Equipos trabajados (opcional)<input type="number" min="1" max="500" step="1" value={form.equipos} onChange={e => setForm(p => ({ ...p, equipos: e.target.value }))} className={campo}/></label></>}
         <label className="grid gap-1 text-xs font-bold">{seleccion.deshacer ? 'Motivo de la corrección' : 'Observación (opcional)'}<textarea required={seleccion.deshacer} rows={3} maxLength={1500} value={form.observaciones} onChange={e => setForm(p => ({ ...p, observaciones: e.target.value }))} className={campo} placeholder="Equipos pendientes, acceso al negocio o detalles para administración…"/></label>
-        <p className="flex gap-2 text-xs text-slate-600"><Clock3 size={16} className="shrink-0"/> Esta marca cuenta como realizado. Se guardan tu nombre, la fecha y los equipos declarados, sin modificar ni duplicar las órdenes del Excel.</p>
+        <p className="flex gap-2 text-xs text-slate-600"><Clock3 size={16} className="shrink-0"/> Al guardar quedará Pendiente de liquidar hasta que aparezca una orden válida del mes en el Excel. Se conservan tu nombre, fecha y equipos declarados.</p>
         {error && <div role="alert" className="text-sm text-rose-700">{error}<button type="button" disabled={enviando} onClick={()=>{cerrar();recargar()}} className="btn-ghost mt-2 block">Actualizar datos</button></div>}
         <div className="flex justify-end gap-2"><button type="button" disabled={enviando} className="btn-ghost min-h-11" onClick={cerrar}>Cancelar</button><button type="submit" disabled={enviando} className="btn-primary min-h-11">{enviando ? 'Guardando…' : seleccion.deshacer ? 'Confirmar corrección' : 'Guardar realizado'}</button></div>
       </form>}
