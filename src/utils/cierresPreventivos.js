@@ -4,7 +4,10 @@ export function combinarCatalogoLocales(calendario, guardados) {
   const porId = new Map(calendario.map(local => [local.id, local]))
   for (const guardado of guardados) {
     const id = `${guardado.marca}:${guardado.codigo}`
-    porId.set(id, { direccion: '', telefono: '', semana: '', equipos: null, ...porId.get(id), ...guardado, id })
+    const base={direccion:'',telefono:'',semana:'',equipos:null,...porId.get(id)}
+    const manual=Number(guardado.revision_catalogo)>0
+    const detalles=Object.fromEntries(['direccion','telefono','semana','equipos'].map(campo=>[campo,manual?(guardado[campo]??(campo==='equipos'?null:'')):(guardado[campo]??base[campo])]))
+    porId.set(id, { ...base, ...guardado, ...detalles, id })
   }
   return [...porId.values()]
 }

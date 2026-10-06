@@ -1,6 +1,7 @@
 import { supabase } from '../supabase.jsx'
 import { extraerOrdenesPreventivas } from './preventivos.js'
 import { validarExclusionOrden } from './exclusionesPreventivos.js'
+import { validarLocalPreventivo } from './catalogoPreventivos.js'
 export async function importarPreventivos(filas) {
   const resultado = extraerOrdenesPreventivas(filas)
   for (let inicio=0; inicio<resultado.ordenes.length; inicio+=200) {
@@ -111,5 +112,14 @@ export async function guardarExclusionPreventivo(orden, excluida, motivo) {
   })
   if(error) throw error
   if(!data?.revision) throw new Error('No se recibió confirmación. Actualiza antes de intentar de nuevo.')
+  return data
+}
+
+export async function guardarCatalogoLocalPreventivo(form, local) {
+  const {data,error}=await supabase.rpc('guardar_local_preventivo',{
+    p_datos:validarLocalPreventivo(form,[],!local),p_nuevo:!local,p_revision:local?.revision_catalogo??0,
+  })
+  if(error) throw error
+  if(!data?.revision_catalogo) throw new Error('No se recibió confirmación. Actualiza antes de intentar de nuevo.')
   return data
 }

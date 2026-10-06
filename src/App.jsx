@@ -8,6 +8,7 @@ import Dashboard from './components/Dashboard'
 import Vacaciones from './components/Vacaciones'
 import Personal from './components/Personal'
 import Preventivos from './components/Preventivos'
+import PreventivosTrimestrales from './components/PreventivosTrimestrales'
 import PortalTecnico from './components/PortalTecnico'
 import Viaticos from './components/Viaticos'
 import Notificaciones from './components/Notificaciones'
@@ -62,7 +63,7 @@ export default function App() {
       const esTecnico = personal?.length === 1 && personal[0].activo !== false
       setPerfilTecnico(esTecnico ? personal[0] : null)
       setAcceso(esTecnico ? 'tecnico' : 'sin-rol')
-      if (esTecnico && !['#viaticos', '#preventivos'].includes(window.location.hash)) window.location.hash = '#viaticos'
+      if (esTecnico && !['#viaticos', '#preventivos', '#preventivos-shell', '#preventivos-taco-bell'].includes(window.location.hash)) window.location.hash = '#viaticos'
     }
     function recibirSesion(sesion) {
       const usuario = sesion?.user?.id || null
@@ -77,7 +78,7 @@ export default function App() {
     })
     return () => { vigente = false; subscription.unsubscribe() }
   }, [])
-  if (acceso === 'tecnico') return <PortalTecnico key={usuarioPortalId} persona={perfilTecnico} usuarioId={usuarioPortalId} inicial={window.location.hash === '#preventivos' ? 'preventivos' : 'viaticos'}/>
+  if (acceso === 'tecnico') return <PortalTecnico key={usuarioPortalId} persona={perfilTecnico} usuarioId={usuarioPortalId} inicial={['#preventivos', '#preventivos-shell', '#preventivos-taco-bell'].includes(window.location.hash) ? window.location.hash.slice(1) : 'viaticos'}/>
   return portalViaticos || acceso !== 'admin' && acceso !== 'comprobando'
     ? <div className="min-h-screen bg-slate-50 p-4 sm:p-8"><div className="mx-auto max-w-6xl"><Viaticos portal /></div></div>
     : acceso === 'comprobando'
@@ -86,7 +87,7 @@ export default function App() {
 }
 
 function AplicacionPrincipal() {
-  const [tab, setTab] = useState(() => window.location.hash === '#preventivos' ? 'preventivos' : 'dashboard')
+  const [tab, setTab] = useState(() => ['#preventivos', '#preventivos-shell', '#preventivos-taco-bell'].includes(window.location.hash) ? window.location.hash.slice(1) : 'dashboard')
   const [menuMovilAbierto, setMenuMovilAbierto] = useState(false)
   const [esVistaMovil, setEsVistaMovil] = useState(() => window.matchMedia('(max-width: 1023px)').matches)
   const [barraLateralOculta, setBarraLateralOculta] = useState(() => localStorage.getItem('ticketmanager_sidebar_hidden') === 'true')
@@ -360,6 +361,8 @@ function AplicacionPrincipal() {
     { id: 'garantias', label: 'Garantías', icon: ShieldCheck },
     { id: 'tablas', label: 'Reportes', icon: BarChart3 },
     { id: 'preventivos', label: 'Preventivos', icon: CalendarDays },
+    { id: 'preventivos-shell', label: 'Shell', icon: CalendarDays },
+    { id: 'preventivos-taco-bell', label: 'Taco Bell', icon: CalendarDays },
     { id: 'pendientes', label: 'Gestión', icon: ClipboardList },
     { id: 'personal', label: 'Personal', icon: Users },
     { id: 'vacaciones', label: 'Vacaciones', icon: CalendarDays },
@@ -603,6 +606,8 @@ function AplicacionPrincipal() {
         </div>
         {tab === 'personal' && <Personal />}
         {tab === 'preventivos' && <Preventivos />}
+        {tab === 'preventivos-shell' && <PreventivosTrimestrales key="SHELL" marca="SHELL" />}
+        {tab === 'preventivos-taco-bell' && <PreventivosTrimestrales key="TACO_BELL" marca="TACO_BELL" />}
         {tab === 'viaticos' && <Viaticos />}
           </main>
         </section>

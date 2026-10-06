@@ -35,7 +35,7 @@ export function DialogoEstadoLocal({ local, hoy, guardar, cerrar }) {
   </Dialogo>
 }
 
-export default function CierresPreventivos({ locales, ordenes, declaraciones, historial, tecnico, listo, ocupado, reactivar, excluirOrden, exclusionesListas }) {
+export default function CierresPreventivos({ locales, ordenes, declaraciones, historial, tecnico, listo, ocupado, reactivar, excluirOrden, exclusionesListas, editarLocal, catalogoManualListo }) {
   const [marca, setMarca] = useState('')
   const [busqueda, setBusqueda] = useState('')
   const termino = busqueda.trim().toLocaleLowerCase('es')
@@ -75,6 +75,7 @@ export default function CierresPreventivos({ locales, ordenes, declaraciones, hi
           </div>
         </details>
         {!tecnico && <button type="button" className="btn-ghost flex min-h-11 w-full items-center justify-center gap-2" disabled={!listo || ocupado} onClick={()=>reactivar(local)}><RotateCcw size={15}/> Reactivar punto de venta</button>}
+        {!tecnico && <button type="button" className="btn-ghost min-h-11 w-full" disabled={!catalogoManualListo || ocupado} onClick={()=>editarLocal(local)}>Editar programación</button>}
       </article>
     })}</div>
     {!visibles.length && <p className="card p-5 text-sm text-slate-600">{locales.length ? 'No hay puntos cerrados con esos filtros.' : 'Todavía no hay puntos de venta cerrados.'}</p>}

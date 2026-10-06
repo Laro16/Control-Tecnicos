@@ -17,6 +17,7 @@ import { crearPDFGarantias } from '../utils/pdfGarantias'
 import EstadoParticulares from './EstadoParticulares'
 import { marcaDesdeCliente } from '../utils/preventivos.js'
 import { importarPreventivos } from '../utils/preventivosPersistencia.js'
+import { importarTrimestrales } from '../utils/preventivosTrimestralesPersistencia.js'
 
 const TODAY = () => {
   const d = new Date()
@@ -276,6 +277,7 @@ export default function ModuloTecnicos({
         const listaTemporal = []
         const filasParticulares = []
         const filasPreventivos = []
+        const filasTrimestrales = []
         for (let i = headerRowIndex + 1; i < rawMatrix.length; i++) {
           const row = rawMatrix[i]
           const fila = {}
@@ -284,6 +286,9 @@ export default function ModuloTecnicos({
           // fichas de órdenes finalizadas: su pago y documentos son manuales.
           if (normalizarTexto(fila.CLIENTE) === 'PARTICULAR') filasParticulares.push(fila)
           if (marcaDesdeCliente(fila.CLIENTE)) filasPreventivos.push(fila)
+          // El CLIENTE exacto de Shell/Taco Bell se configura en sus menús.
+          // Se revisa antes de filtrar estados, igual que el resto de preventivos.
+          filasTrimestrales.push(fila)
           let estadoOriginal = String(fila['ESTADO'] || '').trim()
           let estadoLimpio = normalizarTexto(estadoOriginal)
           const esAsignadoTecnico = estadoLimpio.includes('ASIGNAD') && estadoLimpio.includes('TECNICO')
@@ -373,6 +378,12 @@ export default function ModuloTecnicos({
             : '')
         } catch (fallo) {
           setEstadoPreventivos(`${fallo.message}. Activa activar_preventivos.sql en Supabase y vuelve a subir este Excel. Los demás datos sí se cargaron.`)
+        }
+        try {
+          const resultado = await importarTrimestrales(filasTrimestrales)
+          if (resultado.ordenes.length || resultado.sinOrden) setEstadoPreventivos(actual => `${actual ? `${actual} ` : ''}${resultado.ordenes.length} órdenes Shell/Taco Bell guardadas sin duplicar.${resultado.sinOrden ? ` ${resultado.sinOrden} filas sin N° ORDEN no se contaron.` : ''}`)
+        } catch (fallo) {
+          setEstadoPreventivos(actual => `${actual ? `${actual} ` : ''}No se guardó Shell/Taco Bell: ${fallo.message}. Los demás datos sí se cargaron; revisa este módulo y vuelve a subir el Excel.`)
         }
         await importacionParticulares?.importar(filasParticulares, file.name)
       } catch {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Archive, Check, ChevronDown, Clock3, MapPin, Phone, X } from 'lucide-react'
+import { Archive, Check, ChevronDown, Clock3, Download, MapPin, Phone, X } from 'lucide-react'
 import { MESES_PREVENTIVOS, MARCAS_PREVENTIVOS } from '../utils/preventivos.js'
 import { claveSeguimiento, validarRealizado, tipoRestaurantePreventivo, TIPOS_RESTAURANTE_PREVENTIVO, ESTADOS_PREVENTIVOS } from '../utils/seguimientoPreventivos.js'
 import DetalleOrdenesPreventivos from './DetalleOrdenesPreventivos'
@@ -7,7 +7,7 @@ import DetalleOrdenesPreventivos from './DetalleOrdenesPreventivos'
 const colores = { pendiente: 'bg-slate-100 text-slate-800', 'por-liquidar': 'bg-amber-100 text-amber-900', finalizado: 'bg-emerald-100 text-emerald-900' }
 const campo = 'control-field w-full'
 
-export default function ProgramacionPreventivos({ registros, declaraciones, anio, mes, tecnico, usuarioId, listo, ocupado, hoy, guardar, recargar, cambiarMes, cerrarLocal, cierresListos, excluirOrden, exclusionesListas }) {
+export default function ProgramacionPreventivos({ registros, declaraciones, anio, mes, tecnico, usuarioId, listo, ocupado, hoy, guardar, recargar, cambiarMes, cerrarLocal, cierresListos, excluirOrden, exclusionesListas, editarLocal, catalogoManualListo, descargarFiltrados }) {
   const [filtro, setFiltro] = useState('todos')
   const [busqueda, setBusqueda] = useState('')
   const [marca, setMarca] = useState('')
@@ -50,7 +50,10 @@ export default function ProgramacionPreventivos({ registros, declaraciones, anio
     </div>
     <div className="flex flex-wrap items-center justify-between gap-2">
       <p className="text-xs font-semibold text-slate-600">{visibles.length} de {coincidentes.length} restaurantes · {MESES_PREVENTIVOS[mes-1]} {anio} · Pendientes primero</p>
-      {visibles.length < coincidentes.length && <button type="button" className="btn-ghost min-h-11" onClick={() => setFiltro('todos')}>Ver todos los estados ({coincidentes.length})</button>}
+      <div className="flex flex-wrap gap-2">
+        {visibles.length < coincidentes.length && <button type="button" className="btn-ghost min-h-11" onClick={() => setFiltro('todos')}>Ver todos los estados ({coincidentes.length})</button>}
+        {!tecnico && <button type="button" className="btn-ghost inline-flex min-h-11 items-center gap-2 disabled:opacity-50" disabled={ocupado||!visibles.length} onClick={()=>descargarFiltrados(visibles)}><Download size={14}/> Descargar filtrados PNG</button>}
+      </div>
     </div>
     <div className="grid items-start gap-4 lg:grid-cols-2 2xl:grid-cols-3">{visibles.map(registro => {
       const { local, declaracion, realizado, enExcel } = registro
@@ -72,7 +75,7 @@ export default function ProgramacionPreventivos({ registros, declaraciones, anio
           <div className="space-y-1 border-y border-slate-300 py-3 text-xs text-slate-600">
             {declaracion && <p className="break-words">Marcado por: <span className="font-semibold">{declaracion.realizado_nombre || 'Administrador o técnico'}</span></p>}
             {enExcel && <p>{registro.ordenes.length} {registro.ordenes.length === 1 ? 'orden registrada' : 'órdenes registradas'} en el Excel</p>}
-            {!realizado && <p>Sin registro en Excel ni marca manual.</p>}
+            {!realizado && <p className="break-words leading-relaxed">{local.direccion?.trim() || 'Sin dirección registrada'}</p>}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {!realizado && <button type="button" aria-label="Marcar realizado" className="btn-primary min-h-11 flex-1" disabled={!listo || ocupado} onClick={() => abrir(registro)}><Check size={14} className="mr-1 inline"/>Marcar realizado</button>}
@@ -91,6 +94,7 @@ export default function ProgramacionPreventivos({ registros, declaraciones, anio
           {local.direccion && <a className="btn-ghost inline-flex min-h-11 items-center gap-1" target="_blank" rel="noopener noreferrer" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(local.direccion)}`}><MapPin size={14}/> Mapa</a>}
           {local.telefono && <a className="btn-ghost inline-flex min-h-11 items-center gap-1" href={`tel:${local.telefono.replace(/[^+\d]/g,'')}`}><Phone size={14}/> Llamar</a>}
           {!tecnico && <button type="button" className="btn-ghost inline-flex min-h-11 items-center gap-1" disabled={!cierresListos || ocupado} onClick={()=>cerrarLocal(local)}><Archive size={14}/> Marcar cerrado</button>}
+          {!tecnico && <button type="button" className="btn-ghost min-h-11" disabled={!catalogoManualListo || ocupado} onClick={()=>editarLocal(local)}>Editar programación</button>}
         </div>
         </div>
       </article>
