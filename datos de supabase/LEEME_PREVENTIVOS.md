@@ -4,7 +4,7 @@
 2. Publica la versión actualizada de la aplicación en Vercel.
 3. Vuelve a subir tu Excel diario desde Técnicos. Cada N° ORDEN se guarda una sola vez; una carga posterior actualiza la orden sin duplicarla ni borrar las asignaciones manuales.
 
-El calendario está en `src/Mantenimientos.xlsx`. Para actualizar restaurantes o meses, reemplaza ese archivo manteniendo los encabezados y publica nuevamente. Los locales con ESTADO 2 = CERRADO están excluidos. México queda pendiente de su catálogo.
+El calendario base está en `src/Mantenimientos.xlsx`. Los locales con ESTADO 2 = CERRADO están excluidos. México queda pendiente de su catálogo. Para altas y cambios cotidianos usa las opciones de la app descritas abajo, sin reemplazar el archivo.
 
 Se cuentan todos los estados. La fecha de atención es FECHA REALIZADA, nunca FECHA INGRESO. Una atención tardía se acredita al último mes programado anterior a su atención; en Por ubicar puedes asignar el mes cuando falta la fecha o el restaurante. Las órdenes sin fecha no aparecen como actividad de una semana específica. El avance es acumulado por vuelta hasta el cierre de la semana seleccionada; las asignaciones sin fecha cuentan en la vuelta elegida, sin afirmar cuándo se atendieron.
 
@@ -31,3 +31,15 @@ Sólo el administrador ve **Excluir orden**, por número de orden, en Por ubicar
 Una exclusión se almacena aparte del Excel: volver a importar una orden la actualiza, pero no la reactiva. No se borra ninguna orden. Las excluidas no cuentan en avances, equipos, actividad semanal ni Por ubicar; tampoco se envían al portal técnico. Restaurarlas recupera su mes programado, o las devuelve a Por ubicar si faltaba asignarlo.
 
 Las demás órdenes y marcas manuales no se modifican. El preventivo vuelve a Pendiente sólo si no tiene otra orden válida ni marca manual de Realizado. No se eliminan automáticamente órdenes por estar ausentes en un Excel nuevo.
+
+## Agregar tiendas y cambiar su programación
+
+Con Preventivos y Cierres ya instalados, ejecuta completo únicamente `activar_catalogo_manual_preventivos.sql` y publica la app actualizada. No repitas después los scripts antiguos del calendario, porque reemplazarían su función de sincronización. Este script es repetible y conserva las órdenes, marcas, cierres y exclusiones.
+
+El administrador tiene **Nueva tienda**: marca, código, nombre y meses de mantenimiento; también puede indicar dirección, teléfono, semana y equipos previstos. El ciclo repite el mes cada cuatro meses (por ejemplo: febrero, junio y octubre). Un código no puede repetirse dentro de la misma marca, aunque la ficha esté cerrada. Las tiendas nuevas se guardan en Supabase y no desaparecen al cargar el Excel diario.
+
+En el detalle de cada ficha está **Editar programación**. Los cambios guardados prevalecen sobre el calendario base. No se cambian el código ni la marca, y editar no borra órdenes ni marcas anteriores ni reactiva una tienda cerrada. **Marcar cerrado** la mueve a **Cerrados**, donde conserva su historial y se puede reactivar. Sólo el administrador puede agregar, editar, cerrar o reactivar; los técnicos consultan el calendario y reportan lo realizado.
+
+La imagen mensual tiene encabezado anaranjado y filas verdes para **Finalizado**, amarillas para **Pendiente de liquidar** y blancas/grises para **Pendiente**. Cada fila conserva el texto del estado para no depender únicamente del color.
+
+Las fichas pendientes muestran directamente la dirección del punto de venta, o «Sin dirección registrada» si falta. **Descargar filtrados PNG** guarda únicamente las fichas visibles según mes/año, marca, estado y búsqueda; incluye nombre, semana, dirección completa, estado y cantidades de equipos. Las direcciones largas se distribuyen en varias líneas. Las descargas completas por marca y el avance semanal se mantienen. Este cambio no necesita SQL adicional.
