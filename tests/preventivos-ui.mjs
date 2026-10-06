@@ -16,7 +16,7 @@ const backend=`
 const usuario='00000000-0000-0000-0000-000000000002';
 let ordenes=JSON.parse(sessionStorage.getItem('ordenes')||'[]'),declaraciones=[],fallar=false;
 let exclusiones=JSON.parse(sessionStorage.getItem('exclusiones')||'[]'),historialExclusiones=JSON.parse(sessionStorage.getItem('historialExclusiones')||'[]');
-let locales=JSON.parse(sessionStorage.getItem('locales')||'null')||${JSON.stringify(catalogo.map(l=>({...l,activo_calendario:l.activo,activo_manual:null,revision_estado:0})))},cierres=JSON.parse(sessionStorage.getItem('cierres')||'[]');
+let locales=JSON.parse(sessionStorage.getItem('locales')||'null')||${JSON.stringify(catalogo.map(l=>({...l,activo_calendario:l.activo,activo_manual:null,revision_estado:0,revision_catalogo:0,origen_manual:false})))},cierres=JSON.parse(sessionStorage.getItem('cierres')||'[]');
 const copiar=d=>JSON.parse(JSON.stringify(d));
 export function setOrdenes(d){ordenes=d;sessionStorage.setItem('ordenes',JSON.stringify(d))}
 export function setFallar(d){fallar=d}
@@ -26,7 +26,8 @@ from(tabla){if(tabla==='preventivos_ordenes_exclusiones')return query(exclusione
 rpc(nombre,p){
 if(nombre==='cambiar_exclusion_orden_preventivo'){if(fallar)return Promise.resolve({error:{message:'Conexión de prueba falló'}});const anterior=exclusiones.find(e=>e.numero_orden===p.p_numero_orden);if((anterior?.revision||0)!==p.p_revision)return Promise.resolve({error:{message:'La exclusión cambió'}});const data={numero_orden:p.p_numero_orden,excluida:p.p_excluida,motivo:p.p_motivo,autor_nombre:'Administrador de prueba',actualizado_en:'2026-10-02T14:00:00Z',revision:p.p_revision+1};exclusiones=exclusiones.filter(e=>e!==anterior);exclusiones.push(data);historialExclusiones.push({...data,id:String(historialExclusiones.length+1),registrado_en:data.actualizado_en});sessionStorage.setItem('exclusiones',JSON.stringify(exclusiones));sessionStorage.setItem('historialExclusiones',JSON.stringify(historialExclusiones));return Promise.resolve({data:copiar(data),error:null})}
 if(nombre==='consultar_ordenes_preventivos')return query(ordenes.filter(o=>!exclusiones.some(e=>e.numero_orden===o.numero_orden&&e.excluida)));
-if(nombre==='sincronizar_catalogo_preventivos'){for(const l of p.p_locales){const actual=locales.find(a=>a.codigo===l.codigo&&a.marca===l.marca);if(actual)Object.assign(actual,{...l,activo_calendario:l.activo,activo:actual.activo_manual??l.activo});}return Promise.resolve({error:null})}
+if(nombre==='sincronizar_catalogo_preventivos'){for(const l of p.p_locales){const actual=locales.find(a=>a.codigo===l.codigo&&a.marca===l.marca);if(actual)Object.assign(actual,{...(actual.revision_catalogo>0?{}:l),activo_calendario:l.activo,activo:actual.activo_manual??l.activo});}return Promise.resolve({error:null})}
+if(nombre==='guardar_local_preventivo'){if(fallar)return Promise.resolve({error:{message:'Conexión de prueba falló'}});const d=p.p_datos,actual=locales.find(l=>l.marca===d.marca&&l.codigo===d.codigo);if(p.p_nuevo&&actual)return Promise.resolve({error:{message:'Ese código ya existe'}});if(!p.p_nuevo&&actual.revision_catalogo!==p.p_revision)return Promise.resolve({error:{message:'La programación cambió'}});const data={...(actual||{activo:true,activo_manual:true,activo_calendario:false,revision_estado:0,origen_manual:true}),...d,meses:[d.mes_base,d.mes_base+4,d.mes_base+8],revision_catalogo:p.p_revision+1};if(actual)Object.assign(actual,data);else locales.push(data);sessionStorage.setItem('locales',JSON.stringify(locales));return Promise.resolve({data:copiar(data),error:null})}
 if(nombre==='cambiar_estado_local_preventivo'){if(fallar)return Promise.resolve({data:null,error:{message:'Conexión de prueba falló'}});const actual=locales.find(l=>l.codigo===p.p_codigo&&l.marca===p.p_marca);if(actual.revision_estado!==p.p_revision)return Promise.resolve({error:{message:'Revisión desactualizada'}});Object.assign(actual,{activo:!p.p_cerrado,activo_manual:!p.p_cerrado,fecha_cierre:p.p_cerrado?p.p_fecha:null,motivo_cierre:p.p_motivo,revision_estado:p.p_revision+1});cierres.push({id:String(cierres.length+1),marca:p.p_marca,codigo:p.p_codigo,cerrado:p.p_cerrado,fecha_cierre:actual.fecha_cierre,motivo:p.p_motivo,registrado_en:'2026-10-02T14:00:00Z'});sessionStorage.setItem('locales',JSON.stringify(locales));sessionStorage.setItem('cierres',JSON.stringify(cierres));return Promise.resolve({data:copiar(actual),error:null})}
 if(nombre==='marcar_realizado_preventivo'){if(fallar)return Promise.resolve({data:null,error:{message:'Conexión de prueba falló'}});const anterior=declaraciones.find(d=>d.codigo===p.p_codigo&&d.marca===p.p_marca&&d.anio===p.p_anio&&d.mes===p.p_mes);if((anterior?.revision||0)!==p.p_revision)return Promise.resolve({error:{message:'Revisión desactualizada'}});const data={marca:p.p_marca,codigo:p.p_codigo,anio:p.p_anio,mes:p.p_mes,realizado:p.p_realizado,fecha_realizado:p.p_fecha,equipos_declarados:p.p_equipos,observaciones:p.p_observaciones,realizado_nombre:'Ana Técnica',realizado_por:usuario,revision:p.p_revision+1,actualizado_en:'2026-10-02T14:00:00Z'};declaraciones=declaraciones.filter(d=>d!==anterior);declaraciones.push(data);return Promise.resolve({data:copiar(data),error:null})}throw Error('RPC inesperada: '+nombre)}};
 `
@@ -213,15 +214,105 @@ try {
   await page.getByRole('button',{name:'Confirmar restauración'}).click()
   await page.getByRole('button',{name:'Por ubicar (1)',exact:true}).click()
   await page.getByRole('button',{name:'Excluir orden 407456',exact:true}).waitFor()
+  // Alta manual, reintento, persistencia, edición y colores del PNG mensual.
+  await page.getByRole('button',{name:'Nueva tienda',exact:true}).click()
+  const alta=page.getByRole('dialog',{name:'Nueva tienda',exact:true})
+  await alta.getByLabel('Código de tienda').fill('999001')
+  await alta.getByLabel('Nombre de tienda').fill('GRANJERO NUEVO DE PRUEBA')
+  await alta.getByLabel('Meses de mantenimiento').selectOption('2')
+  await alta.getByLabel('Semana (opcional)').fill('SEMANA 2')
+  await alta.getByLabel('Equipos previstos (opcional)').fill('12')
+  await alta.getByLabel('Dirección (opcional)').fill('Dirección de la tienda nueva')
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'Formulario móvil sin desbordamiento')
+  await page.screenshot({path:join(process.argv[3],'preventivos-nueva-tienda-movil.png')})
+  await page.evaluate(()=>window.__preventivosTest.setFallar(true))
+  await alta.getByRole('button',{name:'Guardar tienda',exact:true}).click()
+  await alta.getByRole('alert').filter({hasText:'Conexión de prueba falló'}).waitFor()
+  await page.evaluate(()=>window.__preventivosTest.setFallar(false))
+  await alta.getByRole('button',{name:'Guardar tienda',exact:true}).click()
+  await page.getByLabel('Buscar',{exact:true}).fill('999001')
+  const tiendaNueva=page.locator('article').filter({hasText:'#999001'}).first()
+  await tiendaNueva.getByText('GRANJERO NUEVO DE PRUEBA',{exact:true}).waitFor()
+  await page.reload({waitUntil:'domcontentloaded'})
+  await page.getByLabel('Buscar',{exact:true}).fill('999001')
+  await tiendaNueva.getByText('12 equipos previstos',{exact:true}).waitFor()
+  await tiendaNueva.locator(':scope > div').first().getByText('Dirección de la tienda nueva',{exact:true}).waitFor()
+  // La descarga recibe sólo las fichas visibles: búsqueda, marca, estado y mes.
+  await page.getByLabel(/^Restaurantes/).selectOption('GRANJERO')
+  await page.getByLabel(/^Mostrar/).selectOption('pendiente')
+  const filasExportadas=await page.evaluate(()=>{
+    const original=document.createElement.bind(document)
+    window.__textosPng=[]
+    document.createElement=function(nombre,...args){const elemento=original(nombre,...args);if(nombre==='canvas'){const ctx=elemento.getContext('2d'),fill=ctx.fillText.bind(ctx);ctx.fillText=function(texto,...pos){window.__textosPng.push(String(texto));return fill(texto,...pos)}}return elemento}
+    return true
+  })
+  assert.equal(filasExportadas,true)
+  const filtrada=page.waitForEvent('download')
+  await page.getByRole('button',{name:'Descargar filtrados PNG',exact:true}).click()
+  await (await filtrada).saveAs(join(process.argv[3],'preventivos-filtrado-direccion.png'))
+  const textosFiltrados=await page.evaluate(()=>window.__textosPng)
+  assert.ok(textosFiltrados.includes('999001'))
+  assert.ok(textosFiltrados.includes('Dirección de la tienda nueva'))
+  assert.ok(!textosFiltrados.includes(local.codigo),'Una ficha fuera de la búsqueda no se exporta')
+  assert.ok(!textosFiltrados.includes('CAMPERO'),'La imagen no añade otras marcas')
+  await page.getByLabel(/^Mostrar/).selectOption('finalizado')
+  assert.equal(await page.getByRole('button',{name:'Descargar filtrados PNG',exact:true}).isDisabled(),true,'Sin resultados no genera una imagen vacía')
+  await page.getByLabel(/^Mostrar/).selectOption('pendiente')
+  await page.setViewportSize({width:390,height:844})
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'Filtro y descarga sin desbordamiento móvil')
+  await tiendaNueva.screenshot({path:join(process.argv[3],'preventivo-direccion-movil.png')})
+  await page.setViewportSize({width:1440,height:1000})
+  await tiendaNueva.screenshot({path:join(process.argv[3],'preventivo-direccion-pc.png')})
+  await tiendaNueva.getByRole('button',{name:'Detalle',exact:true}).click()
+  await tiendaNueva.getByRole('button',{name:'Editar programación',exact:true}).click()
+  const editar=page.getByRole('dialog',{name:'Editar programación',exact:true})
+  assert.equal(await editar.getByLabel('Código de tienda').isDisabled(),true)
+  await editar.getByLabel('Nombre de tienda').fill('GRANJERO NUEVO EDITADO')
+  await editar.getByLabel('Meses de mantenimiento').selectOption('3')
+  await page.setViewportSize({width:1440,height:1000})
+  await page.screenshot({path:join(process.argv[3],'preventivos-editar-tienda-pc.png')})
+  await editar.getByRole('button',{name:'Guardar programación',exact:true}).click()
+  assert.equal(await tiendaNueva.count(),0,'La tienda sale del mes anterior al cambiar su ciclo')
+  await page.getByLabel(/^Mes programado/).selectOption('11')
+  await tiendaNueva.getByText('GRANJERO NUEVO EDITADO',{exact:true}).waitFor()
+  await page.reload({waitUntil:'domcontentloaded'})
+  await page.getByLabel(/^Mes programado/).selectOption('11')
+  await page.getByLabel('Buscar',{exact:true}).fill('999001')
+  await tiendaNueva.getByText('GRANJERO NUEVO EDITADO',{exact:true}).waitFor()
+  await page.getByLabel(/^Mes programado/).selectOption('10')
+  await page.getByLabel('Buscar',{exact:true}).fill('')
+  await page.getByLabel(/^Restaurantes/).selectOption('GRANJERO')
+  const porLiquidar=page.locator('article[data-restaurante-tipo]').filter({hasNotText:`#${local.codigo}`}).filter({hasText:'Pendiente'}).first()
+  await porLiquidar.getByRole('button',{name:'Marcar realizado',exact:true}).click()
+  await page.getByRole('button',{name:'Guardar realizado',exact:true}).click()
+  const descarga=page.waitForEvent('download')
+  await page.getByRole('button',{name:'Granjero / Siciliana · PNG',exact:true}).click()
+  const png=await descarga
+  await png.saveAs(join(process.argv[3],'preventivos-listado-colores.png'))
+  assert.ok(png.suggestedFilename().endsWith('.png'))
+  await page.getByLabel(/^Mes programado/).selectOption('11')
+  await page.getByLabel(/^Mostrar/).selectOption('pendiente')
+  await page.getByLabel('Buscar',{exact:true}).fill('413')
+  const descargaReal=page.waitForEvent('download')
+  await page.getByRole('button',{name:'Descargar filtrados PNG',exact:true}).click()
+  await (await descargaReal).saveAs(join(process.argv[3],'preventivos-filtrado-direccion-real.png'))
+  // El nuevo punto de venta también está disponible para técnicos, sin altas ni edición.
+  await page.goto(`http://127.0.0.1:${puerto}/__preventivos_test#preventivos`,{waitUntil:'domcontentloaded'})
+  await page.getByLabel(/^Mes programado/).selectOption('11')
+  await page.getByLabel('Buscar',{exact:true}).fill('999001')
+  await tiendaNueva.getByText('GRANJERO NUEVO EDITADO',{exact:true}).waitFor()
+  assert.equal(await page.getByRole('button',{name:/Nueva tienda|Editar programación/}).count(),0)
   // El portal técnico ve únicamente la orden restaurada del mes, sin botones administrativos.
   await page.goto(`http://127.0.0.1:${puerto}/__preventivos_test#preventivos`,{waitUntil:'domcontentloaded'})
+  await page.getByLabel(/^Mes programado/).selectOption('10')
   await page.getByLabel('Buscar',{exact:true}).fill(local.codigo)
   await ficha.getByRole('button',{name:'Detalle',exact:true}).click()
+  assert.equal(await page.getByRole('button',{name:'Descargar filtrados PNG',exact:true}).count(),0)
   await ficha.getByText('Orden #ORD-123',{exact:true}).waitFor()
   assert.equal(await ficha.getByText('Orden #ORD-124',{exact:true}).count(),0)
   assert.equal(await page.getByRole('button',{name:/Excluir orden|Restaurar orden|Órdenes excluidas/}).count(),0)
   assert.deepEqual(errores,[])
-  console.log('UI verificada: portal técnico, seguimiento, fichas en PC/móvil, archivo Cerrados, permisos de interfaz, cierre con reintento, persistencia al recargar y reactivación. Backend simulado, sin usar Supabase.')
+  console.log('UI verificada: portal técnico, seguimiento, fichas y formularios en PC/móvil, PNG a color, archivo Cerrados, altas y edición persistentes, permisos y reintentos. Backend simulado, sin usar Supabase.')
 } catch(error) {
   if(pagina){console.log((await pagina.locator('body').innerText()).slice(0,2000));await pagina.screenshot({path:join(process.argv[3],'preventivos-error-prueba.png')})}
   throw error

@@ -18,7 +18,7 @@ before(async()=>{
 after(()=>servidor?.close())
 const local={id:'GRANJERO:1',marca:'GRANJERO',codigo:'1',nombre:'Granjero de prueba',direccion:'Ciudad',meses:[2,6,10],semana:'1',activo:true}
 const marca={...local,anio:2026,mes:10,realizado:true,fecha_realizado:'2026-10-02',realizado_nombre:'Ana',realizado_por:'t1',revision:1,equipos_declarados:3,observaciones:'Faltó acceso a un equipo'}
-const mostrar=(declaraciones=[],usuarioId='t1',tecnico=true)=>renderToStaticMarkup(React.createElement(Programacion,{registros:prepararSeguimiento([local],[],declaraciones,2026,10),declaraciones,anio:2026,mes:10,tecnico,usuarioId,listo:true,hoy:'2026-10-02'}))
+const mostrar=(declaraciones=[],usuarioId='t1',tecnico=true,punto=local)=>renderToStaticMarkup(React.createElement(Programacion,{registros:prepararSeguimiento([punto],[],declaraciones,2026,10),declaraciones,anio:2026,mes:10,tecnico,usuarioId,listo:true,hoy:'2026-10-02'}))
 test('ficha pendiente permite realizado y ofrece los tres estados',()=>{
   const html=mostrar()
   assert.match(html,/Marcar realizado/);assert.match(html,/Finalizado/);assert.match(html,/Pendiente/)
@@ -29,6 +29,22 @@ test('ficha pendiente permite realizado y ofrece los tres estados',()=>{
   assert.match(html,/value="GRANJERO">Granjero \/ Siciliana/)
   assert.doesNotMatch(html,/value="SICILIANA"/)
   assert.match(html,/data-restaurante-tipo="GRANJERO"/)
+  assert.doesNotMatch(html,/Descargar filtrados PNG/,'El portal técnico no recibe descargas administrativas')
+  assert.match(mostrar([], 'admin', false),/Descargar filtrados PNG/)
+})
+test('la ficha pendiente muestra dirección sin abrir Detalle y avisa si falta',()=>{
+  for(const tecnico of [true,false]) {
+    const html=mostrar([], 't1', tecnico, {...local,direccion:' Km 25, entrada al negocio '})
+    const visible=html.slice(0,html.indexOf('id="detalle-preventivo-'))
+    assert.match(visible,/Km 25, entrada al negocio/)
+    assert.match(visible,/break-words leading-relaxed/)
+    assert.doesNotMatch(html,/Sin registro en Excel ni marca manual/)
+    assert.match(visible,/Marcar realizado/)
+  }
+  for(const direccion of [undefined,null,'','   ']) {
+    const html=mostrar([], 't1', true, {...local,direccion})
+    assert.match(html.slice(0,html.indexOf('id="detalle-preventivo-')),/Sin dirección registrada/)
+  }
 })
 test('ficha muestra autor, fecha, equipos y observación; sólo autor o admin pueden editar',()=>{
   const html=mostrar([marca])
@@ -77,8 +93,9 @@ test('sin migración avisa; una falla de conexión nunca se trata como lista vac
     await assert.rejects(()=>Persistencia.leerExclusionesPreventivos(),e=>e.code==='42P01')
   } finally {supabasePrueba.from=anterior}
 })
-test('el portal sólo ofrece Viáticos y Preventivos, no el panel general',()=>{
+test('el portal ofrece Viáticos y los menús de preventivos, no el panel general',()=>{
   const html=renderToStaticMarkup(React.createElement(PortalTecnico,{persona:{nombre:'Ana'},usuarioId:'t1',inicial:'preventivos'}))
   assert.match(html,/Menús del técnico/);assert.match(html,/Viáticos/);assert.match(html,/Preventivos/)
+  assert.match(html,/Shell/);assert.match(html,/Taco Bell/)
   assert.doesNotMatch(html,/Dashboard|Particulares|Vacaciones|Alerta de garantías/)
 })
