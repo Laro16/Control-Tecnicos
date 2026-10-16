@@ -360,7 +360,7 @@ function AplicacionPrincipal() {
     { id: 'particulares', label: 'Particulares', icon: Briefcase },
     { id: 'garantias', label: 'Garantías', icon: ShieldCheck },
     { id: 'tablas', label: 'Reportes', icon: BarChart3 },
-    { id: 'preventivos', label: 'Preventivos', icon: CalendarDays },
+    { id: 'preventivos', label: 'Preventivos CMI', icon: CalendarDays },
     { id: 'preventivos-shell', label: 'Shell', icon: CalendarDays },
     { id: 'preventivos-taco-bell', label: 'Taco Bell', icon: CalendarDays },
     { id: 'pendientes', label: 'Gestión', icon: ClipboardList },

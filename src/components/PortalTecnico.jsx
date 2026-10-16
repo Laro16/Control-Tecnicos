@@ -20,7 +20,7 @@ export default function PortalTecnico({ persona, usuarioId, inicial = 'viaticos'
         <button type="button" className="btn-ghost inline-flex items-center gap-2" onClick={() => supabase.auth.signOut()}><LogOut size={15}/> Salir</button>
         <nav aria-label="Menús del técnico" className="grid w-full grid-cols-2 gap-2 border-t border-slate-800 pt-3 sm:grid-cols-4">
           <button type="button" aria-current={menu === 'viaticos' ? 'page' : undefined} className={`${menu === 'viaticos' ? 'btn-primary' : 'btn-ghost'} flex min-h-11 flex-1 items-center justify-center gap-2`} onClick={() => abrir('viaticos')}><Wallet size={17}/> Viáticos</button>
-          <button type="button" aria-current={menu === 'preventivos' ? 'page' : undefined} className={`${menu === 'preventivos' ? 'btn-primary' : 'btn-ghost'} flex min-h-11 flex-1 items-center justify-center gap-2`} onClick={() => abrir('preventivos')}><CalendarCheck size={17}/> Preventivos</button>
+          <button type="button" aria-current={menu === 'preventivos' ? 'page' : undefined} className={`${menu === 'preventivos' ? 'btn-primary' : 'btn-ghost'} flex min-h-11 flex-1 items-center justify-center gap-2`} onClick={() => abrir('preventivos')}><CalendarCheck size={17}/> Preventivos CMI</button>
           {['shell','taco-bell'].map(m=><button key={m} type="button" aria-current={menu === `preventivos-${m}` ? 'page' : undefined} className={`${menu === `preventivos-${m}` ? 'btn-primary' : 'btn-ghost'} flex min-h-11 items-center justify-center gap-2`} onClick={()=>abrir(`preventivos-${m}`)}><CalendarCheck size={17}/> {m==='shell'?'Shell':'Taco Bell'}</button>)}
         </nav>
       </header>

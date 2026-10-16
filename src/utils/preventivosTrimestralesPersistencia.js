@@ -1,5 +1,5 @@
 import { supabase } from '../supabase.jsx'
-import { extraerOrdenesTrimestrales, validarProgramacionTrimestral } from './preventivosTrimestrales.js'
+import { configuracionesExcelTrimestrales, extraerOrdenesTrimestrales, validarProgramacionTrimestral } from './preventivosTrimestrales.js'
 
 async function leerTabla(tabla, campo='id', marca) {
   const filas=[]
@@ -23,7 +23,7 @@ export async function cargarTrimestrales(marca, calendario, tecnico=false) {
     leerTabla('preventivos_trimestrales_ordenes','numero_orden',marca),
     tecnico?Promise.resolve([]):leerTabla('preventivos_trimestrales_config','marca',marca),
   ])
-  return {programacion,ordenes,configuracion:configuraciones[0]||null}
+  return {programacion,ordenes,configuracion:tecnico?null:configuracionesExcelTrimestrales(configuraciones).find(config=>config.marca===marca)||null}
 }
 export const guardarMarcaTrimestral=(local,datos)=>ejecutar('marcar_realizado_trimestral',{
   p_id:local.id,p_revision:local.revision,p_realizado:datos.realizado,p_fecha:datos.fecha||null,

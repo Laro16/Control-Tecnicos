@@ -2,6 +2,16 @@ import { MESES_PREVENTIVOS, fechaPreventivo } from './preventivos.js'
 import { ESTADOS_PREVENTIVOS } from './seguimientoPreventivos.js'
 
 export const MARCAS_TRIMESTRALES = { SHELL: 'Shell', TACO_BELL: 'Taco Bell' }
+const CONFIGURACIONES_EXCEL = [
+  { marca: 'SHELL', clientes: ['UNO PREVENTIVO'], encabezado_codigo: 'CÓDIGO CLIENTE' },
+  { marca: 'TACO_BELL', clientes: ['TACO BELL PREVENTIVO'], encabezado_codigo: 'CÓDIGO CLIENTE' },
+]
+export function configuracionesExcelTrimestrales(configuraciones = []) {
+  // Una configuración guardada prevalece, incluso si se dejó vacía para desactivar la detección.
+  return [...configuraciones, ...CONFIGURACIONES_EXCEL
+    .filter(predeterminada => !configuraciones.some(config => config.marca === predeterminada.marca))
+    .map(config => ({ ...config, clientes: [...config.clientes] }))]
+}
 export const normalizarTrimestral = v => String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toUpperCase()
 export const codigoTrimestral = v => normalizarTrimestral(v)==='-'?'':normalizarTrimestral(v).replace(/\.0$/, '')
 export const periodoTrimestral = local => `${local.anio}:${local.trimestre}`
@@ -54,9 +64,9 @@ export function prepararTrimestrales(programacion, ordenes) {
   }).sort((a,b)=>prioridad[a.estado]-prioridad[b.estado]||a.local.fecha_programada.localeCompare(b.local.fecha_programada)||a.local.codigo.localeCompare(b.local.codigo,'es',{numeric:true}))
   return {registros,sinUbicar}
 }
-export function extraerOrdenesTrimestrales(filas, configuraciones) {
+export function extraerOrdenesTrimestrales(filas, configuraciones = []) {
   const porCliente=new Map()
-  for(const config of configuraciones)for(const cliente of config.clientes||[]) {
+  for(const config of configuracionesExcelTrimestrales(configuraciones))for(const cliente of config.clientes||[]) {
     const clave=normalizarTrimestral(cliente)
     if(porCliente.has(clave)&&porCliente.get(clave).marca!==config.marca)throw new Error('Un mismo CLIENTE está configurado para dos marcas de preventivos.')
     porCliente.set(clave,config)
