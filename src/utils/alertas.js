@@ -1,5 +1,8 @@
-import { normalizarTextoGarantia, verificarGarantiaTicket } from './garantias.js'
+import { normalizarClienteGarantia, normalizarTextoGarantia, verificarGarantiaTicket } from './garantias.js'
 import { detectarReincidencias } from './historialSeries.js'
+
+// Exclusión solo de alertas: sus tickets, series y expedientes se conservan.
+const CLIENTES_SIN_ALERTAS_GARANTIA = new Set([normalizarClienteGarantia('AVICOLA VILLALOBOS S.A.')])
 
 export function obtenerTicketsDuplicados(tickets = []) {
   const referencias = new Map()
@@ -20,6 +23,7 @@ export function obtenerTicketsDuplicados(tickets = []) {
 // mantienen los mismos estados, clientes y reglas de duplicados.
 export function obtenerControlAlertas(tickets = [], clientesGarantia = [], historialSeries = [], vencimientos = {}) {
   const garantias = tickets
+    .filter(ticket => !CLIENTES_SIN_ALERTAS_GARANTIA.has(normalizarClienteGarantia(ticket.CLIENTE)))
     .filter(ticket => !normalizarTextoGarantia(ticket.ESTADO_LIMPIO || ticket.ESTADO).includes('FINALIZADA'))
     .map(ticket => ({ ticket, garantia: verificarGarantiaTicket(ticket, clientesGarantia, vencimientos) }))
     .filter(alerta => alerta.garantia)

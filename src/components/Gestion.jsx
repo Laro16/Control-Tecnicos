@@ -5,11 +5,12 @@ import { claveReferenciaParticular, idParticularReferencia, leerParticularesExis
 import { DOCS_PARTICULAR, buscarDocumento, descargarAdjunto, leerAdjunto } from '../utils/adjuntosParticulares.js'
 import EstadoParticulares from './EstadoParticulares'
 import Dialogo from './Dialogo'
+import VistaPreviaAdjunto from './VistaPreviaAdjunto'
 import ExpedientesGarantia from './ExpedientesGarantia'
 import {
   Plus, Pencil, Trash2, CheckCircle, X, ClipboardList, RotateCcw, 
   Paperclip, DownloadCloud, Download, CalendarClock, Briefcase,
-  ListTodo, ArrowUpRight
+  ListTodo, ArrowUpRight, Eye
 } from 'lucide-react'
 
 const PRIORIDADES = ['Baja', 'Media', 'Alta']
@@ -46,6 +47,7 @@ export default function ModuloPendientes({ vista = 'Tarea', importacionParticula
   
   const [subiendoFiles, setSubiendoFiles] = useState(false)
   const [imgPreview, setImgPreview] = useState(null)
+  const [archivoPreview, setArchivoPreview] = useState(null)
   const [documentoEnfocado, setDocumentoEnfocado] = useState(null)
   useEffect(() => { setFiltro('Todos') }, [vistaActual])
   useEffect(() => {
@@ -420,16 +422,19 @@ export default function ModuloPendientes({ vista = 'Tarea', importacionParticula
                         {item.archivos.map((arch, idx) => {
                           const archObj = leerAdjunto(arch)
                           if (!archObj?.url) return null
-                          const url = archObj.url, nombre = archObj.nombre, tipoDoc = archObj.tipoDoc || 'Adjunto'
-                          const isImage = url.match(/\.(jpeg|jpg|gif|png|webp)$/i) || nombre.match(/\.(jpeg|jpg|gif|png|webp)$/i)
+                          const url = archObj.url, nombre = archObj.nombre || 'Archivo adjunto', tipoDoc = archObj.tipoDoc || 'Adjunto'
+                          const isImage = /\.(jpeg|jpg|gif|png|webp)(?:[?#]|$)/i.test(url) || /\.(jpeg|jpg|gif|png|webp)$/i.test(nombre)
                           return (
                             <div key={idx} className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-[9px] hover:border-sky-200 transition">
                               {item.tipo === 'Particular' && <span className="bg-sky-100 text-sky-700 font-bold px-1 py-0.5 rounded text-[8px]">{tipoDoc}</span>}
-                              {isImage ? (
-                                <button onClick={() => setImgPreview(url)} className={`text-sky-600 hover:text-sky-800 font-semibold ${item.tipo === 'Particular' ? 'break-all text-left' : 'truncate max-w-[120px]'}`}>{nombre}</button>
+                              {item.tipo === 'Particular' ? (
+                                <button type="button" onClick={() => setArchivoPreview(archObj)} title={`Ver ${nombre}`} className={`text-sky-600 hover:text-sky-800 font-semibold ${item.tipo === 'Particular' ? 'break-all text-left' : 'truncate max-w-[120px]'}`}>{nombre}</button>
+                              ) : isImage ? (
+                                <button type="button" onClick={() => setImgPreview(url)} className="text-sky-600 hover:text-sky-800 font-semibold truncate max-w-[120px]">{nombre}</button>
                               ) : (
                                 <a href={url} target="_blank" rel="noopener noreferrer" className={`text-slate-600 hover:text-slate-800 font-semibold ${item.tipo === 'Particular' ? 'break-all' : 'truncate max-w-[120px]'}`}>{nombre}</a>
                               )}
+                              {item.tipo === 'Particular' && <button type="button" onClick={() => setArchivoPreview(archObj)} aria-label={`Ver ${nombre}`} className="btn-ghost inline-flex shrink-0 items-center gap-1"><Eye size={14}/> Ver</button>}
                               <button type="button" onClick={() => descargarArchivo(archObj)} aria-label={`Descargar ${nombre}`} title={`Descargar ${nombre}`} className="text-sky-500 hover:text-sky-700"><Download size={10} /></button>
                             </div>
                           )
@@ -506,8 +511,9 @@ export default function ModuloPendientes({ vista = 'Tarea', importacionParticula
                           <div key={doc} id={`documento-particular-${DOCS_PARTICULAR.indexOf(doc)}`} tabIndex={-1} className="space-y-1 scroll-mt-4">
                             <span className="text-[10px] font-bold text-sky-800">{doc}</span>
                             {existente !== -1 ? (
-                              <div className="flex items-center justify-between bg-white border border-emerald-200 rounded-md px-2.5 py-1.5">
-                                <span className="text-sm text-emerald-600 font-semibold break-all">✓ {leerAdjunto(form.archivos[existente])?.nombre || 'Archivo cargado'}</span>
+                              <div className="flex flex-wrap items-center justify-between gap-2 bg-white border border-emerald-200 rounded-md px-2.5 py-1.5">
+                                <span className="min-w-0 flex-1 text-sm text-emerald-600 font-semibold break-all">✓ {leerAdjunto(form.archivos[existente])?.nombre || 'Archivo cargado'}</span>
+                                <button type="button" onClick={() => setArchivoPreview(leerAdjunto(form.archivos[existente]))} className="btn-ghost ml-auto inline-flex shrink-0 items-center gap-1" aria-label={`Ver ${doc}`}><Eye size={14}/> Ver</button>
                                 <button type="button" onClick={() => eliminarArchivoExistente(existente)} className="text-rose-500 hover:text-rose-700 p-0.5"><Trash2 size={12}/></button>
                               </div>
                             ) : archivosParticular[doc] ? (
@@ -566,13 +572,13 @@ export default function ModuloPendientes({ vista = 'Tarea', importacionParticula
         </Dialogo>
       )}
 
-      {/* Preview imagen */}
       {imgPreview && (
         <Dialogo titulo="Vista previa del archivo" onCerrar={() => setImgPreview(null)} cerrarFuera>
           <button aria-label="Cerrar vista previa" onClick={() => setImgPreview(null)} className="absolute top-4 right-4 text-white bg-white/10 p-2 rounded-lg hover:bg-white/20 transition"><X size={20} /></button>
           <img src={imgPreview} alt="Vista previa" className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" onClick={e => e.stopPropagation()} />
         </Dialogo>
       )}
+      {archivoPreview && <VistaPreviaAdjunto archivo={archivoPreview} onCerrar={() => setArchivoPreview(null)}/>}
     </div>
   )
 }

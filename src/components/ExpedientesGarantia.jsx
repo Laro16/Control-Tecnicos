@@ -1,13 +1,21 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabase.jsx'
 import Dialogo from './Dialogo'
+import VistaPreviaAdjunto from './VistaPreviaAdjunto'
+import { Eye, Trash2 } from 'lucide-react'
+import { resolverRespaldoGarantia } from '../utils/adjuntosGarantia.js'
 import { ESTADOS, MOTIVOS, candidatosExpedienteGarantia, combinarDatosTicket, datosTicketExpediente, expedientesAnterioresTicket, leerExpedientes, nuevoExpediente, referenciaExpediente, validarExpediente } from '../utils/expedientesGarantia.js'
 import { claveSerieGarantia } from '../utils/vencimientosGarantia.js'
 
-async function abrirArchivo(archivo) {
-  const { data, error } = await supabase.storage.from('respaldos-garantia').createSignedUrl(archivo.path, 300)
-  if (error) throw error
-  window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
+const resolverArchivo = archivo => resolverRespaldoGarantia(supabase, archivo)
+
+function RespaldoGarantia({ archivo, onVer, onQuitar, disabled = false }) {
+  const nombre = archivo.nombre || 'Respaldo adjunto'
+  return <div className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg border border-slate-300 bg-slate-50 p-2">
+    <button type="button" disabled={disabled} className="min-w-0 flex-1 break-words text-left text-sm font-semibold text-sky-700 underline" onClick={() => onVer(archivo)}>{nombre}</button>
+    <button type="button" disabled={disabled} className="btn-ghost inline-flex shrink-0 items-center gap-1" aria-label={`Ver ${nombre}`} onClick={() => onVer(archivo)}><Eye size={15}/> Ver</button>
+    {onQuitar && <button type="button" disabled={disabled} className="btn-ghost inline-flex shrink-0 items-center gap-1 text-rose-700" aria-label={`Quitar ${nombre}`} onClick={() => onQuitar(archivo)}><Trash2 size={15}/> Quitar</button>}
+  </div>
 }
 
 const CAMPOS_TICKET = [
@@ -39,12 +47,20 @@ export function EditorExpediente({ inicial, registros, onCerrar, onGuardado }) {
   const [ocupado, setOcupado] = useState(false)
   const [error, setError] = useState('')
   const [revisiones, setRevisiones] = useState(null)
+  const [archivoPreview, setArchivoPreview] = useState(null)
+  const [avisoArchivos, setAvisoArchivos] = useState('')
   const cambiar = (campo, valor) => setForm(prev => ({ ...prev, [campo]: valor }))
   const antecedentes = registros.filter(r => r.serie === claveSerieGarantia(form.serie) && r.referencia !== form.referencia)
   const sinGarantia = form.motivo === 'Sin garantía confirmada'
   const puntual = ['Reparación', 'Excepción'].includes(form.motivo)
   const sinVencimiento = puntual || sinGarantia
   const estadosDisponibles = sinGarantia ? ESTADOS.filter(estado => estado !== 'Autorizado') : ESTADOS
+  function quitarArchivo(archivo) {
+    if (ocupado || !window.confirm(`¿Quitar «${archivo.nombre || 'este respaldo'}» de la ficha? Se aplicará al guardar. Las revisiones anteriores conservarán su respaldo.`)) return
+    setForm(prev => ({ ...prev, archivos: prev.archivos.filter(a => a.path !== archivo.path) }))
+    setError('')
+    setAvisoArchivos('Documento quitado de esta edición. Pulsa Guardar expediente para aplicar el cambio o Cancelar para descartarlo.')
+  }
   async function subir(files) {
     setOcupado(true); setError('')
     try {
@@ -82,7 +98,7 @@ export function EditorExpediente({ inicial, registros, onCerrar, onGuardado }) {
       setRevisiones(rows)
     } catch (e) { setError(e.message) }
   }
-  return <Dialogo titulo="Expediente de garantía" onCerrar={() => { if (!ocupado) onCerrar() }}>
+  return <><Dialogo titulo="Expediente de garantía" onCerrar={() => { if (!ocupado) onCerrar() }}>
     <form className="app-dialog-panel" onSubmit={guardar}>
       <div className="app-dialog-header"><h3>Expediente de garantía</h3><button type="button" disabled={ocupado} onClick={onCerrar}>Cerrar</button></div>
       <div className="app-dialog-body space-y-4">
@@ -104,14 +120,16 @@ export function EditorExpediente({ inicial, registros, onCerrar, onGuardado }) {
           <label className="sm:col-span-2">Adjuntar captura, factura o autorización (PDF o imagen, hasta 10 MB)<input className="mt-2 block w-full min-w-0 text-sm" type="file" multiple accept="image/jpeg,image/png,image/webp,application/pdf" onChange={e => { subir([...e.target.files]); e.target.value = '' }}/></label>
         </fieldset>
         <p className="text-xs text-slate-500">Los archivos se cargan primero; pulsa Guardar expediente para vincularlos. Se conservan las revisiones. Cerrar o rechazar una ficha no elimina un vencimiento confirmado anteriormente.</p>
-        {form.archivos.map(a => <button type="button" key={a.path} className="block max-w-full break-all text-left text-sm underline" onClick={() => abrirArchivo(a).catch(e => setError(e.message))}>{a.nombre}</button>)}
+        <div className="space-y-2">{form.archivos.map(a => <RespaldoGarantia key={a.path} archivo={a} onVer={setArchivoPreview} onQuitar={quitarArchivo} disabled={ocupado}/>)}</div>
+        {avisoArchivos && <p role="status" className="text-sm text-sky-700">{avisoArchivos}</p>}
+        {form.estado === 'Autorizado' && !form.archivos.length && <p role="status" className="text-sm font-bold text-amber-800">Una ficha autorizada necesita al menos un respaldo. Adjunta el documento correcto o cambia el estado antes de guardar.</p>}
         {inicial.id && <button type="button" className="btn-ghost" onClick={historial}>Consultar revisiones de esta ficha</button>}
-        {revisiones?.map(r => <div key={r.id} className="rounded-lg border-2 border-slate-500 p-3 text-sm"><p>{new Date(r.registrado_en).toLocaleString()} · {r.datos.estado} · {r.datos.motivo}</p><p>Vencimiento: {r.datos.fecha_vencimiento || 'No aplica'} · Responsable: {r.datos.autorizado_por || 'Pendiente'}</p><p className="whitespace-pre-wrap break-words">{r.datos.explicacion}</p>{r.datos.archivos?.map(a => <button type="button" className="block break-all text-left underline" key={a.path} onClick={() => abrirArchivo(a).catch(e => setError(e.message))}>{a.nombre}</button>)}</div>)}
+        {revisiones?.map(r => <div key={r.id} className="space-y-2 rounded-lg border-2 border-slate-500 p-3 text-sm"><p>{new Date(r.registrado_en).toLocaleString()} · {r.datos.estado} · {r.datos.motivo}</p><p>Vencimiento: {r.datos.fecha_vencimiento || 'No aplica'} · Responsable: {r.datos.autorizado_por || 'Pendiente'}</p><p className="whitespace-pre-wrap break-words">{r.datos.explicacion}</p>{r.datos.archivos?.map(a => <RespaldoGarantia key={a.path} archivo={a} onVer={setArchivoPreview} disabled={ocupado}/>)}</div>)}
         {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
       </div>
       <div className="app-dialog-footer"><button type="button" className="btn-ghost" disabled={ocupado} onClick={onCerrar}>Cancelar</button><button type="submit" className="btn-primary" disabled={ocupado}>{ocupado ? 'Guardando…' : 'Guardar expediente'}</button></div>
     </form>
-  </Dialogo>
+  </Dialogo>{archivoPreview && <VistaPreviaAdjunto archivo={archivoPreview} resolverArchivo={resolverArchivo} onCerrar={() => setArchivoPreview(null)}/>}</>
 }
 
 function SelectorTicketExpediente({ candidatos, onElegir, onManual, onCerrar }) {
@@ -147,6 +165,7 @@ export default function ExpedientesGarantia({ datos, tickets = [], ticketInicial
   const [filtro, setFiltro] = useState('Todos')
   const [revision, setRevision] = useState(0)
   const [selector, setSelector] = useState(false)
+  const [archivoPreview, setArchivoPreview] = useState(null)
   useEffect(() => {
     let vivo = true
     setEstado('cargando')
@@ -185,9 +204,10 @@ export default function ExpedientesGarantia({ datos, tickets = [], ticketInicial
       <p className="text-xs text-amber-900">Ficha(s) previa(s): {anteriores.map(r => `#${r.referencia}`).join(', ')}. No coincide el número de reporte, por eso no se considera la misma ficha.</p>
       {(ficha.datos_ticket.negocio || ficha.datos_ticket.modelo || ficha.datos_ticket.tecnico) && <p className="text-xs text-slate-600">{[ficha.datos_ticket.negocio, ficha.datos_ticket.modelo && `Modelo ${ficha.datos_ticket.modelo}`, ficha.datos_ticket.tecnico && `Técnico ${ficha.datos_ticket.tecnico}`].filter(Boolean).join(' · ')}</p>}
     </div> })}</div>}
-    <div className="grid min-w-0 gap-4 lg:grid-cols-2">{visibles.map(r => <article key={r.id} className="card min-w-0 space-y-3 border-2 border-slate-600 p-4"><div><h3 className="break-words font-bold">#{r.referencia} · {r.cliente}</h3><p className="mt-1 break-all text-sm">Serie {r.serie}{r.datos_ticket.numero_orden ? ` · Orden ${r.datos_ticket.numero_orden}` : ''}</p></div><div className="rounded-lg border-2 border-slate-400 bg-slate-50 p-3"><DatosTicket datos={r.datos_ticket}/></div><p className="text-sm font-bold">{r.motivo} · {r.estado}</p><p className="text-sm">{r.motivo === 'Sin garantía confirmada' ? 'Sin cobertura confirmada para esta atención' : ['Reparación', 'Excepción'].includes(r.motivo) ? 'Autorización limitada a este ticket' : `Vencimiento: ${r.fecha_vencimiento || 'Pendiente'}`}</p><p className="whitespace-pre-wrap break-words text-sm">{r.explicacion}</p>{(r.archivos || []).map(a => <button key={a.path} className="block max-w-full break-all text-left text-sm underline" onClick={() => abrirArchivo(a).catch(e => setError(e.message))}>{a.nombre}</button>)}{!(r.archivos || []).length && <p className="text-sm">Sin documentos adjuntos</p>}<button className="btn-primary" onClick={() => setEditor(r)}>Abrir / subir respaldo</button></article>)}</div>
+    <div className="grid min-w-0 gap-4 lg:grid-cols-2">{visibles.map(r => <article key={r.id} className="card min-w-0 space-y-3 border-2 border-slate-600 p-4"><div><h3 className="break-words font-bold">#{r.referencia} · {r.cliente}</h3><p className="mt-1 break-all text-sm">Serie {r.serie}{r.datos_ticket.numero_orden ? ` · Orden ${r.datos_ticket.numero_orden}` : ''}</p></div><div className="rounded-lg border-2 border-slate-400 bg-slate-50 p-3"><DatosTicket datos={r.datos_ticket}/></div><p className="text-sm font-bold">{r.motivo} · {r.estado}</p><p className="text-sm">{r.motivo === 'Sin garantía confirmada' ? 'Sin cobertura confirmada para esta atención' : ['Reparación', 'Excepción'].includes(r.motivo) ? 'Autorización limitada a este ticket' : `Vencimiento: ${r.fecha_vencimiento || 'Pendiente'}`}</p><p className="whitespace-pre-wrap break-words text-sm">{r.explicacion}</p>{(r.archivos || []).map(a => <RespaldoGarantia key={a.path} archivo={a} onVer={setArchivoPreview}/>)}{!(r.archivos || []).length && <p className="text-sm">Sin documentos adjuntos</p>}<button className="btn-primary" onClick={() => setEditor(r)}>Abrir / subir respaldo</button></article>)}</div>
     {estado === 'listo' && !visibles.length && <p>No hay expedientes para esta búsqueda.</p>}
     {editor && <EditorExpediente inicial={editor} registros={registros} onCerrar={cerrarEditor} onGuardado={guardar}/>}
     {selector && <SelectorTicketExpediente candidatos={candidatos} onCerrar={() => setSelector(false)} onManual={() => { setSelector(false); setEditor(nuevoExpediente()) }} onElegir={ticket => { setSelector(false); setEditor(nuevoExpediente(ticket)) }}/>} 
+    {archivoPreview && <VistaPreviaAdjunto archivo={archivoPreview} resolverArchivo={resolverArchivo} onCerrar={() => setArchivoPreview(null)}/>}
   </section>
 }

@@ -148,6 +148,7 @@
   color: var(--panel-text);
 }
 .app-dialog-panel { display: flex; flex-direction: column; width: 100%; max-width: 40rem; max-height: calc(100dvh - 3rem); min-height: 0; overflow: hidden; border: 1px solid var(--line-strong); border-radius: 16px; background: var(--panel-surface); box-shadow: 0 24px 80px #0005; }
+.app-dialog-panel.attachment-preview-panel { max-width: 72rem; height: calc(100dvh - 3rem); }
 .app-dialog-header { flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.25rem; border-bottom: 1px solid var(--line-divider); background: var(--panel-surface); }
 .app-dialog-root .app-dialog-header h3 { margin: 0; color: var(--panel-text); font-size: 1.125rem; font-weight: 800; line-height: 1.35; overflow-wrap: anywhere; }
 .app-dialog-header > button { color: var(--panel-muted); flex-shrink: 0; }
@@ -199,6 +200,7 @@ html.dark .app-main .route-table .text-red-800 { color: #fca5a5; }
   .app-options-content button { justify-content: flex-start; }
   .app-dialog-root { padding: 0; }
   .app-dialog-panel { height: 100dvh; max-height: 100dvh; max-width: none; border: 0; border-radius: 0; }
+  .app-dialog-panel.attachment-preview-panel { height: 100dvh; }
   .app-dialog-header { padding: .75rem 1rem; }
   .app-dialog-body { padding: 1rem; }
   .app-dialog-footer { padding: .75rem 1rem max(.75rem, env(safe-area-inset-bottom)); }
