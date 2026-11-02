@@ -70,6 +70,7 @@ test('las órdenes conservan técnico y fecha sin inventar datos faltantes',()=>
 })
 test('el técnico no ve reportes administrativos ni asignación manual de órdenes',()=>{
   const html=renderToStaticMarkup(React.createElement(Preventivos,{tecnico:true,usuarioId:'t1'}))
+  assert.match(html,/<h1[^>]*>Preventivos CMI<\/h1>/)
   assert.doesNotMatch(html,/Descargar avance|Actividad semanal|Por ubicar|Semana del reporte|Órdenes excluidas/)
   assert.match(html,/Consulta lo que falta/)
 })
@@ -95,7 +96,7 @@ test('sin migración avisa; una falla de conexión nunca se trata como lista vac
 })
 test('el portal ofrece Viáticos y los menús de preventivos, no el panel general',()=>{
   const html=renderToStaticMarkup(React.createElement(PortalTecnico,{persona:{nombre:'Ana'},usuarioId:'t1',inicial:'preventivos'}))
-  assert.match(html,/Menús del técnico/);assert.match(html,/Viáticos/);assert.match(html,/Preventivos/)
+  assert.match(html,/Menús del técnico/);assert.match(html,/Viáticos/);assert.match(html,/Preventivos CMI/)
   assert.match(html,/Shell/);assert.match(html,/Taco Bell/)
   assert.doesNotMatch(html,/Dashboard|Particulares|Vacaciones|Alerta de garantías/)
 })

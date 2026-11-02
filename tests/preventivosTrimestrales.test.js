@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { prepararTrimestrales, prepararAvanceTrimestral, validarProgramacionTrimestral, extraerOrdenesTrimestrales, vincularOrdenTrimestral, datosImagenTrimestral } from '../src/utils/preventivosTrimestrales.js'
+import { prepararTrimestrales, prepararAvanceTrimestral, validarProgramacionTrimestral, extraerOrdenesTrimestrales, configuracionesExcelTrimestrales, vincularOrdenTrimestral, datosImagenTrimestral } from '../src/utils/preventivosTrimestrales.js'
 const calendario=JSON.parse(readFileSync(new URL('../src/data/preventivosTrimestrales.json',import.meta.url),'utf8'))
 const shell=calendario.find(l=>l.marca==='SHELL'),taco=calendario.find(l=>l.marca==='TACO_BELL')
 const configs=[{marca:'SHELL',clientes:['PREVENTIVO SHELL PRUEBA'],encabezado_codigo:'ID Solicitante'}, {marca:'TACO_BELL',clientes:['PREVENTIVO TB PRUEBA'],encabezado_codigo:'Restaurante'}]
@@ -50,6 +50,41 @@ test('importación exacta sin filtrar ESTADO, deduplica N° ORDEN y nunca usa FE
   assert.equal(resultado.ordenes[1].codigo,'TB08');assert.equal(resultado.ordenes[1].fecha_realizada,'2026-10-10')
   assert.equal(extraerOrdenesTrimestrales([fila],[]).ordenes.length,0)
   assert.throws(()=>extraerOrdenesTrimestrales([fila],[...configs,{marca:'TACO_BELL',clientes:['PREVENTIVO SHELL PRUEBA'],encabezado_codigo:'CÓDIGO'}]),/dos marcas/)
+})
+test('CLIENTE reconoce UNO PREVENTIVO y TACO BELL PREVENTIVO sin configuración previa',()=>{
+  const fila={Cliente:'  uno   preventivo  ','N° ORDEN':42,'CÓDIGO CLIENTE':shell.codigo,NEGOCIO:shell.nombre,'FECHA REALIZADA':'06/10/2026',ESTADO:'Asignada a Técnico'}
+  const tacoFila={CLIENTE:'TACO BELL PREVENTIVO','Nº ORDEN':'TB-1','CODIGO CLIENTE':taco.codigo,NEGOCIO:taco.nombre,'FECHA REALIZADA':'07/10/2026',ESTADO:'En Proceso'}
+  const resultado=extraerOrdenesTrimestrales([fila,{...fila,ESTADO:'Orden Finalizada'},tacoFila,
+    {...fila,Cliente:'UNO','N° ORDEN':43},{...fila,Cliente:'UNO PREVENTIVO REPARACION','N° ORDEN':44},
+    {...tacoFila,CLIENTE:'TACO BELL'},{...fila,Cliente:'PREVENTIVO GRANJERO 1','N° ORDEN':45},
+    {...fila,Cliente:'CAMPERO PREVENTIVO','N° ORDEN':46}])
+  assert.equal(resultado.ordenes.length,2);assert.equal(resultado.sinOrden,0)
+  assert.deepEqual(resultado.ordenes.map(o=>[o.numero_orden,o.marca,o.codigo]),[['42','SHELL',shell.codigo],['TB-1','TACO_BELL',taco.codigo]])
+  const registros=prepararTrimestrales(calendario,resultado.ordenes).registros
+  for(const local of [shell,taco]) {
+    const registro=registros.find(r=>r.local.id===local.id)
+    assert.equal(registro.estado,'finalizado');assert.equal(registro.ordenes.length,1)
+  }
+  const sinFecha=extraerOrdenesTrimestrales([{...fila,'FECHA REALIZADA':'','FECHA INGRESO':'01/10/2026'}],[])
+  assert.equal(sinFecha.ordenes[0].fecha_realizada,null)
+  assert.equal(prepararTrimestrales(calendario,sinFecha.ordenes).sinUbicar.length,1)
+})
+test('los valores predeterminados no sobrescriben clientes, encabezados ni detección desactivada',()=>{
+  const guardadas=[{marca:'SHELL',clientes:[],encabezado_codigo:'ID Solicitante'}]
+  const efectivas=configuracionesExcelTrimestrales(guardadas)
+  assert.equal(efectivas.find(c=>c.marca==='SHELL'),guardadas[0])
+  assert.deepEqual(efectivas.find(c=>c.marca==='TACO_BELL').clientes,['TACO BELL PREVENTIVO'])
+  assert.equal(guardadas.length,1)
+  const filas=[{CLIENTE:'UNO PREVENTIVO','N° ORDEN':1,'CÓDIGO CLIENTE':shell.codigo},
+    {CLIENTE:'TACO BELL PREVENTIVO','N° ORDEN':2,'CÓDIGO CLIENTE':taco.codigo}]
+  assert.deepEqual(extraerOrdenesTrimestrales(filas,guardadas).ordenes.map(o=>o.marca),['TACO_BELL'])
+  assert.equal(extraerOrdenesTrimestrales(filas,configs).ordenes.length,0)
+  const personalizado={marca:'SHELL',clientes:['UNO PREVENTIVO'],encabezado_codigo:'ID Solicitante'}
+  assert.equal(extraerOrdenesTrimestrales([{...filas[0],'ID Solicitante':'190'}],[personalizado]).ordenes[0].codigo,'190')
+  const copia=configuracionesExcelTrimestrales()
+  copia[0].clientes.push('PRUEBA')
+  assert.deepEqual(configuracionesExcelTrimestrales()[0].clientes,['UNO PREVENTIVO'])
+  assert.throws(()=>extraerOrdenesTrimestrales(filas,[{marca:'SHELL',clientes:['TACO BELL PREVENTIVO'],encabezado_codigo:'CÓDIGO CLIENTE'}]),/dos marcas/)
 })
 test('validaciones y altas explícitas no crean meses recurrentes',()=>{
   const nueva=validarProgramacionTrimestral({...taco,codigo:'tb123',fecha_programada:'2027-01-10',equipos:''})

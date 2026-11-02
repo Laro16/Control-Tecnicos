@@ -88,3 +88,47 @@ test('la campana incluye reincidencias aunque el cliente no tenga garantía', ()
   assert.equal(control.total, 1)
   assert.equal(obtenerControlAlertas([{ ...datos[0], ESTADO_LIMPIO: 'ORDEN FINALIZADA' }], catalogo, historial).total, 0)
 })
+
+test('Avícola Villalobos no genera alertas de garantía aunque siga en el catálogo', () => {
+  const clientes = [...catalogo, { nombre: 'AVICOLA VILLALOBOS S.A.', anios: 2 }]
+  const variantes = ['AVICOLA VILLALOBOS S.A.', '  avícola   villalobos s. a.  ', 'AVICOLA VILLALOBOS, SOCIEDAD ANONIMA', 'GARANTIA AVICOLA VILLALOBOS S.A.']
+  const casos = [
+    { SERIE: '1001011234' },
+    { SERIE: `${String(anioActual).slice(-2)}01011234`, TIPO: 'Normal' },
+    { SERIE: '-' },
+    { SERIE: `${String(anioActual).slice(-2)}01011234` },
+    { SERIE: '1001011234', 'FECHA INGRESO': '' },
+  ]
+  const datos = Object.freeze(variantes.flatMap((CLIENTE, i) => casos.map((caso, j) => Object.freeze(ticket({ CLIENTE, 'N° REFERENCIA': `AV-${i}-${j}`, ...caso })))))
+  const antes = JSON.stringify(datos)
+  for (const vencimientos of [{}, { '1001011234': { fecha_vencimiento: '2099-01-01' } }]) {
+    const control = obtenerControlAlertas(datos, clientes, [], vencimientos)
+    for (const grupo of ['garantias', 'tipoIncorrecto', 'vencidas', 'sinSerie', 'vigentes']) assert.equal(control[grupo].length, 0, grupo)
+    assert.equal(control.total, 0)
+  }
+  assert.equal(JSON.stringify(datos), antes)
+})
+
+test('la exclusión es por cliente, no por serie ni por coincidencias parciales del nombre', () => {
+  const clientes = [...catalogo, { nombre: 'AVICOLA VILLALOBOS S.A.', anios: 2 }, { nombre: 'AVICOLA VILLALOBOS SERVICIOS S.A.', anios: 2 }]
+  const control = obtenerControlAlertas([
+    ticket({ CLIENTE: 'AVICOLA VILLALOBOS S.A.', 'N° REFERENCIA': 'AV-1' }),
+    ticket({ 'N° REFERENCIA': 'OTRO-1' }),
+    ticket({ CLIENTE: 'AVICOLA VILLALOBOS SERVICIOS S.A.', 'N° REFERENCIA': 'OTRO-2' }),
+  ], clientes)
+  assert.deepEqual(control.vencidas.map(a => a.ticket['N° REFERENCIA']), ['OTRO-1', 'OTRO-2'])
+  assert.equal(control.total, 2)
+})
+
+test('excluir garantías de Avícola no elimina tickets ni sus duplicados o antecedentes', () => {
+  const datos = [ticket({ CLIENTE: 'AVICOLA VILLALOBOS S.A.', 'N° REFERENCIA': 'AV-NUEVA' }), ticket({ CLIENTE: 'AVICOLA VILLALOBOS S.A.', 'N° REFERENCIA': 'AV-NUEVA' })]
+  const historial = [{ serie: '1001011234', referencia: 'AV-ANTERIOR', fecha_cierre: '2020-01-01' }]
+  const sinCatalogo = obtenerControlAlertas(datos, [], historial)
+  const control = obtenerControlAlertas(datos, [{ nombre: 'AVICOLA VILLALOBOS S.A.', anios: 2 }], historial)
+  assert.equal(control.garantias.length, 0)
+  assert.equal(control.duplicados.length, 1)
+  assert.ok(control.reincidencias.length > 0)
+  assert.deepEqual(control.duplicados, sinCatalogo.duplicados)
+  assert.deepEqual(control.reincidencias, sinCatalogo.reincidencias)
+  assert.equal(datos.length, 2)
+})

@@ -50,7 +50,7 @@ try {
   const errores=[];page.on('pageerror',error=>{errores.push(error.message);console.log('Error UI: '+error.message)})
   const puerto=server.address().port
   await page.goto(`http://127.0.0.1:${puerto}/__preventivos_test#preventivos`,{waitUntil:'domcontentloaded'})
-  await page.getByRole('heading',{name:'Preventivos',exact:true}).waitFor()
+  await page.getByRole('heading',{name:'Preventivos CMI',exact:true}).waitFor()
   await page.getByLabel(/^Mes programado/).waitFor()
   await page.getByLabel(/^Restaurantes/).selectOption('GRANJERO')
   const ficha=page.locator('article').filter({hasText:`#${local.codigo}`}).first()
