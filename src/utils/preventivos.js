@@ -58,13 +58,25 @@ export function atribuirOrden(orden, catalogo) {
   const local = catalogo.find(l => l.marca === orden.marca && l.codigo === codigo)
   if (!local) return { ...orden, codigo, local: null }
   const fecha = fechaPreventivo(orden.fecha_realizada)
-  if (orden.anio_programado && orden.mes_programado) return { ...orden, codigo, local, programado: { anio: orden.anio_programado, mes: orden.mes_programado, vuelta: Math.floor((orden.mes_programado-1)/4)+1 }, tarde: Boolean(fecha && fecha.slice(0,7) > `${orden.anio_programado}-${String(orden.mes_programado).padStart(2,'0')}`) }
-  if (!fecha) return { ...orden, codigo, local, programado: null, tarde: false }
+  const atribuir = (anio, mes) => {
+    const periodo = `${anio}-${String(mes).padStart(2, '0')}`
+    return { ...orden, codigo, local, programado: { anio, mes, vuelta: Math.floor((mes-1)/4)+1 },
+      tarde: Boolean(fecha && fecha.slice(0, 7) > periodo),
+      adelantado: Boolean(fecha && fecha.slice(0, 7) < periodo), motivoUbicacion: null }
+  }
+  // Una asignación administrativa siempre prevalece sobre la cercanía de fechas.
+  if (orden.anio_programado && orden.mes_programado) return atribuir(Number(orden.anio_programado), Number(orden.mes_programado))
+  if (!fecha) return { ...orden, codigo, local, programado: null, tarde: false, adelantado: false }
   const [anio, mes] = fecha.split('-').map(Number)
-  const anteriores = local.meses.filter(m => m <= mes)
-  const mesPlan = anteriores.length ? Math.max(...anteriores) : Math.max(...local.meses)
-  const anioPlan = anteriores.length ? anio : anio-1
-  return { ...orden, codigo, local, programado: { anio: anioPlan, mes: mesPlan, vuelta: Math.floor((mesPlan-1)/4)+1 }, tarde: anio !== anioPlan || mes !== mesPlan }
+  const meses = [...new Set((local.meses || []).map(Number).filter(m => Number.isInteger(m) && m >= 1 && m <= 12))]
+  // El calendario solo define meses, no días. Incluye el cambio de año y no
+  // atribuye un adelanto de noviembre a julio por buscar únicamente hacia atrás.
+  const candidatos = [anio-1, anio, anio+1].flatMap(y => meses.map(m => ({ anio: y, mes: m, distancia: Math.abs((y-anio)*12 + m-mes) })))
+  const distancia = Math.min(...candidatos.map(c => c.distancia))
+  const cercanos = candidatos.filter(c => c.distancia === distancia)
+  if (cercanos.length !== 1) return { ...orden, codigo, local, programado: null, tarde: false, adelantado: false,
+    motivoUbicacion: cercanos.length ? 'La fecha realizada está a la misma distancia de dos meses programados. Selecciona el mes correcto.' : 'El restaurante no tiene meses programados válidos.' }
+  return atribuir(cercanos[0].anio, cercanos[0].mes)
 }
 export function prepararAvance(catalogo, ordenes, anio, vuelta, corte, declaraciones = []) {
   const atribuidas = [...new Map(ordenes.filter(o => !o.exclusion?.excluida).map(o => [o.numero_orden, atribuirOrden(o,catalogo)])).values()]

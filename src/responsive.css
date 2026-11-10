@@ -239,3 +239,12 @@ html.dark .app-main .route-table .text-red-800 { color: #fca5a5; }
 @media print {
   .app-options, .app-dialog-root { display: none !important; }
 }
+
+/* Tabla de pared CMI: el color no altera el estado ni las demás vistas. */
+.cmi-control-table th { padding: .8rem .65rem; border-bottom: 2px solid #172033; background: #fb923c; color: #172033; font-weight: 800; }
+.cmi-control-table td { padding: .8rem .65rem; vertical-align: top; overflow-wrap: anywhere; border-top: 1px solid var(--line-divider, #334155); }
+.cmi-control-table tr.cmi-control-highlight > td { background: #dcfce7; color: #14532d; }
+.cmi-control-table .cmi-control-highlight :is(select,button) { color: #172033; background-color: white; }
+.cmi-control-table select { font-size: .875rem; }
+html.dark .cmi-control [role="status"].text-sky-800 { color: #7dd3fc; }
+html.dark .cmi-control [role="status"].text-amber-950 { color: #fde68a; }
