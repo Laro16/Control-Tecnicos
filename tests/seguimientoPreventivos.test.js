@@ -55,6 +55,20 @@ test('no inventa mes de órdenes sin fecha; conserva asignación manual y atenci
   assert.equal(prepararSeguimiento([{...local,activo:false}],[orden],[marca],2026,10).length,0)
 })
 
+test('un adelanto finaliza solo el mes cercano y no duplica equipos ni la vuelta anterior', () => {
+  const noviembre = { ...local, id: 'GRANJERO:413', codigo: '413', meses: [3, 7, 11] }
+  const anticipada = { ...orden, codigo: '413', fecha_realizada: '2026-10-07' }
+  const [actual] = prepararSeguimiento([noviembre], [anticipada, anticipada], [], 2026, 11)
+  assert.equal(actual.estado, 'finalizado')
+  assert.equal(actual.enExcel, true)
+  assert.equal(actual.ordenes.length, 1)
+  assert.equal(actual.ordenes[0].adelantado, true)
+  assert.equal(prepararSeguimiento([noviembre], [anticipada], [], 2026, 7)[0].estado, 'pendiente')
+  const empate = { ...anticipada, fecha_realizada: '2026-09-20' }
+  assert.equal(prepararSeguimiento([noviembre], [empate], [], 2026, 11)[0].estado, 'pendiente')
+  assert.equal(prepararSeguimiento([noviembre], [empate], [], 2026, 7)[0].estado, 'pendiente')
+})
+
 test('deshacer marca no revierte una orden del Excel y los pendientes van primero', () => {
   const registros = prepararSeguimiento([local,otro],[orden],[{...marca,realizado:false}],2026,10)
   assert.equal(registros[0].estado,'pendiente')

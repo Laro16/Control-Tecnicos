@@ -25,8 +25,70 @@ test('Atención de septiembre se acredita al agosto programado', () => {
   assert.equal(atribuida.codigo, '654')
   assert.deepEqual(atribuida.programado, { anio: 2026, mes: 8, vuelta: 2 })
   assert.equal(atribuida.tarde, true)
+  assert.equal(atribuida.adelantado, false)
   assert.equal(prepararAvance(catalogo, [orden], 2026, 2, '2026-08-31').resumen[1].equipos, 0)
   assert.equal(prepararAvance(catalogo, [orden], 2026, 2, '2026-09-06').resumen[1].equipos, 1)
+})
+
+test('los cuatro puntos programados en noviembre reconocen sus adelantos de octubre', () => {
+  for (const [marca, codigo, fecha] of [['GRANJERO', '413', '2026-10-07'], ['GRANJERO', '752', '2026-10-07'], ['CAMPERO', '644', '2026-10-15'], ['CAMPERO', '703', '2026-10-07']]) {
+    const local = catalogo.find(l => l.marca === marca && l.codigo === codigo)
+    assert.deepEqual(local.meses, [3, 7, 11])
+    const original = Object.freeze({ numero_orden: `${marca}-${codigo}`, marca, codigo, fecha_realizada: fecha, estado: 'Orden Finalizada' })
+    const atribuida = atribuirOrden(original, catalogo)
+    assert.deepEqual(atribuida.programado, { anio: 2026, mes: 11, vuelta: 3 })
+    assert.equal(atribuida.adelantado, true)
+    assert.equal(atribuida.tarde, false)
+    assert.equal(atribuida.fecha_realizada, fecha)
+    assert.equal(original.fecha_realizada, fecha)
+    assert.equal(prepararAvance(catalogo, [original, original], 2026, 3, '2026-10-31').incluidas.length, 1)
+    assert.equal(prepararAvance(catalogo, [original], 2026, 2, '2026-10-31').incluidas.length, 0)
+  }
+})
+
+test('un empate de meses queda Por ubicar sin inventar una asignación', () => {
+  const orden = { numero_orden: 'EMPATE', marca: 'GRANJERO', codigo: '413', fecha_realizada: '2026-09-01' }
+  for (const fecha_realizada of ['2026-09-01', '2026-09-30']) {
+    const atribuida = atribuirOrden({ ...orden, fecha_realizada }, catalogo)
+    assert.equal(atribuida.programado, null)
+    assert.equal(atribuida.tarde, false)
+    assert.equal(atribuida.adelantado, false)
+    assert.match(atribuida.motivoUbicacion, /misma distancia/)
+  }
+  assert.equal(prepararAvance(catalogo, [orden], 2026, 2).incluidas.length, 0)
+  assert.equal(prepararAvance(catalogo, [orden], 2026, 3).incluidas.length, 0)
+})
+
+test('la cercanía contempla meses programados de los años adyacentes', () => {
+  const base = { numero_orden: 'ANIO', marca: 'CAMPERO', codigo: '1' }
+  const local = meses => [{ id: 'CAMPERO:1', marca: 'CAMPERO', codigo: '1', meses, activo: true }]
+  const diciembre = atribuirOrden({ ...base, fecha_realizada: '2026-12-20' }, local([1, 5, 9]))
+  assert.deepEqual(diciembre.programado, { anio: 2027, mes: 1, vuelta: 1 })
+  assert.equal(diciembre.adelantado, true)
+  const enero = atribuirOrden({ ...base, fecha_realizada: '2027-01-02' }, local([4, 8, 12]))
+  assert.deepEqual(enero.programado, { anio: 2026, mes: 12, vuelta: 3 })
+  assert.equal(enero.tarde, true)
+  const repetidos = atribuirOrden({ ...base, fecha_realizada: '2026-10-07' }, local([3, 7, 11, 11]))
+  assert.deepEqual(repetidos.programado, { anio: 2026, mes: 11, vuelta: 3 })
+})
+
+test('asignación manual prevalece sobre adelantos, empates y fechas ausentes', () => {
+  const base = { numero_orden: 'MANUAL', marca: 'GRANJERO', codigo: '413', anio_programado: 2026, mes_programado: 7 }
+  for (const fecha_realizada of ['2026-09-01', '2026-10-07', null]) {
+    const atribuida = atribuirOrden({ ...base, fecha_realizada }, catalogo)
+    assert.deepEqual(atribuida.programado, { anio: 2026, mes: 7, vuelta: 2 })
+    assert.equal(atribuida.tarde, Boolean(fecha_realizada))
+    assert.equal(atribuida.adelantado, false)
+  }
+  const adelantada = atribuirOrden({ ...base, mes_programado: 11, fecha_realizada: '2026-10-07' }, catalogo)
+  assert.equal(adelantada.adelantado, true)
+})
+
+test('un calendario inválido no genera meses ficticios ni modifica el restaurante', () => {
+  const local = Object.freeze({ id: 'GRANJERO:1', marca: 'GRANJERO', codigo: '1', meses: Object.freeze([0, 13, null, '']) })
+  const atribuida = atribuirOrden({ numero_orden: 'SIN-PLAN', marca: 'GRANJERO', codigo: '1', fecha_realizada: '2026-10-07' }, [local])
+  assert.equal(atribuida.programado, null)
+  assert.match(atribuida.motivoUbicacion, /meses programados válidos/)
 })
 test('Asignación manual conserva mes sin inventar fecha', () => {
   const orden = {numero_orden: '12', marca:'CAMPERO',codigo:'654',anio_programado:2026,mes_programado:8,fecha_realizada:null}
