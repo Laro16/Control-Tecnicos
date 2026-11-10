@@ -54,7 +54,7 @@ declaraciones=declaraciones.filter(r=>r!==anterior);declaraciones.push(data);gua
 throw Error('RPC inesperada: '+nombre)}};
 `
 const compilado = await build({
-  stdin: { contents: 'import React from "react";import{createRoot}from"react-dom/client";import Preventivos from"./src/components/Preventivos.jsx";import*as backend from"./src/supabase.jsx";window.__controlBackend=backend;createRoot(document.getElementById("root")).render(React.createElement("main",{className:"mx-auto max-w-7xl p-4"},React.createElement(Preventivos,{tecnico:location.search.includes("tecnico")})));', resolveDir: process.cwd(), loader: 'jsx' },
+  stdin: { contents: 'import React from "react";import{createRoot}from"react-dom/client";import Preventivos from"./src/components/Preventivos.jsx";import*as backend from"./src/supabase.jsx";window.__controlBackend=backend;createRoot(document.getElementById("root")).render(React.createElement("main",{className:"mx-auto max-w-7xl p-4"},React.createElement(Preventivos,{tecnico:location.search.includes("tecnico"),soloControl:!location.search.includes("tecnico")})));', resolveDir: process.cwd(), loader: 'jsx' },
   bundle: true, write: false, outdir: 'prueba-en-memoria', jsx: 'automatic', format: 'iife', define: { 'process.env.NODE_ENV': '"production"' },
   plugins: [{ name: 'backend-local', setup(api) {
     api.onLoad({ filter: /supabase\.jsx$/ }, () => ({ contents: backend, loader: 'js' }))
@@ -93,7 +93,7 @@ try {
   page.on('pageerror', error => errores.push(error.message))
   const navegar = async () => {
     await page.goto(base, { waitUntil: 'domcontentloaded' })
-    await page.getByRole('button', { name: 'Control imprimible', exact: true }).click()
+    await page.getByRole('heading', { name: 'Hoja de seguimiento CMI', exact: true }).waitFor()
     await page.waitForFunction(() => [...document.querySelectorAll('button')].some(b => b.textContent.includes('Descargar filtrados como imagen') && !b.disabled))
     await page.getByLabel(/^Mes del control/).selectOption('11')
     await page.getByRole('button', { name: 'Imprimir filtrados', exact: true }).waitFor({ state: 'visible' })
@@ -120,7 +120,7 @@ try {
   assert.deepEqual(guardado.declaraciones, inicial.declaraciones)
   assert.equal(guardado.resaltados.find(r => r.codigo === '413').modo, 'sin-color')
   await page.reload({ waitUntil: 'domcontentloaded' })
-  await page.getByRole('button', { name: 'Control imprimible', exact: true }).click()
+  await page.getByRole('heading', { name: 'Hoja de seguimiento CMI', exact: true }).waitFor()
   await page.waitForFunction(() => [...document.querySelectorAll('button')].some(b => b.textContent.includes('Descargar filtrados como imagen') && !b.disabled))
   await page.getByLabel(/^Mes del control/).selectOption('11')
   await esperarColor('413', 'no')
@@ -157,7 +157,7 @@ try {
   await control.screenshot({ path: join(capturas, 'control-imprimible-pc-listado.png') })
   await page.evaluate(() => document.documentElement.classList.add('dark'))
   const coloresOscuros = await fila('413').evaluate(n => ({ fondo: getComputedStyle(n.cells[0]).backgroundColor, texto: getComputedStyle(n.cells[0]).color, encabezado: getComputedStyle(n.closest('table').querySelector('th')).backgroundColor }))
-  assert.deepEqual(coloresOscuros, { fondo: 'rgb(220, 252, 231)', texto: 'rgb(20, 83, 45)', encabezado: 'rgb(251, 146, 60)' }, 'El verde y encabezado naranja conservan legibilidad en modo oscuro')
+  assert.deepEqual(coloresOscuros, { fondo: 'rgb(220, 252, 231)', texto: 'rgb(20, 83, 45)', encabezado: 'rgb(255, 192, 0)' }, 'El verde y encabezado naranja conservan legibilidad en modo oscuro')
   await control.screenshot({ path: join(capturas, 'control-imprimible-pc-oscuro.png') })
   await page.evaluate(() => document.documentElement.classList.remove('dark'))
   await page.getByLabel(/^Semana programada/).selectOption(local413.semana)

@@ -62,7 +62,7 @@ test('PNG conserva estado a la derecha, datos filtrados y colores independientes
   assert.equal(tabla.anchos.reduce((a, b) => a + b), 1240)
   assert.equal(tabla.encabezados.at(-1), 'Estado')
   assert.deepEqual(tabla.filas.map(f => f.at(-1)), ['Realizado', 'Pendiente'])
-  assert.match(tabla.filas[0][4], /^1 en Excel\n3 previstos$/)
+  assert.match(tabla.filas[0][5], /^1 en Excel\n3 previstos$/)
   assert.deepEqual(tabla.coloresFila, ['#ffffff', '#dcfce7'])
   assert.deepEqual(tabla.estados, ['finalizado', 'pendiente'])
   assert.deepEqual(datosImagenControlImprimible(filas, { anio: 2026, vuelta: 3, colores: false }).secciones[0].coloresFila, ['#ffffff', '#ffffff'])
@@ -79,7 +79,7 @@ test('generador compartido acepta fondo por fila sin perder el texto del estado'
   const datos = datosImagenControlImprimible([registro(1, { enExcel: true, estado: 'finalizado', resaltado: false }), registro(2, { resaltado: true })], { anio: 2026, vuelta: 3 })
   dibujarImagenPreventivos(canvas, datos)
   assert.equal(canvas.width, 1320)
-  assert.deepEqual(rectangulos.filter(r => r.x === 40 && r.ancho === 90 && r.y >= 228).map(r => r.color), ['#ffffff', '#dcfce7'])
+  assert.deepEqual(rectangulos.filter(r => r.x === 40 && r.ancho === 40 && r.y >= 228).map(r => r.color), ['#ffffff', '#dcfce7'])
   assert.ok(textos.includes('Realizado')); assert.ok(textos.includes('Pendiente'))
 })
 
