@@ -25,7 +25,7 @@ export function catalogoDesdeMatriz(matriz) {
     const codigo = codigoLimpio(fila[col('CODIGO')]), marca = normalizarPreventivo(fila[col('CLIENTE')])
     if (!codigo || !MARCAS_PREVENTIVOS[marca]) return []
     const meses = fechas.map(c => MESES_PREVENTIVOS.findIndex(m => normalizarPreventivo(m) === normalizarPreventivo(fila[c])) + 1).filter(Boolean)
-    return [{ id: `${marca}:${codigo}`, codigo, marca, nombre: texto(fila[col('UNIDADES POLLO GRANJERO')]), direccion: texto(fila[col('UBICACION')]), telefono: texto(fila[col('TELEFONO')]), semana: texto(fila[col('SEMANA')]), equipos: Number(fila[col('EQUIPOS')]) || null, meses, activo: normalizarPreventivo(fila[col('ESTADO 2')]) !== 'CERRADO', fila: encabezado+i+2 }]
+    return [{ id: `${marca}:${codigo}`, numero: fila[claves.findIndex(c => ["NO.","NO","N"].includes(c))] || i+1, codigo, marca, nombre: texto(fila[col('UNIDADES POLLO GRANJERO')]), direccion: texto(fila[col('UBICACION')]), telefono: texto(fila[col('TELEFONO')]), semana: texto(fila[col('SEMANA')]), equipos: Number(fila[col('EQUIPOS')]) || null, meses, activo: normalizarPreventivo(fila[col('ESTADO 2')]) !== 'CERRADO', fila: encabezado+i+2 }]
   })
 }
 export function marcaDesdeCliente(cliente) {

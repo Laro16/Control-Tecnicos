@@ -110,7 +110,7 @@ export default function ControlImprimiblePreventivos({ catalogo, ordenes, declar
 
   return <section className="space-y-4 cmi-control" aria-label="Control imprimible de preventivos">
     <header className="card space-y-3 p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-xl font-black">Control imprimible</h2><p className="mt-1 text-sm text-slate-600">Un renglón por punto y mes programado. El resaltado es visual; el estado refleja el registro real.</p></div><button type="button" className="btn-ghost inline-flex min-h-11 items-center gap-2" disabled={bloqueado || cargando} onClick={cargarPreferencias}><RefreshCw size={15}/> Actualizar colores</button></div>
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-xl font-black">Hoja de seguimiento CMI</h2><p className="mt-1 text-sm text-slate-600">Vista tipo Excel: ubicación, código, semana, equipos, cliente y las tres fechas programadas.</p></div><button type="button" className="btn-ghost inline-flex min-h-11 items-center gap-2" disabled={bloqueado || cargando} onClick={cargarPreferencias}><RefreshCw size={15}/> Actualizar colores</button></div>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <label className="text-xs font-bold">Mes del control<select className={campo} value={filtros.mes} onChange={e => cambiarFiltro('mes', e.target.value)}><option value="">Toda la vuelta</option>{meses.map(m => <option key={m} value={m}>{MESES_PREVENTIVOS[m - 1]}</option>)}</select></label>
         <label className="text-xs font-bold">Marca del control<select className={campo} value={filtros.marca} onChange={e => cambiarFiltro('marca', e.target.value)}><option value="">Todas las marcas</option>{Object.entries(MARCAS_PREVENTIVOS).map(([id, nombre]) => <option key={id} value={id}>{nombre}</option>)}</select></label>
@@ -131,15 +131,18 @@ export default function ControlImprimiblePreventivos({ catalogo, ordenes, declar
     <p className="text-xs text-slate-600 sm:hidden">Desliza la tabla hacia los lados para ver los controles y el estado.</p>
     <div className="card overflow-hidden">
       <div className="overflow-x-auto" tabIndex={0} aria-label="Tabla de control; desplaza para ver todas las columnas">
-        <table className="cmi-control-table w-full min-w-[1040px] table-fixed text-left text-sm">
-          <colgroup><col style={{ width: '7%' }}/><col style={{ width: '18%' }}/><col style={{ width: '25%' }}/><col style={{ width: '9%' }}/><col style={{ width: '10%' }}/><col style={{ width: '19%' }}/><col style={{ width: '12%' }}/></colgroup>
-          <thead><tr>{['Código', 'Punto de venta / semana', 'Dirección', 'Mes', 'Equipos', 'Controles', 'Estado'].map(t => <th key={t} scope="col">{t}</th>)}</tr></thead>
+        <table className="cmi-control-table w-full min-w-[1620px] table-fixed text-left text-sm">
+          <colgroup>{[4,15,22,5,7,5,7,7,7,7,8,6].map((w,i)=><col key={i} style={{width:`${w}%`}}/>)}</colgroup>
+          <thead><tr>{['No.', 'Unidades Pollo Granjero', 'Ubicación', 'Código', 'Semana', 'Equipos', 'Cliente', 'Fechas', 'Fechas', 'Fechas', 'Controles', 'Estado'].map((t,i) => <th key={i} scope="col">{t}</th>)}</tr></thead>
           <tbody>{visibles.map(r => <tr key={clave(r)} data-clave-control={clave(r)} data-resaltado={r.resaltado ? 'verde' : 'no'} className={r.resaltado ? 'cmi-control-highlight' : ''}>
-            <td className="font-bold">#{r.local.codigo}</td>
-            <td><strong className="block">{r.local.nombre}</strong><span className="mt-1 block text-xs">{MARCAS_PREVENTIVOS[r.local.marca]} · {r.local.semana || 'Sin semana'}</span></td>
+            <td>{r.local.numero || r.local.fila - 2 || '—'}</td>
+            <td className="font-bold">{r.local.nombre}</td>
             <td>{r.local.direccion?.trim() || 'Sin dirección registrada'}</td>
-            <td>{MESES_PREVENTIVOS[r.mes - 1]}</td>
-            <td><span className="block">{r.local.equipos ?? '—'} previstos</span><strong className="mt-1 block">{r.ordenes.length} en Excel</strong>{r.declaracion?.equipos_declarados != null && <span className="mt-1 block text-xs">{r.declaracion.equipos_declarados} declarados</span>}</td>
+            <td className="font-bold">#{r.local.codigo}</td>
+            <td>{r.local.semana || '—'}</td>
+            <td>{r.local.equipos ?? '—'}<span className="block text-xs">{r.ordenes.length} en Excel</span></td>
+            <td>{r.local.marca === 'CAMPERO' ? 'CAMPERO' : 'GRANJERO'}</td>
+            {[0,1,2].map(i => <td key={i} className={r.local.meses[i] === r.mes ? 'font-extrabold underline' : ''}>{MESES_PREVENTIVOS[r.local.meses[i]-1]?.toUpperCase() || '—'}</td>)}
             <td><div className="space-y-2"><label className="block text-xs font-bold">Resaltado<select className="control-field mt-1 w-full" aria-label={`Resaltado de ${r.local.marca} ${r.local.codigo} ${MESES_PREVENTIVOS[r.mes - 1]}`} value={r.modoResaltado} disabled={!disponible || cargando || Boolean(errorLectura) || bloqueado} onChange={e => cambiarColor(r, e.target.value)}><option value="automatico">Automático</option><option value="verde">Verde manual</option><option value="sin-color">Sin resaltado</option></select></label>{!r.enExcel && <button type="button" className="btn-ghost w-full min-h-11" disabled={!listo || bloqueado} onClick={() => abrirRealizado(r)}><Check size={14} className="mr-1 inline"/>{r.declaracion ? 'Editar realizado' : 'Marcar realizado'}</button>}</div></td>
             <td className="font-extrabold"><span>{estadoControlImprimible(r)}</span>{r.modoResaltado === 'verde' && <span className="mt-1 block text-xs font-normal">Color manual</span>}</td>
           </tr>)}</tbody>

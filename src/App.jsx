@@ -87,7 +87,7 @@ export default function App() {
 }
 
 function AplicacionPrincipal() {
-  const [tab, setTab] = useState(() => ['#preventivos', '#preventivos-shell', '#preventivos-taco-bell'].includes(window.location.hash) ? window.location.hash.slice(1) : 'dashboard')
+  const [tab, setTab] = useState(() => ['#control-cmi', '#preventivos', '#preventivos-shell', '#preventivos-taco-bell'].includes(window.location.hash) ? window.location.hash.slice(1) : 'dashboard')
   const [menuMovilAbierto, setMenuMovilAbierto] = useState(false)
   const [esVistaMovil, setEsVistaMovil] = useState(() => window.matchMedia('(max-width: 1023px)').matches)
   const [barraLateralOculta, setBarraLateralOculta] = useState(() => localStorage.getItem('ticketmanager_sidebar_hidden') === 'true')
@@ -361,6 +361,7 @@ function AplicacionPrincipal() {
     { id: 'garantias', label: 'Garantías', icon: ShieldCheck },
     { id: 'tablas', label: 'Reportes', icon: BarChart3 },
     { id: 'preventivos', label: 'Preventivos CMI', icon: CalendarDays },
+    { id: 'control-cmi', label: 'Control CMI · hoja', icon: ClipboardList },
     { id: 'preventivos-shell', label: 'Shell', icon: CalendarDays },
     { id: 'preventivos-taco-bell', label: 'Taco Bell', icon: CalendarDays },
     { id: 'pendientes', label: 'Gestión', icon: ClipboardList },
@@ -606,6 +607,7 @@ function AplicacionPrincipal() {
         </div>
         {tab === 'personal' && <Personal />}
         {tab === 'preventivos' && <Preventivos />}
+        {tab === 'control-cmi' && <Preventivos key="control-cmi" soloControl />}
         {tab === 'preventivos-shell' && <PreventivosTrimestrales key="SHELL" marca="SHELL" />}
         {tab === 'preventivos-taco-bell' && <PreventivosTrimestrales key="TACO_BELL" marca="TACO_BELL" />}
         {tab === 'viaticos' && <Viaticos />}

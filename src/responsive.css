@@ -246,5 +246,10 @@ html.dark .app-main .route-table .text-red-800 { color: #fca5a5; }
 .cmi-control-table tr.cmi-control-highlight > td { background: #dcfce7; color: #14532d; }
 .cmi-control-table .cmi-control-highlight :is(select,button) { color: #172033; background-color: white; }
 .cmi-control-table select { font-size: .875rem; }
+.cmi-control-table { min-width: 1620px; font: 12px Arial, sans-serif; border-collapse: collapse; background: white; color: #111; }
+.cmi-control-table :is(th,td) { border: 1px solid #111; padding: .35rem; text-align: center; }
+.cmi-control-table th { background: #ffc000; color: #111; }
+.cmi-control-table td:nth-child(3) { text-align: left; }
+html.dark .cmi-control-table tr:not(.cmi-control-highlight) > td { background: #111c2f; color: #e2e8f0; border-color: #94a3b8; }
 html.dark .cmi-control [role="status"].text-sky-800 { color: #7dd3fc; }
 html.dark .cmi-control [role="status"].text-amber-950 { color: #fde68a; }
