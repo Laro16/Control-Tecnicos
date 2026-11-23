@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { FileSpreadsheet, Loader2 } from 'lucide-react'
+import { nombreVueltaCMI } from './VueltaActivaCMI'
 
 const formatos = ['.xlsx', '.xls', '.xlsm', '.xlsb', '.csv', '.tsv', '.ods']
 
-export default function CargaExcelDiario({ archivoRef, cargar, ocupado, nombreArchivo, fecha }) {
+export default function CargaExcelDiario({ archivoRef, cargar, ocupado, nombreArchivo, fecha, periodoCMI }) {
   const [arrastrando, setArrastrando] = useState(false)
   const [error, setError] = useState('')
 
@@ -39,6 +40,9 @@ export default function CargaExcelDiario({ archivoRef, cargar, ocupado, nombreAr
         <div className="min-w-0">
           <strong className="block text-sm">Reporte diario</strong>
           <span className="text-xs text-slate-600 dark:text-slate-300">{arrastrando ? 'Suelta el archivo para cargarlo' : 'Arrastra el Excel aquí'}</span>
+          {periodoCMI && <span className="block text-xs font-semibold">{periodoCMI.ocupado ? 'Confirmando la vuelta CMI…' : periodoCMI.destino
+            ? `Destino CMI · ${nombreVueltaCMI(periodoCMI.destino.vuelta)} de ${periodoCMI.destino.anio}`
+            : 'Selecciona la vuelta en Preventivos CMI para cargar sus órdenes.'}</span>}
           {nombreArchivo && <span className="block truncate text-xs text-slate-500 dark:text-slate-300" title={nombreArchivo}>Último: {nombreArchivo}{fecha && ' · ' + fecha}</span>}
         </div>
       </div>

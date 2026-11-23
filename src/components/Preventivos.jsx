@@ -1,5 +1,6 @@
 import BloqueoVueltaCMI from './BloqueoVueltaCMI'
 import VueltaActivaCMI from './VueltaActivaCMI'
+import useVueltaActivaCMI from '../hooks/useVueltaActivaCMI'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { CalendarCheck, Download, Plus, RefreshCw } from 'lucide-react'
@@ -31,11 +32,16 @@ async function leerCatalogo() {
   catalogoCache=catalogoDesdeMatriz(XLSX.utils.sheet_to_json(libro.Sheets[hoja],{header:1,defval:''}))
   return catalogoCache
 }
-export default function Preventivos({ tecnico = false, usuarioId: usuarioPortalId = null, soloControl = false, revisionExcel = 0 }) {
+export default function Preventivos({ tecnico = false, usuarioId: usuarioPortalId = null, soloControl = false, revisionExcel = 0, periodoCMI, importando = false }) {
   const [catalogo,setCatalogo]=useState([]),[ordenes,setOrdenes]=useState([])
   const [cargando,setCargando]=useState(true),[error,setError]=useState(''),[ocupado,setOcupado]=useState(false),[aviso,setAviso]=useState('')
-  const [fechaSemana,setFechaSemana]=useState(hoy),[anio,setAnio]=useState(()=>Number(hoy().slice(0,4))),[vuelta,setVuelta]=useState(()=>Math.floor((Number(hoy().slice(5,7))-1)/4)+1)
+  const [fechaSemana,setFechaSemana]=useState(hoy),[anioTecnico,setAnioTecnico]=useState(()=>Number(hoy().slice(0,4)))
+  const periodoLocal = useVueltaActivaCMI(!tecnico && !periodoCMI)
+  const periodo = periodoCMI || periodoLocal
+  const anio = tecnico ? anioTecnico : periodo.anio
+  const vuelta = periodo.vuelta
   const [mes,setMes]=useState(0),[vista,setVista]=useState(soloControl ? 'control' : 'programacion')
+  useEffect(() => { setMes(0) }, [vuelta])
   const [declaraciones,setDeclaraciones]=useState([]),[seguimientoListo,setSeguimientoListo]=useState(false),[avisoSeguimiento,setAvisoSeguimiento]=useState('')
   const [cierresListos,setCierresListos]=useState(false),[historialCierres,setHistorialCierres]=useState([]),[seleccionEstado,setSeleccionEstado]=useState(null)
   const [catalogoManualListo,setCatalogoManualListo]=useState(false),[seleccionCatalogo,setSeleccionCatalogo]=useState(null),[versionProgramacion,setVersionProgramacion]=useState(0)
@@ -133,20 +139,20 @@ export default function Preventivos({ tecnico = false, usuarioId: usuarioPortalI
   }catch(e){setError(e.message)}finally{setOcupado(false)}}
   return <div className="space-y-5 fade-in">
     <section className="workspace-hero"><div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-sky-300"><CalendarCheck size={15}/> Mantenimientos programados</p><h1 className="text-3xl font-black">{soloControl ? "Control CMI · hoja de seguimiento" : "Preventivos CMI"}</h1><p className="mt-2 max-w-xl text-sm text-slate-300">{tecnico?'Consulta lo que falta y reporta los preventivos que ya realizaste. Las órdenes del Excel también cuentan como realizadas.':'Calendario de restaurantes, seguimiento del técnico y avance por vuelta. Cada orden conserva su registro entre cargas del Excel.'}</p></div><button className="btn-ghost bg-white text-slate-900" onClick={()=>cargar()} disabled={cargando||ocupado}><RefreshCw size={14} className="mr-1 inline"/> Actualizar</button></div></section>
-    {!tecnico&&<VueltaActivaCMI/>}
     {error&&<div role="alert" className="rounded-xl border-2 border-rose-500 bg-rose-50 p-4 text-sm text-rose-900">{error}<p className="mt-1">{tecnico?'Pide al administrador que revise la activación de Preventivos para técnicos.':'Revisa la conexión y la activación de Preventivos en Supabase. Pulsa Actualizar para volver a consultar los datos.'}</p></div>}
     {avisoSeguimiento&&<p role="alert" className="card border-amber-700 bg-amber-50 p-4 text-sm text-amber-950">{avisoSeguimiento}</p>}
     {!tecnico&&seguimientoListo&&!cierresListos&&<p role="status" className="card bg-amber-50 p-4 text-sm text-amber-950">Para guardar cierres y reactivaciones, ejecuta activar_cierres_preventivos.sql en Supabase y pulsa Actualizar.</p>}
     {!tecnico&&seguimientoListo&&!catalogoManualListo&&<p role="status" className="card bg-amber-50 p-4 text-sm text-amber-950">Para agregar tiendas y editar sus meses, ejecuta activar_catalogo_manual_preventivos.sql en Supabase y pulsa Actualizar. No repitas los scripts anteriores.</p>}
     {!tecnico&&!cargando&&!error&&!exclusionesListas&&<p role="status" className="card bg-amber-50 p-4 text-sm text-amber-950">Para excluir y restaurar órdenes, ejecuta activar_exclusiones_preventivos.sql en Supabase y pulsa Actualizar. No necesitas repetir los scripts anteriores.</p>}
     {aviso&&<p role="status" className="rounded-xl border border-emerald-500 bg-emerald-50 p-3 text-sm text-emerald-900">{aviso}</p>}
-    {vista!=='cerrados'&&vista!=='excluidas'&&<section className="card grid gap-3 p-4 sm:grid-cols-3 lg:grid-cols-4">
-      <label className="text-xs font-bold">Año del reporte<input type="number" min="2020" max="2100" value={anio} onChange={e=>setAnio(e.target.value)} className="control-field mt-1 w-full"/></label>
-      {!tecnico&&<><label className="text-xs font-bold">Vuelta del reporte<select value={vuelta} onChange={e=>{setVuelta(Number(e.target.value));setMes(0)}} className="control-field mt-1 w-full">{[1,2,3].map(v=><option key={v} value={v}>{MESES_PREVENTIVOS[(v-1)*4]} – {MESES_PREVENTIVOS[v*4-1]}</option>)}</select></label>
+    {vista!=='cerrados'&&vista!=='excluidas'&&!tecnico&&<VueltaActivaCMI periodo={periodo} importando={importando}>
       {vista!=='control'&&<><label className="text-xs font-bold">Semana del reporte<input type="date" value={fechaSemana} onChange={e=>e.target.value&&setFechaSemana(e.target.value)} className="control-field mt-1 w-full"/></label>
       <button onClick={exportarAvance} disabled={ocupado||cargando||Boolean(error)||!catalogo.length} className="btn-primary self-end disabled:opacity-50"><Download size={14} className="mr-1 inline"/> Descargar avance PNG</button>
-      <p className="text-xs text-slate-500 sm:col-span-3 lg:col-span-4">Corte: {fechaVisible(semana.inicio)} al {fechaVisible(semana.fin)}. Realizados incluye Pendientes de liquidar y Finalizados, según la vuelta y el mes programado. Los equipos cuentan órdenes únicas del Excel.</p></>}</>}
-      {tecnico&&<p className="self-center text-sm text-slate-600 sm:col-span-2 lg:col-span-3">Calendario compartido · se conservan las marcas por restaurante, mes y año.</p>}
+      <p className="col-span-full text-xs text-slate-500">Corte: {fechaVisible(semana.inicio)} al {fechaVisible(semana.fin)}. Realizados incluye Pendientes de liquidar y Finalizados, según la vuelta y el mes programado. Los equipos cuentan órdenes únicas del Excel.</p></>}
+    </VueltaActivaCMI>}
+    {vista!=='cerrados'&&vista!=='excluidas'&&tecnico&&<section className="card grid gap-3 p-4 sm:grid-cols-3 lg:grid-cols-4">
+      <label className="text-xs font-bold">Año del reporte<input type="number" min="2020" max="2100" value={anio} onChange={e=>setAnioTecnico(e.target.value)} className="control-field mt-1 w-full"/></label>
+      <p className="self-center text-sm text-slate-600 sm:col-span-2 lg:col-span-3">Calendario compartido · se conservan las marcas por restaurante, mes y año.</p>
     </section>}
     {!tecnico&&<BloqueoVueltaCMI key={`${anio}:${vuelta}`} anio={anio} vuelta={vuelta}/>}
     {!tecnico&&!error&&vista!=='cerrados'&&vista!=='excluidas'&&vista!=='control'&&<section className="grid gap-4 md:grid-cols-2">{avance.resumen.map(r=><article className="card p-5" key={r.marca}><h2 className="text-base font-black">{r.nombre}</h2><div className="mt-4 grid grid-cols-3 gap-3"><Dato nombre="Asignados" valor={r.asignados}/><Dato nombre="Realizados (total)" valor={r.atendidos}/><Dato nombre="Equipos en Excel" valor={r.equipos}/></div><div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-300 pt-3 text-xs font-bold"><p className="text-amber-800">{r.porLiquidar} pendientes de liquidar</p><p className="text-emerald-700">{r.finalizados} finalizados</p></div><div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-200"><div className="h-full bg-emerald-500" style={{width:porcentaje(r.porcentaje)}}/></div><p className="mt-2 flex justify-between text-xs font-bold"><span className="text-emerald-700">{porcentaje(r.porcentaje)} realizado</span><span>{r.pendiente} pendientes · {porcentaje(100-r.porcentaje)}</span></p></article>)}</section>}

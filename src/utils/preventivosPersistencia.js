@@ -2,11 +2,17 @@ import { supabase } from '../supabase.jsx'
 import { extraerOrdenesPreventivas } from './preventivos.js'
 import { validarExclusionOrden } from './exclusionesPreventivos.js'
 import { validarLocalPreventivo } from './catalogoPreventivos.js'
-export async function importarPreventivos(filas) {
+export async function importarPreventivos(filas, destinoElegido) {
   const resultado = extraerOrdenesPreventivas(filas)
   if (!resultado.ordenes.length) return resultado
+  if (destinoElegido === null) throw new Error('Confirma el año y la vuelta en Preventivos CMI antes de cargar sus órdenes.')
   const {data:periodo,error:falloPeriodo}=await supabase.from('preventivos_vuelta_activa').select('*').eq('id',1).maybeSingle()
   if(falloPeriodo||!periodo) throw new Error('Selecciona una vuelta activa CMI. Si no está disponible, ejecuta activar_vuelta_cmi.sql')
+  if (destinoElegido && (periodo.anio !== destinoElegido.anio || periodo.vuelta !== destinoElegido.vuelta)) {
+    const error = new Error('La vuelta de carga cambió. Vuelve a elegir el período en Preventivos CMI')
+    error.code = 'VUELTA_CMI_CAMBIADA'
+    throw error
+  }
   resultado.ordenes=resultado.ordenes.map(o=>({...o,anio_carga:periodo.anio,vuelta_carga:periodo.vuelta}))
   for (let inicio=0; inicio<resultado.ordenes.length; inicio+=200) {
     const { error } = await supabase.from('preventivos_ordenes').upsert(resultado.ordenes.slice(inicio,inicio+200), { onConflict: 'numero_orden' })

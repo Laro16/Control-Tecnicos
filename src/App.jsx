@@ -16,6 +16,7 @@ import { obtenerControlAlertas } from './utils/alertas'
 import useHistorialSeries from './hooks/useHistorialSeries'
 import useVencimientosGarantia from './hooks/useVencimientosGarantia'
 import useImportacionParticulares from './hooks/useImportacionParticulares'
+import useVueltaActivaCMI from './hooks/useVueltaActivaCMI'
 import garantiasUrl from './Garantias.xlsx?url'
 import { Wrench, ClipboardList, BarChart3, Briefcase, Cloud, CloudOff, Copy, Loader2, LayoutDashboard, CalendarDays, Menu, Moon, MoreHorizontal, PanelLeftClose, PanelLeftOpen, ShieldAlert, ShieldCheck, Sun, X, Wallet, Users } from 'lucide-react'
 
@@ -91,6 +92,7 @@ function AplicacionPrincipal() {
   const archivoDiarioRef = useRef(null)
   const [zonaCarga, setZonaCarga] = useState(null)
   const [cargandoExcel, setCargandoExcel] = useState(false)
+  const periodoCMI = useVueltaActivaCMI()
   const [avisoExcel, setAvisoExcel] = useState('')
   const [revisionExcel, setRevisionExcel] = useState(0)
   const abrirExcel = () => archivoDiarioRef.current?.click()
@@ -581,6 +583,7 @@ function AplicacionPrincipal() {
         <div className={['tecnicos', 'alertas-garantia', 'duplicados'].includes(tab) ? 'block fade-in' : 'hidden'}>
           <ModuloTecnicos
             archivoDiarioRef={archivoDiarioRef}
+            periodoCMI={periodoCMI}
             zonaCarga={zonaCarga}
             onProcesandoExcel={setCargandoExcel}
             onAvisoExcel={setAvisoExcel}
@@ -622,8 +625,8 @@ function AplicacionPrincipal() {
           {vacacionesMontado && <Vacaciones activa={tab === 'vacaciones'} onNavigate={setTab} />}
         </div>
         {tab === 'personal' && <Personal />}
-        {tab === 'preventivos' && <Preventivos revisionExcel={revisionExcel} />}
-        {tab === 'control-cmi' && <Preventivos revisionExcel={revisionExcel} key="control-cmi" soloControl />}
+        {tab === 'preventivos' && <Preventivos periodoCMI={periodoCMI} importando={cargandoExcel} revisionExcel={revisionExcel} />}
+        {tab === 'control-cmi' && <Preventivos periodoCMI={periodoCMI} importando={cargandoExcel} revisionExcel={revisionExcel} key="control-cmi" soloControl />}
         {tab === 'preventivos-shell' && <PreventivosTrimestrales revisionExcel={revisionExcel} key="SHELL" marca="SHELL" />}
         {tab === 'preventivos-taco-bell' && <PreventivosTrimestrales revisionExcel={revisionExcel} key="TACO_BELL" marca="TACO_BELL" />}
         {tab === 'viaticos' && <Viaticos />}

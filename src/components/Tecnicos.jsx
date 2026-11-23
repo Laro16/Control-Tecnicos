@@ -192,7 +192,7 @@ function TicketBadge({ estado }) {
 }
 
 export default function ModuloTecnicos({ 
-  vista = 'tecnicos', archivoDiarioRef, zonaCarga, onProcesandoExcel, onAvisoExcel, onPreventivosProcesados,
+  vista = 'tecnicos', archivoDiarioRef, zonaCarga, onProcesandoExcel, onAvisoExcel, onPreventivosProcesados, periodoCMI,
   allTickets, setAllTickets, nombreArchivo, setNombreArchivo, 
   fechaSubidaExcel, setFechaSubidaExcel,
   rutasTecnicos, setRutasTecnicos, rutasAutomaticas, valorRutaTecnico, baseMunicipios,
@@ -266,16 +266,16 @@ export default function ModuloTecnicos({
     reader.onload = async (e) => {
       try {
         const wb = XLSX.read(e.target.result, { type: 'array' })
-        // Nuestro informe abre en Resumen, pero al volver a cargarlo la fuente
-        // es Base completa, nunca las vistas de garantías o duplicados.
-        const hojaBase = wb.SheetNames.find(nombre => normalizarTexto(nombre) === 'BASE COMPLETA') || wb.SheetNames[0]
-        const ws = wb.Sheets[hojaBase]
-        const rawMatrix = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
-        
-        let headerRowIndex = -1, headerKeys = []
-        for (let i = 0; i < rawMatrix.length; i++) {
-          const upperRow = rawMatrix[i].map(cell => normalizarTexto(cell))
-          if (upperRow.includes('ESTADO')) { headerRowIndex = i; headerKeys = upperRow; break }
+        const hojasDatos = ['BASE COMPLETA', 'GENERAL'].map(etiqueta =>
+          wb.SheetNames.find(nombre => normalizarTexto(nombre) === etiqueta))
+        let rawMatrix, headerKeys, headerRowIndex = -1
+        for (const nombre of new Set([...hojasDatos.filter(Boolean), ...wb.SheetNames])) {
+          rawMatrix = XLSX.utils.sheet_to_json(wb.Sheets[nombre], { header: 1, defval: '' })
+          headerRowIndex = rawMatrix.findIndex(fila => fila.some(celda => normalizarTexto(celda) === 'ESTADO'))
+          if (headerRowIndex >= 0) {
+            headerKeys = rawMatrix[headerRowIndex].map(normalizarTexto)
+            break
+          }
         }
         if (headerRowIndex === -1) { alert("⚠️ No encontré columna 'ESTADO'."); return }
 
@@ -378,11 +378,12 @@ export default function ModuloTecnicos({
         const avisosCarga = []
         // Este historial es independiente de los estados y de la última base cargada.
         try {
-          const resultado = await importarPreventivos(filasPreventivos)
+          const resultado = await importarPreventivos(filasPreventivos, periodoCMI?.destino)
           avisosCarga.push(resultado.ordenes.length || resultado.sinOrden
             ? `${resultado.ordenes.length} órdenes de preventivos guardadas sin duplicar.${resultado.sinOrden ? ` ${resultado.sinOrden} filas sin N° ORDEN no se contaron.` : ''}`
             : '')
         } catch (fallo) {
+          if (fallo.code === 'VUELTA_CMI_CAMBIADA') periodoCMI?.actualizar()
           avisosCarga.push(`${fallo.message}. Revisa la vuelta activa CMI y vuelve a subir este Excel. Los demás datos sí se cargaron.`)
         }
         try {
@@ -652,15 +653,15 @@ export default function ModuloTecnicos({
       </section>
 
       {zonaCarga && createPortal(
-        <CargaExcelDiario archivoRef={fileRef} cargar={procesarExcel}
-          ocupado={procesandoExcel || importacionParticulares?.estado === 'importando'}
+        <CargaExcelDiario archivoRef={fileRef} cargar={procesarExcel} periodoCMI={periodoCMI}
+          ocupado={procesandoExcel || importacionParticulares?.estado === 'importando' || periodoCMI?.ocupado}
           nombreArchivo={nombreArchivo} fecha={fechaSubidaExcel} />,
         zonaCarga
       )}
 
       {vistaTecnicos && procesandoExcel && importacionParticulares?.estado !== 'importando' && <p className="text-sm text-slate-600" role="status">Leyendo el archivo…</p>}
       {vistaTecnicos && <EstadoParticulares importacion={importacionParticulares} />}
-      {vistaTecnicos && <VueltaActivaCMI/>}
+      {vistaTecnicos && periodoCMI && <VueltaActivaCMI periodo={periodoCMI} importando={procesandoExcel}/>}
       {vistaTecnicos && estadoPreventivos && <p role="status" className="rounded-xl border border-slate-700 p-3 text-sm">{estadoPreventivos}</p>}
 
       {vistaAlertas && allTickets.length === 0 && <HistorialSeries datos={historialSeries} reincidencias={controlAlertas.reincidencias} solicitudAlerta={solicitudAlerta} />}
