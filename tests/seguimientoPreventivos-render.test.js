@@ -100,3 +100,16 @@ test('el portal ofrece Viáticos y los menús de preventivos, no el panel genera
   assert.match(html,/Shell/);assert.match(html,/Taco Bell/)
   assert.doesNotMatch(html,/Dashboard|Particulares|Vacaciones|Alerta de garantías/)
 })
+
+test('Todos muestra meses propios de las fichas y limita opciones a la vuelta',()=>{
+  const registros=[9,12].map(m=>({...prepararSeguimiento([{...local,id:'p'+m,codigo:String(m),meses:[m]}],[],[],2026,m)[0],mes:m}))
+  const html=renderToStaticMarkup(React.createElement(Programacion,{registros,declaraciones:[],anio:2026,vuelta:3,mes:0,hoy:'2026-11-23'}))
+  assert.match(html,/value="0" selected="">Todos/)
+  assert.match(html,/Septiembre · 1/)
+  assert.match(html,/Diciembre · 1/)
+  assert.doesNotMatch(html,/value="1">Enero/)
+  assert.match(html,/2 de 2 restaurantes/)
+  const filtrado=renderToStaticMarkup(React.createElement(Programacion,{registros,declaraciones:[],anio:2026,vuelta:3,mes:12,hoy:'2026-11-23'}))
+  assert.match(filtrado,/1 de 1 restaurantes/)
+  assert.doesNotMatch(filtrado,/Septiembre · 1/)
+})
