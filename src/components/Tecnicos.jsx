@@ -1,10 +1,12 @@
+import { createPortal } from 'react-dom'
+import CargaExcelDiario from './CargaExcelDiario'
 import VueltaActivaCMI from './VueltaActivaCMI'
 import { useState, useRef, useEffect } from 'react'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { 
-  Upload, Clipboard, FileText, FileSpreadsheet, ChevronDown, Wrench, Filter, 
+  Clipboard, FileText, FileSpreadsheet, ChevronDown, Wrench, Filter, 
   DownloadCloud, MapPin, ShieldAlert, ShieldCheck, Copy, ChevronRight, Users, Activity,
   Phone, Navigation, MessageCircle, Check
 } from 'lucide-react'
@@ -190,13 +192,12 @@ function TicketBadge({ estado }) {
 }
 
 export default function ModuloTecnicos({ 
-  vista = 'tecnicos', archivoDiarioRef, onProcesandoExcel, onAvisoExcel, onPreventivosProcesados,
+  vista = 'tecnicos', archivoDiarioRef, zonaCarga, onProcesandoExcel, onAvisoExcel, onPreventivosProcesados,
   allTickets, setAllTickets, nombreArchivo, setNombreArchivo, 
   fechaSubidaExcel, setFechaSubidaExcel,
   rutasTecnicos, setRutasTecnicos, rutasAutomaticas, valorRutaTecnico, baseMunicipios,
   clientesGarantia = [], estadoCatalogoGarantias, controlAlertas, solicitudAlerta, historialSeries, importacionParticulares, vencimientosGarantia
 }) {
-  const [dragging, setDragging] = useState(false)
   const [expandido, setExpandido] = useState({})
   const [filtroTecnico, setFiltroTecnico] = useState('Todos')
   const [filtroEstadoGlobal, setFiltroEstadoGlobal] = useState('Todos')
@@ -412,20 +413,7 @@ export default function ModuloTecnicos({
     reader.readAsArrayBuffer(file)
   }
 
-  const extensionesValidas = ['.xlsx', '.xls', '.xlsm', '.xlsb', '.csv', '.tsv', '.ods']
-  function onFileChange(e) {
-    const archivo = e.target.files[0]
-    if (!archivo) return
-    const ext = archivo.name.slice(archivo.name.lastIndexOf('.')).toLowerCase()
-    if (!extensionesValidas.includes(ext)) {
-      alert('Archivo no soportado. Usa: ' + extensionesValidas.join(', '))
-      e.target.value = ''
-      return
-    }
-    procesarExcel(archivo)
-    e.target.value = ''
-  }
-  function onDrop(e) { e.preventDefault(); setDragging(false); if (e.dataTransfer.files[0]) procesarExcel(e.dataTransfer.files[0]) }
+
 
   function comprobarCatalogoExportacion() {
     if (estadoCatalogoGarantias !== 'listo' || !clientesGarantia.length) {
@@ -663,37 +651,12 @@ export default function ModuloTecnicos({
         </div>
       </section>
 
-      {/* ── Upload zone ── */}
-      {vistaTecnicos && <div
-        className={`upload-zone card group flex cursor-pointer items-center gap-4 border-2 border-dashed px-4 py-4 transition-all ${dragging ? 'border-sky-400 bg-sky-50' : 'border-slate-200 hover:border-sky-300 hover:bg-sky-50/40'}`}
-        onClick={() => fileRef.current.click()}
-        onDragOver={e => { e.preventDefault(); setDragging(true) }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={onDrop}
-      >
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-600 ring-1 ring-sky-100 transition group-hover:bg-sky-100">
-          <Upload size={18} />
-        </div>
-        <div className="flex-1 min-w-0 text-xs">
-          {nombreArchivo ? (
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-extrabold text-slate-800 truncate max-w-[300px]">{nombreArchivo}</span>
-              {fechaSubidaExcel && <span className="text-slate-400 font-medium text-[10px]">· {fechaSubidaExcel}</span>}
-            </div>
-          ) : (
-            <div>
-              <p className="font-extrabold text-slate-700">Cargar base de tickets</p>
-              <p className="mt-0.5 text-[10px] font-medium text-slate-400">Arrastra el archivo aquí o haz clic para seleccionarlo</p>
-            </div>
-          )}
-        </div>
-        {allTickets.length > 0 && (
-          <button disabled={Boolean(exportando) || estadoCatalogoGarantias === 'cargando'} onClick={(e) => { e.stopPropagation(); descargarExcelCompleto() }} className="btn-success hidden items-center gap-1.5 shrink-0 text-[10px] sm:flex disabled:opacity-50">
-            <DownloadCloud size={12} /> {exportando === 'excel' ? 'Generando…' : 'Excel organizado'}
-          </button>
-        )}
-      </div>}
-      <input ref={fileRef} type="file" className="hidden" accept={extensionesValidas.join(',')} onChange={onFileChange} disabled={procesandoExcel || importacionParticulares?.estado === 'importando'} />
+      {zonaCarga && createPortal(
+        <CargaExcelDiario archivoRef={fileRef} cargar={procesarExcel}
+          ocupado={procesandoExcel || importacionParticulares?.estado === 'importando'}
+          nombreArchivo={nombreArchivo} fecha={fechaSubidaExcel} />,
+        zonaCarga
+      )}
 
       {vistaTecnicos && procesandoExcel && importacionParticulares?.estado !== 'importando' && <p className="text-sm text-slate-600" role="status">Leyendo el archivo…</p>}
       {vistaTecnicos && <EstadoParticulares importacion={importacionParticulares} />}

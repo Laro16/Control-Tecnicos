@@ -17,7 +17,7 @@ import useHistorialSeries from './hooks/useHistorialSeries'
 import useVencimientosGarantia from './hooks/useVencimientosGarantia'
 import useImportacionParticulares from './hooks/useImportacionParticulares'
 import garantiasUrl from './Garantias.xlsx?url'
-import { Upload, Wrench, ClipboardList, BarChart3, Briefcase, Cloud, CloudOff, Copy, Loader2, LayoutDashboard, CalendarDays, Menu, Moon, MoreHorizontal, PanelLeftClose, PanelLeftOpen, ShieldAlert, ShieldCheck, Sun, X, Wallet, Users } from 'lucide-react'
+import { Wrench, ClipboardList, BarChart3, Briefcase, Cloud, CloudOff, Copy, Loader2, LayoutDashboard, CalendarDays, Menu, Moon, MoreHorizontal, PanelLeftClose, PanelLeftOpen, ShieldAlert, ShieldCheck, Sun, X, Wallet, Users } from 'lucide-react'
 
 function normalizarTexto(texto) {
   if (!texto) return ''
@@ -89,6 +89,7 @@ export default function App() {
 function AplicacionPrincipal() {
   const [tab, setTab] = useState(() => ['#control-cmi', '#preventivos', '#preventivos-shell', '#preventivos-taco-bell'].includes(window.location.hash) ? window.location.hash.slice(1) : 'dashboard')
   const archivoDiarioRef = useRef(null)
+  const [zonaCarga, setZonaCarga] = useState(null)
   const [cargandoExcel, setCargandoExcel] = useState(false)
   const [avisoExcel, setAvisoExcel] = useState('')
   const [revisionExcel, setRevisionExcel] = useState(0)
@@ -512,11 +513,6 @@ function AplicacionPrincipal() {
             </div>
 
             <div className="app-topbar-actions">
-            <button type="button" className="app-topbar-icon-button" title="Cargar Excel del reporte diario"
-              aria-label="Cargar Excel del reporte diario" onClick={abrirExcel} disabled={cargandoExcel}>
-              {cargandoExcel ? <Loader2 size={17} className="animate-spin" /> : <Upload size={17} />}
-              <span className="hidden sm:inline">Cargar Excel</span>
-            </button>
             <Notificaciones control={controlAlertas} estadoCatalogo={estadoCatalogoGarantias} estadoHistorial={historialSeries.estado} onVerAlertas={verAlertas} />
             <details className="app-options" open={!esVistaMovil || undefined}
               onBlur={event => { if (esVistaMovil && event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false }}
@@ -558,6 +554,7 @@ function AplicacionPrincipal() {
 
           {/* ── CONTENT ── */}
           <main className="app-main">
+          <div ref={setZonaCarga} className="print:hidden" />
           {tab !== 'tecnicos' && (cargandoExcel || avisoExcel) && <div role="status" className="card mb-3 flex items-center justify-between gap-3 p-3 text-sm">
             {cargandoExcel ? 'Procesando el reporte diario…' : avisoExcel}
             {!cargandoExcel && <button type="button" className="btn-ghost" onClick={() => setAvisoExcel('')}>Cerrar</button>}
@@ -584,6 +581,7 @@ function AplicacionPrincipal() {
         <div className={['tecnicos', 'alertas-garantia', 'duplicados'].includes(tab) ? 'block fade-in' : 'hidden'}>
           <ModuloTecnicos
             archivoDiarioRef={archivoDiarioRef}
+            zonaCarga={zonaCarga}
             onProcesandoExcel={setCargandoExcel}
             onAvisoExcel={setAvisoExcel}
             onPreventivosProcesados={() => setRevisionExcel(v => v + 1)} 
