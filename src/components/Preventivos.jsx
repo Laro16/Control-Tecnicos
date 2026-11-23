@@ -1,3 +1,5 @@
+import BloqueoVueltaCMI from './BloqueoVueltaCMI'
+import VueltaActivaCMI from './VueltaActivaCMI'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { CalendarCheck, Download, Plus, RefreshCw } from 'lucide-react'
@@ -29,11 +31,11 @@ async function leerCatalogo() {
   catalogoCache=catalogoDesdeMatriz(XLSX.utils.sheet_to_json(libro.Sheets[hoja],{header:1,defval:''}))
   return catalogoCache
 }
-export default function Preventivos({ tecnico = false, usuarioId: usuarioPortalId = null, soloControl = false }) {
+export default function Preventivos({ tecnico = false, usuarioId: usuarioPortalId = null, soloControl = false, revisionExcel = 0 }) {
   const [catalogo,setCatalogo]=useState([]),[ordenes,setOrdenes]=useState([])
   const [cargando,setCargando]=useState(true),[error,setError]=useState(''),[ocupado,setOcupado]=useState(false),[aviso,setAviso]=useState('')
   const [fechaSemana,setFechaSemana]=useState(hoy),[anio,setAnio]=useState(()=>Number(hoy().slice(0,4))),[vuelta,setVuelta]=useState(()=>Math.floor((Number(hoy().slice(5,7))-1)/4)+1)
-  const [mes,setMes]=useState(()=>Number(hoy().slice(5,7))),[vista,setVista]=useState(soloControl ? 'control' : 'programacion')
+  const [mes,setMes]=useState(0),[vista,setVista]=useState(soloControl ? 'control' : 'programacion')
   const [declaraciones,setDeclaraciones]=useState([]),[seguimientoListo,setSeguimientoListo]=useState(false),[avisoSeguimiento,setAvisoSeguimiento]=useState('')
   const [cierresListos,setCierresListos]=useState(false),[historialCierres,setHistorialCierres]=useState([]),[seleccionEstado,setSeleccionEstado]=useState(null)
   const [catalogoManualListo,setCatalogoManualListo]=useState(false),[seleccionCatalogo,setSeleccionCatalogo]=useState(null),[versionProgramacion,setVersionProgramacion]=useState(0)
@@ -63,14 +65,14 @@ export default function Preventivos({ tecnico = false, usuarioId: usuarioPortalI
     catch(fallo){if(consulta===cargaActual.current)setError(fallo.message || 'No se pudo consultar el historial de preventivos.')}
     finally{if(consulta===cargaActual.current)setCargando(false)}
   }
-  useEffect(()=>{cargar();return()=>{cargaActual.current++}},[tecnico,usuarioPortalId])
+  useEffect(()=>{cargar();return()=>{cargaActual.current++}},[tecnico,usuarioPortalId,revisionExcel])
   // Sin recargar la página ni reaccionar al cambio de pestaña del navegador.
   useEffect(()=>{const id=setInterval(()=>{if(!ocupado&&!seleccionEstado&&!seleccionOrden&&!seleccionCatalogo&&document.visibilityState==='visible')cargar(true)},60000);return()=>clearInterval(id)},[ocupado,seleccionEstado,seleccionOrden,seleccionCatalogo,tecnico,usuarioPortalId])
   const semana=useMemo(()=>rangoSemana(fechaSemana),[fechaSemana])
   const ordenesRevisadas=useMemo(()=>combinarExclusionesOrdenes(ordenes,exclusiones),[ordenes,exclusiones])
   const ordenesExcluidas=useMemo(()=>ordenesRevisadas.filter(o=>o.exclusion?.excluida).map(o=>atribuirOrden(o,catalogo)),[ordenesRevisadas,catalogo])
   const avance=useMemo(()=>prepararAvance(catalogo,ordenesRevisadas,Number(anio),Number(vuelta),semana.fin,declaraciones),[catalogo,ordenesRevisadas,anio,vuelta,semana.fin,declaraciones])
-  const seguimiento=useMemo(()=>prepararSeguimiento(catalogo,ordenesRevisadas,declaraciones,anio,mes),[catalogo,ordenesRevisadas,declaraciones,anio,mes])
+  const seguimiento=useMemo(()=>[0,1,2,3].flatMap(i=>{const m=(Number(vuelta)-1)*4+i+1;return prepararSeguimiento(catalogo,ordenesRevisadas,declaraciones,anio,m).map(r=>({...r,mes:m}))}),[catalogo,ordenesRevisadas,declaraciones,anio,vuelta])
   const deSemana=avance.atribuidas.filter(o=>o.fecha_realizada>=semana.inicio&&o.fecha_realizada<=semana.fin)
   const porUbicar=avance.atribuidas.filter(o=>!o.local||(o.local.activo&&!o.programado))
   const cerrados=catalogo.filter(l=>!l.activo)
@@ -90,7 +92,7 @@ export default function Preventivos({ tecnico = false, usuarioId: usuarioPortalI
       setCatalogo(actual=>combinarCatalogoLocales(actual,[guardado]))
       setSeleccionEstado(null)
       setAviso(datos.cerrado?`El punto de venta #${local.codigo} se movió a Cerrados. Sus órdenes y reportes se conservaron.`:`El punto de venta #${local.codigo} fue reactivado y volverá a aparecer en sus meses programados.`)
-      if(datos.cerrado)setVista('cerrados')
+      if(datos.cerrado&&!soloControl)setVista('cerrados')
       await cargar(true)
     }finally{setOcupado(false)}
   }
@@ -116,7 +118,7 @@ export default function Preventivos({ tecnico = false, usuarioId: usuarioPortalI
   }
   async function exportarAvance(){setOcupado(true);setError('');try{await descargarImagenPreventivos(datosImagenAvance(avance.resumen,{anio,vuelta,semana}),`Preventivos_Avance_${anio}_Vuelta_${vuelta}_${semana.fin}.png`)}catch(e){setError(e.message)}finally{setOcupado(false)}}
   async function exportarMes(tipo){setOcupado(true);setError('');try{
-    await descargarImagenPreventivos(datosImagenProgramacion(seguimiento,{tipo,anio,mes}),`Preventivos_${tipo}_${anio}_${String(mes).padStart(2,'0')}.png`)
+    await descargarImagenPreventivos(datosImagenProgramacion(seguimiento.filter(r=>!mes||r.mes===mes),{tipo,anio,mes}),`Preventivos_${tipo}_${anio}_${String(mes).padStart(2,'0')}.png`)
   }catch(e){setError(e.message)}finally{setOcupado(false)}}
   async function exportarFiltrados(registros){setOcupado(true);setError('');try{
     await descargarImagenPreventivos(datosImagenFiltradaProgramacion(registros,{anio,mes}),`Preventivos_Filtrados_${anio}_${String(mes).padStart(2,'0')}.png`)
@@ -131,6 +133,7 @@ export default function Preventivos({ tecnico = false, usuarioId: usuarioPortalI
   }catch(e){setError(e.message)}finally{setOcupado(false)}}
   return <div className="space-y-5 fade-in">
     <section className="workspace-hero"><div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-sky-300"><CalendarCheck size={15}/> Mantenimientos programados</p><h1 className="text-3xl font-black">{soloControl ? "Control CMI · hoja de seguimiento" : "Preventivos CMI"}</h1><p className="mt-2 max-w-xl text-sm text-slate-300">{tecnico?'Consulta lo que falta y reporta los preventivos que ya realizaste. Las órdenes del Excel también cuentan como realizadas.':'Calendario de restaurantes, seguimiento del técnico y avance por vuelta. Cada orden conserva su registro entre cargas del Excel.'}</p></div><button className="btn-ghost bg-white text-slate-900" onClick={()=>cargar()} disabled={cargando||ocupado}><RefreshCw size={14} className="mr-1 inline"/> Actualizar</button></div></section>
+    {!tecnico&&<VueltaActivaCMI/>}
     {error&&<div role="alert" className="rounded-xl border-2 border-rose-500 bg-rose-50 p-4 text-sm text-rose-900">{error}<p className="mt-1">{tecnico?'Pide al administrador que revise la activación de Preventivos para técnicos.':'Revisa la conexión y la activación de Preventivos en Supabase. Pulsa Actualizar para volver a consultar los datos.'}</p></div>}
     {avisoSeguimiento&&<p role="alert" className="card border-amber-700 bg-amber-50 p-4 text-sm text-amber-950">{avisoSeguimiento}</p>}
     {!tecnico&&seguimientoListo&&!cierresListos&&<p role="status" className="card bg-amber-50 p-4 text-sm text-amber-950">Para guardar cierres y reactivaciones, ejecuta activar_cierres_preventivos.sql en Supabase y pulsa Actualizar.</p>}
@@ -138,28 +141,29 @@ export default function Preventivos({ tecnico = false, usuarioId: usuarioPortalI
     {!tecnico&&!cargando&&!error&&!exclusionesListas&&<p role="status" className="card bg-amber-50 p-4 text-sm text-amber-950">Para excluir y restaurar órdenes, ejecuta activar_exclusiones_preventivos.sql en Supabase y pulsa Actualizar. No necesitas repetir los scripts anteriores.</p>}
     {aviso&&<p role="status" className="rounded-xl border border-emerald-500 bg-emerald-50 p-3 text-sm text-emerald-900">{aviso}</p>}
     {vista!=='cerrados'&&vista!=='excluidas'&&<section className="card grid gap-3 p-4 sm:grid-cols-3 lg:grid-cols-4">
-      <label className="text-xs font-bold">Año<input type="number" min="2020" max="2100" value={anio} onChange={e=>setAnio(e.target.value)} className="control-field mt-1 w-full"/></label>
-      {!tecnico&&<><label className="text-xs font-bold">Vuelta<select value={vuelta} onChange={e=>setVuelta(Number(e.target.value))} className="control-field mt-1 w-full">{[1,2,3].map(v=><option key={v} value={v}>{MESES_PREVENTIVOS[(v-1)*4]} – {MESES_PREVENTIVOS[v*4-1]}</option>)}</select></label>
+      <label className="text-xs font-bold">Año del reporte<input type="number" min="2020" max="2100" value={anio} onChange={e=>setAnio(e.target.value)} className="control-field mt-1 w-full"/></label>
+      {!tecnico&&<><label className="text-xs font-bold">Vuelta del reporte<select value={vuelta} onChange={e=>{setVuelta(Number(e.target.value));setMes(0)}} className="control-field mt-1 w-full">{[1,2,3].map(v=><option key={v} value={v}>{MESES_PREVENTIVOS[(v-1)*4]} – {MESES_PREVENTIVOS[v*4-1]}</option>)}</select></label>
       {vista!=='control'&&<><label className="text-xs font-bold">Semana del reporte<input type="date" value={fechaSemana} onChange={e=>e.target.value&&setFechaSemana(e.target.value)} className="control-field mt-1 w-full"/></label>
       <button onClick={exportarAvance} disabled={ocupado||cargando||Boolean(error)||!catalogo.length} className="btn-primary self-end disabled:opacity-50"><Download size={14} className="mr-1 inline"/> Descargar avance PNG</button>
       <p className="text-xs text-slate-500 sm:col-span-3 lg:col-span-4">Corte: {fechaVisible(semana.inicio)} al {fechaVisible(semana.fin)}. Realizados incluye Pendientes de liquidar y Finalizados, según la vuelta y el mes programado. Los equipos cuentan órdenes únicas del Excel.</p></>}</>}
       {tecnico&&<p className="self-center text-sm text-slate-600 sm:col-span-2 lg:col-span-3">Calendario compartido · se conservan las marcas por restaurante, mes y año.</p>}
     </section>}
+    {!tecnico&&<BloqueoVueltaCMI key={`${anio}:${vuelta}`} anio={anio} vuelta={vuelta}/>}
     {!tecnico&&!error&&vista!=='cerrados'&&vista!=='excluidas'&&vista!=='control'&&<section className="grid gap-4 md:grid-cols-2">{avance.resumen.map(r=><article className="card p-5" key={r.marca}><h2 className="text-base font-black">{r.nombre}</h2><div className="mt-4 grid grid-cols-3 gap-3"><Dato nombre="Asignados" valor={r.asignados}/><Dato nombre="Realizados (total)" valor={r.atendidos}/><Dato nombre="Equipos en Excel" valor={r.equipos}/></div><div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-300 pt-3 text-xs font-bold"><p className="text-amber-800">{r.porLiquidar} pendientes de liquidar</p><p className="text-emerald-700">{r.finalizados} finalizados</p></div><div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-200"><div className="h-full bg-emerald-500" style={{width:porcentaje(r.porcentaje)}}/></div><p className="mt-2 flex justify-between text-xs font-bold"><span className="text-emerald-700">{porcentaje(r.porcentaje)} realizado</span><span>{r.pendiente} pendientes · {porcentaje(100-r.porcentaje)}</span></p></article>)}</section>}
     {!soloControl&&<div className="flex flex-wrap gap-2" aria-label="Vistas de preventivos">{[['programacion','Programación y seguimiento'],['cerrados',`Cerrados (${cerrados.length})`],...(!tecnico?[['semana',`Actividad semanal (${deSemana.length})`],['revision',`Por ubicar (${porUbicar.length})`],['excluidas',`Órdenes excluidas (${ordenesExcluidas.length})`]]:[])].map(([id,nombre])=><button type="button" aria-pressed={vista===id} className={vista===id?'btn-primary':'btn-ghost'} key={id} onClick={()=>setVista(id)}>{nombre}</button>)}</div>}
     {!tecnico&&!soloControl&&<button type="button" className="btn-primary inline-flex min-h-11 items-center gap-2" disabled={!catalogoManualListo||cargando||ocupado} onClick={()=>setSeleccionCatalogo({local:null})}><Plus size={16}/> Nueva tienda</button>}
     {cargando&&<p role="status" className="text-sm text-slate-500">Consultando calendario e historial…</p>}
     {!cargando&&!error&&!ordenes.length&&vista!=='cerrados'&&vista!=='excluidas'&&<p className="card p-4 text-sm text-slate-600">{tecnico?'Aún no se han detectado órdenes en el Excel; puedes consultar el calendario y reportar lo realizado.':'Todavía no hay órdenes registradas. Vuelve a cargar tu Excel diario en Técnicos para iniciar el historial.'}</p>}
     {!error&&catalogo.length>0&&vista==='programacion'&&<>
-      <ProgramacionPreventivos key={versionProgramacion} registros={seguimiento} declaraciones={declaraciones} anio={Number(anio)} mes={mes} tecnico={tecnico} usuarioId={usuarioId} listo={seguimientoListo} ocupado={ocupado||cargando} hoy={hoy()} guardar={guardarRealizado} recargar={()=>cargar()} cambiarMes={setMes} cerrarLocal={setSeleccionEstado} cierresListos={cierresListos} excluirOrden={setSeleccionOrden} exclusionesListas={exclusionesListas} editarLocal={local=>setSeleccionCatalogo({local})} catalogoManualListo={catalogoManualListo} descargarFiltrados={exportarFiltrados}/>
+      <ProgramacionPreventivos key={versionProgramacion} registros={seguimiento} declaraciones={declaraciones} anio={Number(anio)} vuelta={Number(vuelta)} mes={mes} tecnico={tecnico} usuarioId={usuarioId} listo={seguimientoListo} ocupado={ocupado||cargando} hoy={hoy()} guardar={guardarRealizado} recargar={()=>cargar()} cambiarMes={setMes} cerrarLocal={setSeleccionEstado} cierresListos={cierresListos} excluirOrden={setSeleccionOrden} exclusionesListas={exclusionesListas} editarLocal={local=>setSeleccionCatalogo({local})} catalogoManualListo={catalogoManualListo} descargarFiltrados={exportarFiltrados}/>
       {!tecnico&&<div className="flex flex-wrap gap-2">{Object.entries(MARCAS_PREVENTIVOS).map(([id,n])=><button key={id} onClick={()=>exportarMes(id)} disabled={ocupado||cargando||Boolean(error)} className="btn-ghost disabled:opacity-50"><Download size={14} className="mr-1 inline"/> {n} · PNG</button>)}</div>}
     </>}
-    {!tecnico&&!error&&catalogo.length>0&&vista==='control'&&<ControlImprimiblePreventivos catalogo={catalogo} ordenes={ordenesRevisadas} declaraciones={declaraciones} anio={Number(anio)} vuelta={Number(vuelta)} listo={seguimientoListo} ocupado={ocupado||cargando} hoy={hoy()} guardar={guardarRealizado} revisionDatos={cargaActual.current}/>}
+    {!tecnico&&!error&&catalogo.length>0&&vista==='control'&&<ControlImprimiblePreventivos catalogo={catalogo} ordenes={ordenesRevisadas} declaraciones={declaraciones} anio={Number(anio)} vuelta={Number(vuelta)} listo={seguimientoListo} ocupado={ocupado||cargando} hoy={hoy()} guardar={guardarRealizado} revisionDatos={cargaActual.current} cerrarLocal={setSeleccionEstado} cierresListos={cierresListos}/>}
     {!error&&vista==='cerrados'&&<CierresPreventivos locales={cerrados} ordenes={avance.atribuidas} declaraciones={declaraciones} historial={historialCierres} tecnico={tecnico} listo={cierresListos} ocupado={ocupado||cargando} reactivar={setSeleccionEstado} excluirOrden={setSeleccionOrden} exclusionesListas={exclusionesListas} editarLocal={local=>setSeleccionCatalogo({local})} catalogoManualListo={catalogoManualListo}/>}
     {!tecnico&&!error&&vista==='excluidas'&&<ExclusionesPreventivos ordenes={ordenesExcluidas} historial={historialExclusiones} listo={exclusionesListas} ocupado={ocupado||cargando} restaurar={setSeleccionOrden}/>}
     {!tecnico&&seleccionOrden&&<DialogoExclusionOrden orden={seleccionOrden} guardar={cambiarExclusion} cerrar={()=>setSeleccionOrden(null)}/>}
     {seleccionEstado&&!tecnico&&<DialogoEstadoLocal local={seleccionEstado} hoy={hoy()} guardar={cambiarEstadoLocal} cerrar={()=>setSeleccionEstado(null)}/>}
-    {seleccionCatalogo&&!tecnico&&<DialogoCatalogoPreventivos local={seleccionCatalogo.local} catalogo={catalogo} mesInicial={mes} guardar={guardarCatalogo} cerrar={()=>setSeleccionCatalogo(null)}/>}
+    {seleccionCatalogo&&!tecnico&&<DialogoCatalogoPreventivos local={seleccionCatalogo.local} catalogo={catalogo} mesInicial={mes||(Number(vuelta)-1)*4+1} guardar={guardarCatalogo} cerrar={()=>setSeleccionCatalogo(null)}/>}
     {vista==='semana'&&<section className="card overflow-x-auto"><div className="border-b border-slate-400 p-4"><h2 className="font-black">Órdenes con fecha realizada esta semana</h2><p className="mt-1 text-xs text-slate-600">{avance.sinFecha.length} órdenes sin fecha realizada se conservan en el historial; no se atribuyen a una semana.</p></div><table className="w-full min-w-[720px] text-left text-sm"><thead className="bg-slate-100"><tr>{['Orden','Restaurante','Fecha realizada','Mes programado','Técnico'].map(t=><th className="p-3" key={t}>{t}</th>)}</tr></thead><tbody>{deSemana.map(o=><tr className="border-t border-slate-300" key={o.numero_orden}><td className="p-3 font-bold">#{o.numero_orden}</td><td className="p-3">{o.local?.nombre||o.negocio}<span className="block text-xs text-slate-500">{MARCAS_PREVENTIVOS[o.marca]} · {o.codigo||'Sin código'}</span></td><td className="p-3">{fechaVisible(o.fecha_realizada)}</td><td className="p-3">{o.programado?`${MESES_PREVENTIVOS[o.programado.mes-1]} ${o.programado.anio}`:'Por ubicar'}{o.tarde&&<span className="block text-xs text-slate-500">Atendido después del mes programado</span>}</td><td className="p-3">{o.tecnico||'—'}</td></tr>)}</tbody></table>{!deSemana.length&&<p className="p-5 text-sm text-slate-500">Sin fechas realizadas dentro de esta semana.</p>}</section>}
     {!tecnico&&!error&&vista==='revision'&&<section className="space-y-3">
       <div className="card p-4"><h2 className="font-black">Ubicar órdenes en el calendario</h2><p className="mt-1 text-sm text-slate-600">El estado del servicio no limita el conteo. Cuando falta la fecha realizada o no se identifica el restaurante, indica el local y su mes programado para incluir sus órdenes en la vuelta. Si una orden fue eliminada o no se realizó, puedes excluirla individualmente.</p><label className="mt-3 block max-w-xs text-xs font-bold">Mes programado<input type="month" className="control-field mt-1 w-full" value={mesManual} onChange={e=>setMesManual(e.target.value)}/></label></div>

@@ -7,7 +7,7 @@ import DetalleOrdenesPreventivos from './DetalleOrdenesPreventivos'
 const colores = { pendiente: 'bg-slate-100 text-slate-800', 'por-liquidar': 'bg-amber-100 text-amber-900', finalizado: 'bg-emerald-100 text-emerald-900' }
 const campo = 'control-field w-full'
 
-export default function ProgramacionPreventivos({ registros, declaraciones, anio, mes, tecnico, usuarioId, listo, ocupado, hoy, guardar, recargar, cambiarMes, cerrarLocal, cierresListos, excluirOrden, exclusionesListas, editarLocal, catalogoManualListo, descargarFiltrados }) {
+export default function ProgramacionPreventivos({ registros, declaraciones, anio, mes, vuelta = Math.floor((Number(mes || 1)-1)/4)+1, tecnico, usuarioId, listo, ocupado, hoy, guardar, recargar, cambiarMes, cerrarLocal, cierresListos, excluirOrden, exclusionesListas, editarLocal, catalogoManualListo, descargarFiltrados }) {
   const [filtro, setFiltro] = useState('todos')
   const [busqueda, setBusqueda] = useState('')
   const [marca, setMarca] = useState('')
@@ -18,15 +18,17 @@ export default function ProgramacionPreventivos({ registros, declaraciones, anio
   const [enviando, setEnviando] = useState(false)
   const dialogo = useRef(null)
   useEffect(() => { if (seleccion) dialogo.current?.showModal() }, [seleccion])
-  useEffect(() => { setSeleccion(null); setExpandido(null); dialogo.current?.close() }, [anio, mes])
-  const revision = local => declaraciones.find(d => Number(d.anio) === Number(anio) && Number(d.mes) === Number(mes) && claveSeguimiento(d, anio, mes) === claveSeguimiento(local, anio, mes))
-  const coincidentes = registros.filter(r => (!marca || r.local.marca === marca)
-    && `${r.local.codigo} ${r.local.nombre} ${r.local.direccion}`.toLocaleLowerCase('es').includes(busqueda.toLocaleLowerCase('es')))
-  const visibles = coincidentes.filter(r => filtro === 'todos' || r.estado === filtro)
+  useEffect(() => { setSeleccion(null); setExpandido(null); dialogo.current?.close() }, [anio, mes, vuelta])
+  const revision = (local, mes) => declaraciones.find(d => Number(d.anio) === Number(anio) && Number(d.mes) === Number(mes) && claveSeguimiento(d, anio, mes) === claveSeguimiento(local, anio, mes))
+  const buscando = Boolean(busqueda.trim())
+  const coincidentes = registros.filter(r => (buscando || !mes || Number(r.mes ?? mes) === Number(mes)) && (!marca || r.local.marca === marca)
+    && `${r.local.codigo} ${r.local.nombre} ${r.local.direccion}`.toLocaleLowerCase('es').includes(busqueda.trim().toLocaleLowerCase('es')))
+  const prioridad = {pendiente:0,'por-liquidar':1,finalizado:2}
+  const visibles = coincidentes.filter(r => filtro === 'todos' || r.estado === filtro).sort((a,b)=>prioridad[a.estado]-prioridad[b.estado])
   function abrir(registro, deshacer = false) {
-    const anterior = revision(registro.local)
+    const anterior = revision(registro.local, registro.mes ?? mes)
     setError(''); setForm({ fecha: anterior?.fecha_realizado || hoy, equipos: anterior?.equipos_declarados ?? '', observaciones: deshacer ? '' : anterior?.observaciones || '' })
-    setSeleccion({ ...registro, deshacer, anterior, anio, mes })
+    setSeleccion({ ...registro, deshacer, anterior, anio, mes: registro.mes ?? mes })
   }
   function cerrar() { if (!enviando) { dialogo.current?.close(); setSeleccion(null) } }
   async function enviar(e) {
@@ -42,14 +44,14 @@ export default function ProgramacionPreventivos({ registros, declaraciones, anio
   return <section className="space-y-4" aria-label="Seguimiento de los mantenimientos">
     <div className="grid grid-cols-3 gap-2 sm:gap-4">{[['pendiente','Pendientes'],['por-liquidar','Pendientes de liquidar'],['finalizado','Finalizados']].map(([estado, titulo]) => <button key={estado} type="button" aria-pressed={filtro === estado} onClick={() => setFiltro(estado)} className={`card min-h-24 p-3 text-left ${filtro === estado ? 'ring-2 ring-sky-500' : ''}`}><span className="block text-[11px] font-bold text-slate-600">{titulo}</span><span className="mt-1 block text-2xl font-black">{coincidentes.filter(r => r.estado === estado).length}</span></button>)}</div>
     <div className="card grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
-      <label className="text-xs font-bold">Mes programado<select className={`${campo} mt-1`} value={mes} onChange={e => cambiarMes(Number(e.target.value))}>{MESES_PREVENTIVOS.map((nombre, i) => <option key={nombre} value={i+1}>{nombre}</option>)}</select></label>
+      <label className="text-xs font-bold">Mes programado<select className={`${campo} mt-1`} value={mes} onChange={e => cambiarMes(Number(e.target.value))}><option value={0}>Todos</option>{[0,1,2,3].map(i=>(vuelta-1)*4+i+1).map(m => <option key={m} value={m}>{MESES_PREVENTIVOS[m-1]}</option>)}</select></label>
       <label className="text-xs font-bold">Restaurantes<select className={`${campo} mt-1`} value={marca} onChange={e => setMarca(e.target.value)}><option value="">Todas las marcas</option>{Object.entries(MARCAS_PREVENTIVOS).map(([id, nombre]) => <option key={id} value={id}>{nombre}</option>)}</select></label>
       <label className="text-xs font-bold">Mostrar<select className={`${campo} mt-1`} value={filtro} onChange={e => setFiltro(e.target.value)}><option value="todos">Todos</option><option value="pendiente">Pendientes</option><option value="por-liquidar">Pendientes de liquidar</option><option value="finalizado">Finalizados</option></select></label>
       <label className="text-xs font-bold">Buscar<input className={`${campo} mt-1`} value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder="Código, nombre o dirección"/></label>
-      <p className="text-xs leading-relaxed text-slate-600 sm:col-span-2 lg:col-span-4">Pendiente: aún no tiene marca ni orden. Pendiente de liquidar: lo marcó un administrador o técnico y falta su registro en el Excel. Finalizado: ya tiene una orden válida del mes programado en el Excel, sin importar el estado de la orden.</p>
+      <p className="text-xs leading-relaxed text-slate-600 sm:col-span-2 lg:col-span-4">La búsqueda abarca todos los meses de la vuelta. Pendiente: aún no tiene marca ni orden. Pendiente de liquidar: lo marcó un administrador o técnico y falta su registro en el Excel. Finalizado: ya tiene una orden válida del mes programado en el Excel, sin importar el estado de la orden.</p>
     </div>
     <div className="flex flex-wrap items-center justify-between gap-2">
-      <p className="text-xs font-semibold text-slate-600">{visibles.length} de {coincidentes.length} restaurantes · {MESES_PREVENTIVOS[mes-1]} {anio} · Pendientes primero</p>
+      <p className="text-xs font-semibold text-slate-600">{visibles.length} de {coincidentes.length} restaurantes · {buscando || !mes ? 'Toda la vuelta' : MESES_PREVENTIVOS[mes-1]} {anio} · Pendientes primero</p>
       <div className="flex flex-wrap gap-2">
         {visibles.length < coincidentes.length && <button type="button" className="btn-ghost min-h-11" onClick={() => setFiltro('todos')}>Ver todos los estados ({coincidentes.length})</button>}
         {!tecnico && <button type="button" className="btn-ghost inline-flex min-h-11 items-center gap-2 disabled:opacity-50" disabled={ocupado||!visibles.length} onClick={()=>descargarFiltrados(visibles)}><Download size={14}/> Descargar filtrados PNG</button>}
@@ -57,6 +59,7 @@ export default function ProgramacionPreventivos({ registros, declaraciones, anio
     </div>
     <div className="grid items-start gap-4 lg:grid-cols-2 2xl:grid-cols-3">{visibles.map(registro => {
       const { local, declaracion, realizado, enExcel } = registro
+      const mesRegistro = registro.mes ?? mes
       const corregible = declaracion && (!tecnico || declaracion.realizado_por === usuarioId)
       const abierto = expandido === local.id
       const idDetalle = `detalle-preventivo-${local.marca}-${local.codigo}`
@@ -69,7 +72,7 @@ export default function ProgramacionPreventivos({ registros, declaraciones, anio
               <span className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold ${colores[registro.estado]}`}>{enExcel ? <Check size={13} aria-hidden="true"/> : <Clock3 size={13} aria-hidden="true"/>}{ESTADOS_PREVENTIVOS[registro.estado]}</span>
             </div>
             <h3><button type="button" aria-expanded={abierto} aria-controls={idDetalle} onClick={alternar} className="min-h-7 text-left text-base font-black leading-snug hover:text-sky-700">{local.nombre}</button></h3>
-            <p className="mt-2 text-xs font-semibold text-slate-600">{MESES_PREVENTIVOS[mes-1]} · {local.semana || 'Sin semana asignada'}</p>
+            <p className="mt-2 text-xs font-semibold text-slate-600">{MESES_PREVENTIVOS[mesRegistro-1]} · {local.semana || 'Sin semana asignada'}</p>
             <p className="mt-1 text-xs text-slate-600">{local.equipos == null ? 'Sin cantidad prevista' : `${local.equipos} equipos previstos`}{declaracion?.equipos_declarados ? ` · ${declaracion.equipos_declarados} declarados` : ''}</p>
           </div>
           <div className="space-y-1 border-y border-slate-300 py-3 text-xs text-slate-600">
@@ -83,7 +86,7 @@ export default function ProgramacionPreventivos({ registros, declaraciones, anio
           </div>
         </div>
         <div id={idDetalle} hidden={!abierto} className="border-t border-slate-300 bg-slate-50 px-4 py-4 sm:px-6">
-        <p className="text-xs font-bold">{TIPOS_RESTAURANTE_PREVENTIVO[tipoRestaurantePreventivo(local)]} · #{local.codigo} · {MESES_PREVENTIVOS[mes-1]} {anio}</p>
+        <p className="text-xs font-bold">{TIPOS_RESTAURANTE_PREVENTIVO[tipoRestaurantePreventivo(local)]} · #{local.codigo} · {MESES_PREVENTIVOS[mesRegistro-1]} {anio}</p>
         <p className="mt-3 break-words text-xs text-slate-600">{local.direccion || 'Sin dirección en calendario'}</p>
         <p className="mt-2 text-xs font-semibold text-slate-600">{local.semana || 'Sin semana asignada'} · {local.equipos == null ? 'Sin cantidad prevista' : `${local.equipos} equipos previstos`}</p>
         {declaracion && <div className={`mt-3 rounded-lg p-3 text-xs ${enExcel ? 'bg-emerald-50 text-emerald-950' : 'bg-amber-50 text-amber-950'}`}><p className="font-bold">{declaracion.realizado_nombre}</p><p className="mt-1">Realizado: {declaracion.fecha_realizado.split('-').reverse().join('/')}{declaracion.equipos_declarados ? ` · ${declaracion.equipos_declarados} equipos declarados` : ''}</p>{declaracion.actualizado_en && <p className="mt-1 text-[11px]">Registro: {new Date(declaracion.actualizado_en).toLocaleString('es-GT',{timeZone:'America/Guatemala',dateStyle:'short',timeStyle:'short'})}</p>}{declaracion.observaciones && <p className="mt-2 whitespace-pre-wrap break-words">{declaracion.observaciones}</p>}</div>}

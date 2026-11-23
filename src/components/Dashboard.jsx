@@ -10,7 +10,7 @@ const numero = valor => valor.toLocaleString('es-GT')
 const iconosAlertas = { duplicados: Copy, reincidencias: History }
 const tonosEdad = ['emerald', 'sky', 'amber', 'rose', 'slate']
 
-export default function Dashboard({ allTickets, nombreArchivo, fechaSubidaExcel, onNavigate, controlAlertas, estadoCatalogoGarantias, estadoHistorial, onVerAlertas }) {
+export default function Dashboard({ onCargarExcel, allTickets, nombreArchivo, fechaSubidaExcel, onNavigate, controlAlertas, estadoCatalogoGarantias, estadoHistorial, onVerAlertas }) {
   const stats = useMemo(() => obtenerResumenDashboard(allTickets), [allTickets])
   const [orden, setOrden] = useState('pendientes')
   const [mostrarTodos, setMostrarTodos] = useState(false)
@@ -24,7 +24,7 @@ export default function Dashboard({ allTickets, nombreArchivo, fechaSubidaExcel,
       <FileSpreadsheet size={36} aria-hidden="true" />
       <h1>Tu operación, en un vistazo</h1>
       <p>Carga la base de tickets para revisar pendientes, garantías y carga por técnico.</p>
-      <button type="button" className="dashboard-button dashboard-button--primary" onClick={abrirTecnicos}>Cargar base en Técnicos <ArrowRight size={17} /></button>
+      <button type="button" className="dashboard-button dashboard-button--primary" onClick={onCargarExcel || abrirTecnicos}>{onCargarExcel ? 'Cargar Excel' : 'Cargar base en Técnicos'} <ArrowRight size={17} /></button>
     </section>
   )
 

@@ -4,6 +4,10 @@ import { validarExclusionOrden } from './exclusionesPreventivos.js'
 import { validarLocalPreventivo } from './catalogoPreventivos.js'
 export async function importarPreventivos(filas) {
   const resultado = extraerOrdenesPreventivas(filas)
+  if (!resultado.ordenes.length) return resultado
+  const {data:periodo,error:falloPeriodo}=await supabase.from('preventivos_vuelta_activa').select('*').eq('id',1).maybeSingle()
+  if(falloPeriodo||!periodo) throw new Error('Selecciona una vuelta activa CMI. Si no está disponible, ejecuta activar_vuelta_cmi.sql')
+  resultado.ordenes=resultado.ordenes.map(o=>({...o,anio_carga:periodo.anio,vuelta_carga:periodo.vuelta}))
   for (let inicio=0; inicio<resultado.ordenes.length; inicio+=200) {
     const { error } = await supabase.from('preventivos_ordenes').upsert(resultado.ordenes.slice(inicio,inicio+200), { onConflict: 'numero_orden' })
     if (error) throw new Error(`No se guardaron los preventivos: ${error.message}`)

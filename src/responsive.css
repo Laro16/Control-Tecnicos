@@ -253,3 +253,6 @@ html.dark .app-main .route-table .text-red-800 { color: #fca5a5; }
 html.dark .cmi-control-table tr:not(.cmi-control-highlight) > td { background: #111c2f; color: #e2e8f0; border-color: #94a3b8; }
 html.dark .cmi-control [role="status"].text-sky-800 { color: #7dd3fc; }
 html.dark .cmi-control [role="status"].text-amber-950 { color: #fde68a; }
+.cmi-control-table tr.cmi-cerrado td:not(:nth-last-child(2)) { text-decoration: line-through; color: #b91c1c; background: #fff1f2; }
+.cmi-control-table td:nth-last-child(2) { min-width: 180px; }
+.cmi-control-table.cmi-mensual { min-width: 1200px; }

@@ -3,12 +3,12 @@ import { prepararSeguimiento } from './seguimientoPreventivos.js'
 
 export const claveControlImprimible = registro => `${registro.local.marca}:${registro.local.codigo}:${Number(registro.anio)}:${Number(registro.mes)}`
 
-export function prepararControlImprimible(catalogo, ordenes, declaraciones, anio, vuelta) {
+export function prepararControlImprimible(catalogo, ordenes, declaraciones, anio, vuelta, incluirCerrados = false) {
   const y = Number(anio), v = Number(vuelta)
   if (!Number.isInteger(y) || y < 2020 || y > 2100 || ![1, 2, 3].includes(v)) return []
   const inicio = (v - 1) * 4 + 1
   return Array.from({ length: 4 }, (_, i) => inicio + i)
-    .flatMap(mes => prepararSeguimiento(catalogo, ordenes, declaraciones, y, mes).map(registro => ({ ...registro, anio: y, mes })))
+    .flatMap(mes => prepararSeguimiento(incluirCerrados ? catalogo.map(l=>({...l,activo:true})) : catalogo, ordenes, declaraciones, y, mes).map(registro => ({ ...registro, estado: catalogo.find(l=>l.id===registro.local.id)?.activo===false ? 'cerrado' : registro.estado, local: catalogo.find(l=>l.id===registro.local.id)||registro.local, anio: y, mes })))
     // El control de pared no cambia el orden de sus filas al finalizar un servicio.
     .sort((a, b) => a.mes - b.mes || a.local.marca.localeCompare(b.local.marca, 'es')
       || String(a.local.semana || '').localeCompare(String(b.local.semana || ''), 'es', { numeric: true })
@@ -35,13 +35,13 @@ export function combinarResaltadosControl(registros, resaltados = []) {
       ...registro,
       modoResaltado,
       revisionResaltado: Number.isInteger(preferencia?.revision) ? preferencia.revision : 0,
-      resaltado: modoResaltado === 'verde' || modoResaltado === 'automatico' && Boolean(registro.enExcel),
+      resaltado: registro.local.activo !== false && (modoResaltado === 'verde' || modoResaltado === 'automatico' && Boolean(registro.enExcel)),
     }
   })
 }
 
 export function estadoControlImprimible(registro) {
-  return registro.enExcel ? 'Realizado' : registro.declaracion ? 'Pendiente de liquidar' : 'Pendiente'
+  return registro.local.activo === false ? 'Cerrado' : registro.enExcel ? 'Realizado' : registro.declaracion ? 'Pendiente de liquidar' : 'Pendiente'
 }
 
 const cantidadOrdenes = registro => new Set((registro.ordenes || []).map(orden => String(orden.numero_orden || '').trim()).filter(Boolean)).size
@@ -63,16 +63,17 @@ export function dividirControlImprimible(registros, limite = 24) {
 export const encabezadosHojaCMI = ['No.', 'Unidades Pollo Granjero', 'Ubicación', 'Código', 'Semana', 'Equipos', 'Cliente', 'Fechas', 'Fechas', 'Fechas', 'Estado']
 export const celdasHojaCMI = r => [r.local.numero || r.local.fila - 2 || '—', r.local.nombre, r.local.direccion?.trim() || 'Sin dirección registrada', r.local.codigo, r.local.semana || '—', equiposControl(r), r.local.marca === 'CAMPERO' ? 'CAMPERO' : 'GRANJERO', ...[0,1,2].map(i => MESES_PREVENTIVOS[r.local.meses?.[i]-1]?.toUpperCase() || '—'), estadoControlImprimible(r)]
 
-export function datosImagenControlImprimible(registros, { anio, vuelta, colores = true } = {}) {
+export function datosImagenControlImprimible(registros, { anio, vuelta, colores = true, mes = null } = {}) {
   if (!registros.length) throw new Error('No hay preventivos con estos filtros para descargar.')
   return {
     tema: 'anaranjado', tamanoTexto: 13, titulo: `CONTROL DE PREVENTIVOS CMI · ${anio}`,
-    subtitulo: `${tituloPeriodo(anio, vuelta)} · ${registros.length} ${registros.length === 1 ? 'punto de venta filtrado' : 'puntos de venta filtrados'}`,
+    subtitulo: `${mes ? `${MESES_PREVENTIVOS[Number(mes)-1]} ${anio}` : tituloPeriodo(anio, vuelta)} · ${registros.length} ${registros.length === 1 ? 'punto de venta filtrado' : 'puntos de venta filtrados'}`,
     secciones: [{
-      titulo: 'PROGRAMACIÓN Y ESTADO', multilinea: true, anchos: [40, 170, 225, 65, 90, 100, 100, 100, 100, 100, 150],
-      encabezados: encabezadosHojaCMI,
-      filas: registros.map(celdasHojaCMI),
+      titulo: 'PROGRAMACIÓN Y ESTADO', multilinea: true, anchos: mes ? [40,220,410,70,100,100,100,100,100] : [40, 170, 225, 65, 90, 100, 100, 100, 100, 100, 150],
+      encabezados: mes ? [...encabezadosHojaCMI.slice(0,7),'Fecha','Estado'] : encabezadosHojaCMI,
+      filas: registros.map(r=>mes ? [...celdasHojaCMI(r).slice(0,7),MESES_PREVENTIVOS[r.mes-1].toUpperCase(),estadoControlImprimible(r)] : celdasHojaCMI(r)),
       estados: registros.map(registro => registro.estado),
+      tachadas: registros.map(r=>r.local.activo===false),
       coloresFila: registros.map((registro, indice) => colorFila(registro, colores, indice)),
     }],
     pie: 'El color es visual y no cambia el estado. Realizado: registrado en Excel. Equipos: órdenes únicas.',
@@ -81,12 +82,12 @@ export function datosImagenControlImprimible(registros, { anio, vuelta, colores 
 
 const escaparHtml = valor => String(valor ?? '').replace(/[&<>"']/g, caracter => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[caracter]))
 
-export function htmlControlImprimible(registros, { anio, vuelta, colores = true } = {}) {
+export function htmlControlImprimible(registros, { anio, vuelta, colores = true, mes = null } = {}) {
   if (!registros.length) throw new Error('No hay preventivos con estos filtros para imprimir.')
-  const filas = registros.map((registro, indice) => '<tr style="background-color:'+colorFila(registro,colores,indice)+'">'+celdasHojaCMI(registro).map((valor,i)=>'<td'+(i===10?' class="estado"':'')+'>'+escaparHtml(valor)+'</td>').join('')+'</tr>').join('')
+  const filas = registros.map((registro, indice) => '<tr style="'+(registro.local.activo===false?'text-decoration:line-through;color:#b91c1c;':'')+'background-color:'+colorFila(registro,colores,indice)+'">'+(mes ? [...celdasHojaCMI(registro).slice(0,7),MESES_PREVENTIVOS[registro.mes-1].toUpperCase(),estadoControlImprimible(registro)] : celdasHojaCMI(registro)).map((valor,i)=>'<td'+(i===(mes?8:10)?' class="estado"':'')+'>'+escaparHtml(valor)+'</td>').join('')+'</tr>').join('')
   return `<!doctype html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Control de preventivos CMI · ${escaparHtml(anio)}</title><style>
-@page{size:A4 landscape;margin:10mm}*{box-sizing:border-box}body{margin:0;color:#172033;background:white;font:8pt Arial,sans-serif}header{border-bottom:2px solid #172033;margin-bottom:12px;padding:10px 12px;background:#fb923c}h1{margin:0 0 5px;font-size:17pt}p{margin:4px 0}table{width:100%;border-collapse:collapse;table-layout:fixed}thead{display:table-header-group}th,td{border:1px solid #172033;padding:6px;overflow-wrap:anywhere;vertical-align:top;white-space:pre-line}th{background:#ffc000;text-align:left;font-size:9pt}th:nth-child(1){width:3%}th:nth-child(2){width:15%}th:nth-child(3){width:20%}th:nth-child(4){width:5%}th:nth-child(5){width:7%}th:nth-child(6){width:8%}th:nth-child(7){width:7%}th:nth-child(8),th:nth-child(9),th:nth-child(10){width:8%}th:nth-child(11){width:11%}tr{break-inside:avoid;page-break-inside:avoid}td span{display:block;margin-top:4px;font-size:9pt}.estado{font-weight:bold}footer{margin-top:10px;font-size:9pt}@media print{body,header,th,tr,td{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
-</style></head><body><header><h1>Control de preventivos CMI</h1><p>${escaparHtml(tituloPeriodo(anio, vuelta))} · ${registros.length} ${registros.length === 1 ? 'punto de venta filtrado' : 'puntos de venta filtrados'}</p></header><table><thead><tr>${encabezadosHojaCMI.map(t=>`<th>${escaparHtml(t)}</th>`).join('')}</tr></thead><tbody>${filas}</tbody></table><footer>El resaltado es visual. Quitar el color no cambia el estado ni las órdenes registradas.</footer></body></html>`
+@page{size:A4 landscape;margin:10mm}*{box-sizing:border-box}body{margin:0;color:#172033;background:white;font:9pt Arial,sans-serif}header{border-bottom:2px solid #172033;margin-bottom:12px;padding:10px 12px;background:#fb923c}h1{margin:0 0 5px;font-size:17pt}p{margin:4px 0}table{width:100%;border-collapse:collapse;table-layout:auto}thead{display:table-header-group}th,td{border:1px solid #172033;padding:6px;overflow-wrap:anywhere;vertical-align:top;white-space:pre-line}th{background:#ffc000;text-align:left;font-size:9pt}th:nth-child(1){width:3%}th:nth-child(2){width:15%}th:nth-child(3){width:20%}th:nth-child(4){width:5%}th:nth-child(5){width:7%}th:nth-child(6){width:8%}th:nth-child(7){width:7%}th:nth-child(8),th:nth-child(9),th:nth-child(10){width:8%}th:nth-child(11){width:11%}tr{break-inside:avoid;page-break-inside:avoid}td span{display:block;margin-top:4px;font-size:9pt}.estado{font-weight:bold}footer{margin-top:10px;font-size:9pt}@media print{body,header,th,tr,td{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style></head><body><header><h1>Control de preventivos CMI</h1><p>${escaparHtml(mes ? `${MESES_PREVENTIVOS[Number(mes)-1]} ${anio}` : tituloPeriodo(anio, vuelta))} · ${registros.length} ${registros.length === 1 ? 'punto de venta filtrado' : 'puntos de venta filtrados'}</p></header><table><thead><tr>${(mes ? [...encabezadosHojaCMI.slice(0,7),'Fecha','Estado'] : encabezadosHojaCMI).map(t=>`<th>${escaparHtml(t)}</th>`).join('')}</tr></thead><tbody>${filas}</tbody></table><footer>El resaltado es visual. Quitar el color no cambia el estado ni las órdenes registradas.</footer></body></html>`
 }
 
 export function imprimirControlImprimible(registros, opciones = {}, { abrir = (...args) => window.open(...args) } = {}) {

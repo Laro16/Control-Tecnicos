@@ -13,7 +13,7 @@ const hoy = () => new Intl.DateTimeFormat('en-CA',{timeZone:'America/Guatemala',
 const colores={pendiente:'bg-slate-100 text-slate-800','por-liquidar':'bg-amber-100 text-amber-900',finalizado:'bg-emerald-100 text-emerald-900'}
 const campo='control-field w-full'
 
-export default function PreventivosTrimestrales({ marca, tecnico=false, usuarioId:usuarioPortalId=null }) {
+export default function PreventivosTrimestrales({ marca, tecnico=false, usuarioId:usuarioPortalId=null, revisionExcel=0 }) {
   const [datos,setDatos]=useState({programacion:[],ordenes:[],configuracion:null})
   const [listo,setListo]=useState(false),[cargando,setCargando]=useState(true),[ocupado,setOcupado]=useState(false),[error,setError]=useState(''),[aviso,setAviso]=useState('')
   const [usuarioId,setUsuarioId]=useState(usuarioPortalId)
@@ -31,14 +31,14 @@ export default function PreventivosTrimestrales({ marca, tecnico=false, usuarioI
     } catch(fallo) {if(version===carga.current){setListo(false);setError(fallo.message)}}
     finally {if(version===carga.current)setCargando(false)}
   }
-  useEffect(()=>{cargar();return()=>{carga.current++}},[marca,tecnico,usuarioPortalId])
+  useEffect(()=>{cargar();return()=>{carga.current++}},[marca,tecnico,usuarioPortalId,revisionExcel])
   useEffect(()=>{const timer=setInterval(()=>{if(!ocupado&&!edicion&&document.visibilityState==='visible')cargar(true)},60000);return()=>clearInterval(timer)},[marca,tecnico,usuarioPortalId,ocupado,edicion])
   const periodos=useMemo(()=>[...new Set([...calendario.filter(p=>p.marca===marca),...datos.programacion].map(periodoTrimestral))].sort().reverse(),[marca,datos.programacion])
   const [anio,trimestre]=periodo.split(':').map(Number)
   const trimestreTitulo=tituloTrimestre(anio,trimestre)
   const seguimiento=useMemo(()=>prepararTrimestrales(datos.programacion,datos.ordenes),[datos.programacion,datos.ordenes])
   const delPeriodo=seguimiento.registros.filter(r=>periodoTrimestral(r.local)===periodo)
-  const coincidencias=delPeriodo.filter(r=>Boolean(r.local.cerrado)===(vista==='cerrados')&&(!mes||Number(r.local.fecha_programada.slice(5,7))===Number(mes))&&`${r.local.codigo} ${r.local.nombre} ${r.local.direccion} ${r.local.municipio}`.toLocaleLowerCase('es').includes(busqueda.toLocaleLowerCase('es')))
+  const coincidencias=delPeriodo.filter(r=>Boolean(r.local.cerrado)===(vista==='cerrados')&&(busqueda.trim()||!mes||Number(r.local.fecha_programada.slice(5,7))===Number(mes))&&`${r.local.codigo} ${r.local.nombre} ${r.local.direccion} ${r.local.municipio}`.toLocaleLowerCase('es').includes(busqueda.trim().toLocaleLowerCase('es')))
   const visibles=coincidencias.filter(r=>estado==='todos'||r.estado===estado)
   const cerrados=delPeriodo.filter(r=>r.local.cerrado)
   const excluidas=datos.ordenes.filter(o=>o.excluida)
@@ -65,7 +65,7 @@ export default function PreventivosTrimestrales({ marca, tecnico=false, usuarioI
   }
   async function descargar(registros=visibles) {
     setOcupado(true)
-    try {await descargarImagenPreventivos(datosImagenTrimestral(registros,marca,trimestreTitulo,mes?MESES_PREVENTIVOS[Number(mes)-1]:'Todo el trimestre'),`preventivos-${marca.toLowerCase()}-${anio}-T${trimestre}${mes?`-${mes}`:''}-filtrados.png`)}
+    try {await descargarImagenPreventivos(datosImagenTrimestral(registros,marca,trimestreTitulo,mes&&!busqueda.trim()?MESES_PREVENTIVOS[Number(mes)-1]:'Todo el trimestre'),`preventivos-${marca.toLowerCase()}-${anio}-T${trimestre}${mes?`-${mes}`:''}-filtrados.png`)}
     catch(fallo){setError(fallo.message)}finally{setOcupado(false)}
   }
   async function descargarAvance() {
@@ -84,7 +84,7 @@ export default function PreventivosTrimestrales({ marca, tecnico=false, usuarioI
     {cargando&&!listo&&<p className="card p-5 text-sm">Cargando programación…</p>}
     {listo&&['programacion','cerrados'].includes(vista)&&<>
       <div className="grid grid-cols-3 gap-2 sm:gap-4">{Object.entries(ESTADOS_PREVENTIVOS).map(([id,nombre])=><button key={id} type="button" aria-pressed={estado===id} onClick={()=>setEstado(id)} className={`card min-h-24 p-3 text-left ${estado===id?'ring-2 ring-sky-500':''}`}><span className="block text-[11px] font-bold text-slate-600">{nombre}</span><span className="mt-1 block text-2xl font-black">{coincidencias.filter(r=>r.estado===id).length}</span></button>)}</div>
-      <div className="card grid gap-3 p-4 sm:grid-cols-3"><label className="text-xs font-bold">Mes programado<select className={`${campo} mt-1`} value={mes} onChange={e=>setMes(e.target.value)}><option value="">Todo el trimestre</option>{[0,1,2].map(i=>(trimestre-1)*3+i+1).map(m=><option key={m} value={m}>{MESES_PREVENTIVOS[m-1]}</option>)}</select></label><label className="text-xs font-bold">Mostrar<select className={`${campo} mt-1`} value={estado} onChange={e=>setEstado(e.target.value)}><option value="todos">Todos los estados</option>{Object.entries(ESTADOS_PREVENTIVOS).map(([id,n])=><option key={id} value={id}>{n}</option>)}</select></label><label className="text-xs font-bold">Buscar<input className={`${campo} mt-1`} value={busqueda} onChange={e=>setBusqueda(e.target.value)} placeholder="Código, tienda o dirección"/></label><p className="text-xs leading-relaxed text-slate-600 sm:col-span-3">Pendiente: sin orden ni marca. Pendiente de liquidar: marcado manualmente, falta el Excel. Finalizado: ya existe una orden válida, sin importar su estado.</p></div>
+      <div className="card grid gap-3 p-4 sm:grid-cols-3"><label className="text-xs font-bold">Mes programado<select className={`${campo} mt-1`} value={mes} onChange={e=>setMes(e.target.value)}><option value="">Todos</option>{[0,1,2].map(i=>(trimestre-1)*3+i+1).map(m=><option key={m} value={m}>{MESES_PREVENTIVOS[m-1]}</option>)}</select></label><label className="text-xs font-bold">Mostrar<select className={`${campo} mt-1`} value={estado} onChange={e=>setEstado(e.target.value)}><option value="todos">Todos los estados</option>{Object.entries(ESTADOS_PREVENTIVOS).map(([id,n])=><option key={id} value={id}>{n}</option>)}</select></label><label className="text-xs font-bold">Buscar<input className={`${campo} mt-1`} value={busqueda} onChange={e=>setBusqueda(e.target.value)} placeholder="Código, tienda o dirección"/></label><p className="text-xs leading-relaxed text-slate-600 sm:col-span-3">La búsqueda abarca todos los meses del trimestre. Pendiente: sin orden ni marca. Pendiente de liquidar: marcado manualmente, falta el Excel. Finalizado: ya existe una orden válida, sin importar su estado.</p></div>
       <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-slate-600">{visibles.length} tiendas · Pendientes primero</p><button type="button" className="btn-ghost inline-flex min-h-11 items-center gap-2" disabled={ocupado||!visibles.length} onClick={()=>descargar()}><Download size={14}/> Descargar filtrados PNG</button></div>
       <div className="grid items-start gap-4 lg:grid-cols-2 2xl:grid-cols-3">{visibles.map(r=> {
         const l=r.local,abierto=expandido===l.id,corregible=l.realizado&&(!tecnico||l.realizado_por===usuarioId)

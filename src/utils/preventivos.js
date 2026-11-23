@@ -1,3 +1,4 @@
+import { cierresConfirmadosCMI } from './cierresConfirmadosCMI.js'
 export const MESES_PREVENTIVOS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 export const MARCAS_PREVENTIVOS = { GRANJERO: 'Granjero / Siciliana', CAMPERO: 'Campero' }
 export const normalizarPreventivo = valor => String(valor ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase()
@@ -25,7 +26,7 @@ export function catalogoDesdeMatriz(matriz) {
     const codigo = codigoLimpio(fila[col('CODIGO')]), marca = normalizarPreventivo(fila[col('CLIENTE')])
     if (!codigo || !MARCAS_PREVENTIVOS[marca]) return []
     const meses = fechas.map(c => MESES_PREVENTIVOS.findIndex(m => normalizarPreventivo(m) === normalizarPreventivo(fila[c])) + 1).filter(Boolean)
-    return [{ id: `${marca}:${codigo}`, numero: fila[claves.findIndex(c => ["NO.","NO","N"].includes(c))] || i+1, codigo, marca, nombre: texto(fila[col('UNIDADES POLLO GRANJERO')]), direccion: texto(fila[col('UBICACION')]), telefono: texto(fila[col('TELEFONO')]), semana: texto(fila[col('SEMANA')]), equipos: Number(fila[col('EQUIPOS')]) || null, meses, activo: normalizarPreventivo(fila[col('ESTADO 2')]) !== 'CERRADO', fila: encabezado+i+2 }]
+    return [{ id: `${marca}:${codigo}`, numero: fila[claves.findIndex(c => ["NO.","NO","N"].includes(c))] || i+1, codigo, marca, nombre: texto(fila[col('UNIDADES POLLO GRANJERO')]), direccion: texto(fila[col('UBICACION')]), telefono: texto(fila[col('TELEFONO')]), semana: texto(fila[col('SEMANA')]), equipos: Number(fila[col('EQUIPOS')]) || null, meses, activo: !cierresConfirmadosCMI.has(`${marca}:${codigo}`) && normalizarPreventivo(fila[col('ESTADO 2')]) !== 'CERRADO', fila: encabezado+i+2 }]
   })
 }
 export function marcaDesdeCliente(cliente) {
@@ -66,6 +67,10 @@ export function atribuirOrden(orden, catalogo) {
   }
   // Una asignación administrativa siempre prevalece sobre la cercanía de fechas.
   if (orden.anio_programado && orden.mes_programado) return atribuir(Number(orden.anio_programado), Number(orden.mes_programado))
+  if (orden.anio_carga && orden.vuelta_carga) {
+    const mesesCarga = local.meses.filter(m => Math.ceil(Number(m)/4) === Number(orden.vuelta_carga))
+    return mesesCarga.length === 1 ? atribuir(Number(orden.anio_carga), Number(mesesCarga[0])) : { ...orden, codigo, local, programado: null, motivoUbicacion: 'Revisa el mes del punto en la vuelta de carga seleccionada.' }
+  }
   if (!fecha) return { ...orden, codigo, local, programado: null, tarde: false, adelantado: false }
   const [anio, mes] = fecha.split('-').map(Number)
   const meses = [...new Set((local.meses || []).map(Number).filter(m => Number.isInteger(m) && m >= 1 && m <= 12))]

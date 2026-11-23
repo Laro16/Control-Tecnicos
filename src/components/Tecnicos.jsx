@@ -1,3 +1,4 @@
+import VueltaActivaCMI from './VueltaActivaCMI'
 import { useState, useRef, useEffect } from 'react'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
@@ -189,7 +190,7 @@ function TicketBadge({ estado }) {
 }
 
 export default function ModuloTecnicos({ 
-  vista = 'tecnicos',
+  vista = 'tecnicos', archivoDiarioRef, onProcesandoExcel, onAvisoExcel, onPreventivosProcesados,
   allTickets, setAllTickets, nombreArchivo, setNombreArchivo, 
   fechaSubidaExcel, setFechaSubidaExcel,
   rutasTecnicos, setRutasTecnicos, rutasAutomaticas, valorRutaTecnico, baseMunicipios,
@@ -205,7 +206,8 @@ export default function ModuloTecnicos({
   const [toast, setToast] = useState('')
   const [estadoPreventivos, setEstadoPreventivos] = useState('')
   const [exportando, setExportando] = useState('')
-  const fileRef = useRef()
+  const fileRefLocal = useRef(null)
+  const fileRef = archivoDiarioRef || fileRefLocal
   const leyendoExcel = useRef(false)
   const [procesandoExcel, setProcesandoExcel] = useState(false)
   const ultimaAlertaEnfocada = useRef(null)
@@ -257,6 +259,8 @@ export default function ModuloTecnicos({
     }
     leyendoExcel.current = true
     setProcesandoExcel(true)
+    onProcesandoExcel?.(true)
+    onAvisoExcel?.('')
     const reader = new FileReader()
     reader.onload = async (e) => {
       try {
@@ -370,32 +374,39 @@ export default function ModuloTecnicos({
           const ahora = new Date()
           setFechaSubidaExcel(`${ahora.toLocaleDateString()} a las ${ahora.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`)
         }
+        const avisosCarga = []
         // Este historial es independiente de los estados y de la última base cargada.
         try {
           const resultado = await importarPreventivos(filasPreventivos)
-          setEstadoPreventivos(resultado.ordenes.length || resultado.sinOrden
+          avisosCarga.push(resultado.ordenes.length || resultado.sinOrden
             ? `${resultado.ordenes.length} órdenes de preventivos guardadas sin duplicar.${resultado.sinOrden ? ` ${resultado.sinOrden} filas sin N° ORDEN no se contaron.` : ''}`
             : '')
         } catch (fallo) {
-          setEstadoPreventivos(`${fallo.message}. Activa activar_preventivos.sql en Supabase y vuelve a subir este Excel. Los demás datos sí se cargaron.`)
+          avisosCarga.push(`${fallo.message}. Revisa la vuelta activa CMI y vuelve a subir este Excel. Los demás datos sí se cargaron.`)
         }
         try {
           const resultado = await importarTrimestrales(filasTrimestrales)
-          if (resultado.ordenes.length || resultado.sinOrden) setEstadoPreventivos(actual => `${actual ? `${actual} ` : ''}${resultado.ordenes.length} órdenes Shell/Taco Bell guardadas sin duplicar.${resultado.sinOrden ? ` ${resultado.sinOrden} filas sin N° ORDEN no se contaron.` : ''}`)
+          if (resultado.ordenes.length || resultado.sinOrden) avisosCarga.push(`${resultado.ordenes.length} órdenes Shell/Taco Bell guardadas sin duplicar.${resultado.sinOrden ? ` ${resultado.sinOrden} filas sin N° ORDEN no se contaron.` : ''}`)
         } catch (fallo) {
-          setEstadoPreventivos(actual => `${actual ? `${actual} ` : ''}No se guardó Shell/Taco Bell: ${fallo.message}. Los demás datos sí se cargaron; revisa este módulo y vuelve a subir el Excel.`)
+          avisosCarga.push(`No se guardó Shell/Taco Bell: ${fallo.message}. Los demás datos sí se cargaron; revisa este módulo y vuelve a subir el Excel.`)
         }
+        const resumen = avisosCarga.filter(Boolean).join(' ')
+        setEstadoPreventivos(resumen)
+        onAvisoExcel?.([file.name, resumen].filter(Boolean).join(' · '))
+        onPreventivosProcesados?.()
         await importacionParticulares?.importar(filasParticulares, file.name)
       } catch {
         alert('No se pudo leer el Excel. Comprueba el archivo y vuelve a intentar.')
       } finally {
         leyendoExcel.current = false
         setProcesandoExcel(false)
+        onProcesandoExcel?.(false)
       }
     }
     reader.onerror = () => {
       leyendoExcel.current = false
       setProcesandoExcel(false)
+      onProcesandoExcel?.(false)
       alert('No se pudo abrir el archivo. Vuelve a seleccionarlo.')
     }
     reader.readAsArrayBuffer(file)
@@ -681,11 +692,12 @@ export default function ModuloTecnicos({
             <DownloadCloud size={12} /> {exportando === 'excel' ? 'Generando…' : 'Excel organizado'}
           </button>
         )}
-        <input ref={fileRef} type="file" className="hidden" onChange={onFileChange} disabled={procesandoExcel || importacionParticulares?.estado === 'importando'} />
       </div>}
+      <input ref={fileRef} type="file" className="hidden" accept={extensionesValidas.join(',')} onChange={onFileChange} disabled={procesandoExcel || importacionParticulares?.estado === 'importando'} />
 
       {vistaTecnicos && procesandoExcel && importacionParticulares?.estado !== 'importando' && <p className="text-sm text-slate-600" role="status">Leyendo el archivo…</p>}
       {vistaTecnicos && <EstadoParticulares importacion={importacionParticulares} />}
+      {vistaTecnicos && <VueltaActivaCMI/>}
       {vistaTecnicos && estadoPreventivos && <p role="status" className="rounded-xl border border-slate-700 p-3 text-sm">{estadoPreventivos}</p>}
 
       {vistaAlertas && allTickets.length === 0 && <HistorialSeries datos={historialSeries} reincidencias={controlAlertas.reincidencias} solicitudAlerta={solicitudAlerta} />}

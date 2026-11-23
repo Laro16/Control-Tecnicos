@@ -23,13 +23,13 @@ function lineasTexto(ctx,valor,ancho) {
   }
   return lineas
 }
-function tabla(ctx,y,anchos,encabezados,filas,estados=[],anaranjado=false,envoltura=null,coloresFila=[],tamanoTexto=17) {
+function tabla(ctx,y,anchos,encabezados,filas,estados=[],anaranjado=false,envoltura=null,coloresFila=[],tamanoTexto=17,tachadas=[]) {
   const alto=48, x0=40
   ctx.font=`bold ${tamanoTexto}px Arial`
   let x=x0
   encabezados.forEach((t,i)=>{ctx.fillStyle=anaranjado?'#fb923c':color.azul;ctx.fillRect(x,y,anchos[i],alto);ctx.strokeStyle=color.borde;ctx.strokeRect(x,y,anchos[i],alto);ctx.fillStyle=color.texto;texto(ctx,t,x+10,y+30,anchos[i]-18);x+=anchos[i]})
   let top=y+alto
-  filas.forEach((fila,r)=>{let x=x0;const altoFila=envoltura?.[r].alto||alto;const estado=estados[r];ctx.font=estado==='finalizado'?`bold ${tamanoTexto}px Arial`:`${tamanoTexto}px Arial`;fila.forEach((t,i)=>{ctx.fillStyle=coloresFila[r]||(estado==='finalizado'?'#dcfce7':estado==='por-liquidar'?'#fef3c7':r%2?'#f1f5f9':'#ffffff');ctx.fillRect(x,top,anchos[i],altoFila);ctx.strokeStyle=color.borde;ctx.strokeRect(x,top,anchos[i],altoFila);ctx.fillStyle=estado==='finalizado'?'#14532d':estado==='por-liquidar'?'#78350f':color.texto;if(envoltura)envoltura[r].celdas[i].forEach((linea,n)=>texto(ctx,linea,x+10,top+30+n*22));else texto(ctx,t,x+10,top+30,anchos[i]-18);x+=anchos[i]});top+=altoFila})
+  filas.forEach((fila,r)=>{let x=x0;const altoFila=envoltura?.[r].alto||alto;const estado=estados[r];ctx.font=estado==='finalizado'?`bold ${tamanoTexto}px Arial`:`${tamanoTexto}px Arial`;fila.forEach((t,i)=>{ctx.fillStyle=coloresFila[r]||(estado==='finalizado'?'#dcfce7':estado==='por-liquidar'?'#fef3c7':r%2?'#f1f5f9':'#ffffff');ctx.fillRect(x,top,anchos[i],altoFila);ctx.strokeStyle=color.borde;ctx.strokeRect(x,top,anchos[i],altoFila);ctx.fillStyle=estado==='finalizado'?'#14532d':estado==='por-liquidar'?'#78350f':color.texto;if(envoltura)envoltura[r].celdas[i].forEach((linea,n)=>texto(ctx,linea,x+10,top+30+n*22));else texto(ctx,t,x+10,top+30,anchos[i]-18);if(tachadas[r]){ctx.strokeStyle='#b91c1c';ctx.beginPath();ctx.moveTo(x+8,top+altoFila/2);ctx.lineTo(x+anchos[i]-8,top+altoFila/2);ctx.stroke()}x+=anchos[i]});top+=altoFila})
   return top
 }
 export function dibujarImagenPreventivos(canvas,{titulo,subtitulo,secciones,pie,tema,tamanoTexto=17}) {
@@ -45,7 +45,7 @@ export function dibujarImagenPreventivos(canvas,{titulo,subtitulo,secciones,pie,
   ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height)
   ctx.fillStyle=anaranjado?'#f59e0b':color.oscuro;ctx.fillRect(0,0,canvas.width,110);ctx.fillStyle=anaranjado?color.texto:'#fff';ctx.font='bold 30px Arial';texto(ctx,titulo,40,46,1240);ctx.font='18px Arial';texto(ctx,subtitulo,40,81,1240)
   let y=140
-  for(const s of preparadas){ctx.fillStyle=color.oscuro;ctx.font='bold 22px Arial';texto(ctx,s.titulo,40,y+24,1240);y=tabla(ctx,y+40,s.anchos,s.encabezados,s.filas,s.estados,anaranjado,s.envoltura,s.coloresFila,tamanoTexto)+35}
+  for(const s of preparadas){ctx.fillStyle=color.oscuro;ctx.font='bold 22px Arial';texto(ctx,s.titulo,40,y+24,1240);y=tabla(ctx,y+40,s.anchos,s.encabezados,s.filas,s.estados,anaranjado,s.envoltura,s.coloresFila,tamanoTexto,s.tachadas)+35}
   if(pie){ctx.fillStyle='#475569';ctx.font='16px Arial';texto(ctx,pie,40,y+10,1240)}
   return canvas
 }
@@ -65,11 +65,11 @@ export function datosImagenProgramacion(seguimiento, { tipo, anio, mes }) {
     .sort((a,b) => (a.local.semana||'ZZ').localeCompare(b.local.semana||'ZZ') || a.local.codigo.localeCompare(b.local.codigo,'es',{numeric:true}))
   return {
     tema: 'anaranjado',
-    titulo: `${MARCAS_PREVENTIVOS[tipo].toUpperCase()} · ${MESES_PREVENTIVOS[mes-1].toUpperCase()} ${anio}`,
+    titulo: `${MARCAS_PREVENTIVOS[tipo].toUpperCase()} · ${(MESES_PREVENTIVOS[mes-1]||'Toda la vuelta').toUpperCase()} ${anio}`,
     subtitulo: `Occidente · ${registros.length} restaurantes programados`,
     secciones: [{ titulo: 'PROGRAMACIÓN MENSUAL', anchos: [90,380,150,180,230,210],
       encabezados: ['Código','Restaurante','Semana','Equipos previstos','Estado','Equipos en Excel'],
-      filas: registros.map(({local,estado,ordenes}) => [local.codigo,local.nombre,local.semana||'—',local.equipos??'—',ESTADOS_PREVENTIVOS[estado],ordenes.length||'—']),
+      filas: registros.map(({local,estado,ordenes,mes:mesRegistro}) => [local.codigo,local.nombre,(mes||!mesRegistro?'':MESES_PREVENTIVOS[mesRegistro-1]+' · ')+(local.semana||'—'),local.equipos??'—',ESTADOS_PREVENTIVOS[estado],ordenes.length||'—']),
       estados: registros.map(r=>r.estado),
     }],
     pie: 'Verde: Finalizado (Excel). Amarillo: Pendiente de liquidar (marca manual). Blanco/gris: Pendiente. Equipos: órdenes únicas.',
@@ -77,16 +77,18 @@ export function datosImagenProgramacion(seguimiento, { tipo, anio, mes }) {
 }
 
 export function datosImagenFiltradaProgramacion(registros,{anio,mes}) {
+  const meses=[...new Set(registros.map(r=>r.mes).filter(Boolean))]
+  if(meses.length) mes=meses.length===1?meses[0]:0
   if(!registros.length) throw new Error('No hay preventivos con estos filtros para descargar.')
   return {
-    tema:'anaranjado',titulo:`PREVENTIVOS · ${MESES_PREVENTIVOS[mes-1].toUpperCase()} ${anio}`,
+    tema:'anaranjado',titulo:`PREVENTIVOS · ${(MESES_PREVENTIVOS[mes-1]||'Toda la vuelta').toUpperCase()} ${anio}`,
     subtitulo:`Listado filtrado · ${registros.length} ${registros.length===1?'punto de venta':'puntos de venta'}`,
     secciones:Object.entries(MARCAS_PREVENTIVOS).flatMap(([marca,nombre])=>{
       const visibles=registros.filter(r=>r.local.marca===marca)
       if(!visibles.length)return []
       return [{titulo:nombre.toUpperCase(),multilinea:true,anchos:[100,280,430,240,190],
         encabezados:['Código','Punto de venta / semana','Dirección','Estado','Equipos'],
-        filas:visibles.map(({local,estado,ordenes,declaracion})=>[local.codigo,`${local.nombre}\n${local.semana||'Sin semana asignada'}`,local.direccion?.trim()||'Sin dirección registrada',ESTADOS_PREVENTIVOS[estado],`${local.equipos??'—'} previstos\n${ordenes.length} en Excel${declaracion?.equipos_declarados?`\n${declaracion.equipos_declarados} declarados`:''}`]),
+        filas:visibles.map(({local,estado,ordenes,declaracion,mes:mesRegistro})=>[local.codigo,`${local.nombre}\n${mesRegistro?MESES_PREVENTIVOS[mesRegistro-1]+' · ':''}${local.semana||'Sin semana asignada'}`,local.direccion?.trim()||'Sin dirección registrada',ESTADOS_PREVENTIVOS[estado],`${local.equipos??'—'} previstos\n${ordenes.length} en Excel${declaracion?.equipos_declarados?`\n${declaracion.equipos_declarados} declarados`:''}`]),
         estados:visibles.map(r=>r.estado),
       }]
     }),
