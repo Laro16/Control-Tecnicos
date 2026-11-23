@@ -33,12 +33,15 @@ const guardar=()=>{for(const[k,v]of Object.entries({ordenes,declaraciones,resalt
 export function snapshot(){return copiar({ordenes,declaraciones,resaltados})}
 function query(datos){return{select(){return this},order(){return this},eq(){return this},ilike(){return this},limit(){return this},async maybeSingle(){return{data:copiar(datos[0]||null),error:null}},async range(i,f){return{data:copiar(datos.slice(i,f+1)),error:null}},then(resolve,reject){return Promise.resolve({data:copiar(datos),error:null}).then(resolve,reject)}}}
 export const supabase={auth:{async getSession(){return{data:{session:{user:{id:usuario,email:'tecnico@example.test'}}}}}},from(tabla){
+if(tabla==='preventivos_vuelta_activa')return {...query(leer('control:periodo',[])),upsert(p){sessionStorage.setItem('control:periodo',JSON.stringify([p]));return{select(){return this},async single(){return{data:p,error:null}}}}};
+if(tabla==='preventivos_vueltas_bloqueadas')return query(leer('control:bloqueo',[]));
 if(tabla==='preventivos_ordenes')return query(ordenes);
 if(tabla==='preventivos_realizados')return query(declaraciones);
 if(tabla==='preventivos_resaltados')return query(resaltados);
 if(tabla==='preventivos_locales')return query(locales);
 if(['preventivos_cierres_historial','preventivos_ordenes_exclusiones','preventivos_exclusiones_historial'].includes(tabla))return query([]);
 throw Error('Tabla inesperada: '+tabla)},rpc(nombre,p){
+if(nombre==='cambiar_bloqueo_vuelta_cmi'){const anterior=leer('control:bloqueo',[])[0];if((anterior?.revision||0)!==p.p_revision)return Promise.resolve({error:{message:'Revisión cambió'}});const data={anio:p.p_anio,vuelta:p.p_vuelta,bloqueada:p.p_bloqueada,motivo:p.p_motivo,revision:p.p_revision+1};sessionStorage.setItem('control:bloqueo',JSON.stringify([data]));return Promise.resolve({data,error:null})}
 if(nombre==='consultar_ordenes_preventivos')return query(ordenes);
 if(nombre==='sincronizar_catalogo_preventivos')return Promise.resolve({data:null,error:null});
 if(nombre==='guardar_resaltado_preventivo'){
@@ -99,10 +102,16 @@ try {
     await page.getByRole('button', { name: 'Imprimir filtrados', exact: true }).waitFor({ state: 'visible' })
   }
   await navegar()
+  const periodoUI=page.getByRole('region',{name:'Vuelta activa de carga CMI',exact:true})
+  await periodoUI.getByLabel('Año de carga').fill('2027')
+  await periodoUI.getByLabel('1. Enero–abril',{exact:true}).check()
+  await periodoUI.getByRole('button',{name:'Guardar vuelta de carga'}).click()
+  await periodoUI.getByText('Guardada: 2027 · vuelta 1',{exact:false}).waitFor()
   const control = page.getByRole('region', { name: 'Control imprimible de preventivos', exact: true })
   const fila = codigo => control.locator(`tr[data-clave-control="GRANJERO:${codigo}:2026:11"]`)
   const estado = codigo => fila(codigo).locator('td').last().locator('span').first()
-  const color = codigo => page.getByLabel(`Resaltado de GRANJERO ${codigo} Noviembre`, { exact: true })
+  const abrirOpciones=async codigo=>{await fila(codigo).getByRole('button',{name:'Gestionar',exact:true}).click()}
+  const color=codigo=>({selectOption:async valor=>{await abrirOpciones(codigo);await page.getByLabel(`Resaltado de GRANJERO ${codigo} Noviembre`,{exact:true}).selectOption(valor);await page.getByRole('button',{name:'Cerrar controles',exact:true}).click()},inputValue:async()=>{await abrirOpciones(codigo);const valor=await page.getByLabel(`Resaltado de GRANJERO ${codigo} Noviembre`,{exact:true}).inputValue();await page.getByRole('button',{name:'Cerrar controles',exact:true}).click();return valor}})
   const esperarColor = async (codigo, valor) => {
     await page.waitForFunction(({ codigo, valor }) => document.querySelector(`[data-clave-control="GRANJERO:${codigo}:2026:11"]`)?.dataset.resaltado === valor, { codigo, valor })
   }
@@ -135,7 +144,7 @@ try {
   assert.deepEqual(guardado.declaraciones, inicial.declaraciones)
   await color('393').selectOption('automatico')
   await esperarColor('393', 'no')
-  await fila('393').getByRole('button', { name: 'Marcar realizado', exact: true }).click()
+  await abrirOpciones('393'); await page.getByRole('button', { name: 'Marcar realizado', exact: true }).click()
   const dialogo = page.getByRole('dialog', { name: 'Reportar preventivo realizado', exact: true })
   await dialogo.getByLabel('Fecha en que se realizó', { exact: true }).fill('2026-11-09')
   await dialogo.getByLabel('Equipos trabajados (opcional)', { exact: true }).fill('3')
@@ -169,6 +178,9 @@ try {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'No hay desbordamiento global en PC')
   await control.screenshot({ path: join(capturas, 'control-imprimible-pc.png') })
 
+  const [pdfDescargado]=await Promise.all([page.waitForEvent('download'),control.getByRole('button',{name:'Descargar PDF filtrado',exact:true}).click()])
+  assert.ok(pdfDescargado.suggestedFilename().endsWith('.pdf'))
+  await pdfDescargado.saveAs(join(capturas,'control-filtrado.pdf'))
   await page.evaluate(() => { window.__controlCanvasText = [] })
   const [download] = await Promise.all([page.waitForEvent('download'), control.getByRole('button', { name: 'Descargar filtrados como imagen', exact: true }).click()])
   assert.equal(download.suggestedFilename(), 'Control_Preventivos_2026_V3.png')
@@ -208,6 +220,25 @@ try {
   await tablaScroll.evaluate(n => { n.scrollLeft = n.scrollWidth })
   await tablaScroll.screenshot({ path: join(capturas, 'control-imprimible-movil-estado.png') })
 
+  await page.setViewportSize({width:1440,height:1050})
+  await page.getByLabel(/^Semana programada/).selectOption('')
+  await page.getByLabel(/^Estado del control/).selectOption('todos')
+  await page.getByLabel('Buscar punto',{exact:true}).fill('216')
+  assert.equal(await estado('216').textContent(),'Cerrado')
+  assert.ok((await fila('216').getAttribute('class')).includes('cmi-cerrado'))
+  await tablaScroll.evaluate(n=>{n.scrollLeft=0})
+  await control.screenshot({path:join(capturas,'control-cerrado-216.png')})
+  await control.getByRole('button',{name:'Imprimir filtrados',exact:true}).click()
+  assert.ok((await page.evaluate(()=>window.__controlPrint.html.at(-1))).includes('line-through'))
+  await page.getByLabel('Incluir puntos cerrados (tachados)',{exact:true}).uncheck()
+  assert.equal(await fila('216').count(),0)
+  const bloqueoUI=page.getByRole('region',{name:'Bloqueo de vuelta CMI',exact:true})
+  await bloqueoUI.getByLabel('Motivo de cierre',{exact:true}).fill('Revisión ficticia de prueba')
+  await bloqueoUI.getByRole('button',{name:'Bloquear vuelta terminada',exact:true}).click()
+  await bloqueoUI.getByRole('heading',{name:/Bloqueada/}).waitFor()
+  await bloqueoUI.getByLabel('Motivo de reapertura',{exact:true}).fill('Corrección ficticia autorizada')
+  await bloqueoUI.getByRole('button',{name:'Reabrir vuelta',exact:true}).click()
+  await bloqueoUI.getByRole('heading',{name:/Abierta/}).waitFor()
   const tecnico = await context.newPage()
   await tecnico.clock.install({ time: new Date('2026-11-10T14:00:00Z') })
   tecnico.on('pageerror', error => errores.push(error.message))

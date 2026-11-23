@@ -7,7 +7,7 @@ const libro = XLSX.readFile('src/Mantenimientos.xlsx')
 const catalogo = catalogoDesdeMatriz(XLSX.utils.sheet_to_json(libro.Sheets[libro.SheetNames[0]], { header: 1, defval: '' }))
 test('Calendario real: excluye cerrados y conserva meses y códigos por marca', () => {
   assert.equal(catalogo.length, 173)
-  assert.equal(catalogo.filter(l => l.activo && l.marca === 'GRANJERO').length, 114)
+  assert.equal(catalogo.filter(l => l.activo && l.marca === 'GRANJERO').length, 113)
   assert.equal(catalogo.filter(l => l.activo && l.marca === 'CAMPERO').length, 39)
   assert.equal(catalogo.find(l => l.codigo === '745' && l.marca === 'GRANJERO').activo, false)
 })
@@ -99,4 +99,13 @@ test('No adivina códigos ambiguos y valida fecha/semana', () => {
   assert.equal(codigoDesdeNegocio('LOCAL 1 2','CAMPERO',[{marca:'CAMPERO',codigo:'1'},{marca:'CAMPERO',codigo:'2'}]),null)
   assert.equal(fechaPreventivo('31/02/2026'),null)
   assert.deepEqual(rangoSemana('2026-09-30'), {inicio:'2026-09-28',fin:'2026-10-04'})
+})
+
+test('la vuelta elegida cuenta sin fecha y separa años; una asignación explícita prevalece',()=>{
+ const local=catalogo.find(l=>l.codigo==='413'&&l.marca==='GRANJERO')
+ const orden={numero_orden:'ACTIVA',marca:'GRANJERO',codigo:'413',fecha_realizada:null,anio_carga:2027,vuelta_carga:1}
+ assert.deepEqual(atribuirOrden(orden,[local]).programado,{anio:2027,mes:3,vuelta:1})
+ assert.deepEqual(atribuirOrden({...orden,anio_carga:2026,vuelta_carga:3},[local]).programado,{anio:2026,mes:11,vuelta:3})
+ assert.equal(atribuirOrden({...orden,anio_programado:2026,mes_programado:7},[local]).programado.mes,7)
+ assert.equal(catalogo.find(l=>l.codigo==='216'&&l.marca==='GRANJERO').activo,false)
 })

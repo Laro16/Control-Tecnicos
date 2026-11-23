@@ -119,3 +119,18 @@ test('listas grandes se dividen en PNG manejables sin perder ni duplicar filas',
   assert.equal(dividirControlImprimible(filas.slice(0, 3)).length, 1)
   assert.throws(() => dividirControlImprimible(filas, 0), /válida/)
 })
+
+test('cerrados se muestran tachados al imprimir el mes sin sumarlos como pendientes',()=>{
+ const catalogo=[local(216,{activo:false}),local(413)]
+ const filas=combinarResaltadosControl(prepararControlImprimible(catalogo,[],[],2026,3,true))
+ const cerrado=filas.find(r=>r.local.codigo==='216')
+ assert.equal(cerrado.estado,'cerrado');assert.equal(cerrado.resaltado,false)
+ assert.equal(filtrarControlImprimible(filas,{estado:'pendiente'}).length,1)
+ const html=htmlControlImprimible(filas,{anio:2026,vuelta:3,mes:11})
+ assert.match(html,/line-through/);assert.match(html,/Cerrado/)
+ assert.equal((html.match(/<th>Fecha<\/th>/g)||[]).length,1)
+ assert.ok(!html.includes('MARZO')&&!html.includes('JULIO'))
+ const imagen=datosImagenControlImprimible(filas,{anio:2026,vuelta:3,mes:11}).secciones[0]
+ assert.equal(imagen.anchos.reduce((a,b)=>a+b),1240)
+ assert.equal(imagen.encabezados.length,9);assert.equal(imagen.tachadas.filter(Boolean).length,1)
+})
